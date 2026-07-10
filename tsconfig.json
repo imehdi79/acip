@@ -11,6 +11,12 @@
     },
     {
       "path": "./apps/web-editor"
+    },
+    {
+      "path": "./packages/editor-core"
+    },
+    {
+      "path": "./packages/ui"
     }
   ]
 }
