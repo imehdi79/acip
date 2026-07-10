@@ -1,5 +1,5 @@
 {
-  "name": "@ecore",
+  "name": "@acip/editor-core",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -30,6 +30,20 @@
           "tsConfig": "packages/editor-core/tsconfig.lib.json",
           "skipTypeCheck": true,
           "stripLeadingPaths": true
+        }
+      },
+      "typecheck": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "bun x tsc -p packages/editor-core/tsconfig.lib.json --noEmit",
+          "cwd": "{workspaceRoot}"
+        }
+      },
+      "test": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "bun test",
+          "cwd": "packages/editor-core"
         }
       }
     }
