@@ -5,6 +5,12 @@
   "references": [
     {
       "path": "./apps/saas"
+    },
+    {
+      "path": "./apps/editor-server"
+    },
+    {
+      "path": "./apps/web-editor"
     }
   ]
 }
