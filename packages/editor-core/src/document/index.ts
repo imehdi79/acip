@@ -1,0 +1,13 @@
+export type { DocumentChangeEvent, DocumentEvents } from './document.js';
+export { DrawingDocument } from './document.js';
+export type { Layer } from './layer.js';
+export { DEFAULT_LAYER_ID, createDefaultLayer } from './layer.js';
+export type { Level } from './levels/index.js';
+export { LevelTable } from './levels/index.js';
+export type { Material, MaterialUnit } from './materials/index.js';
+export { MaterialLibrary } from './materials/index.js';
+export type { AssemblyLayer, EntityTypeDef } from './types/index.js';
+export { TypeCatalog } from './types/index.js';
+export type { SpatialIndex } from './spatial/index.js';
+export { NaiveSpatialIndex } from './spatial/index.js';
+export * from './history/index.js';

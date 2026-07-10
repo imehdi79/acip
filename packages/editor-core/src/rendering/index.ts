@@ -1,0 +1,37 @@
+import type { EntityId } from '../common/id.js';
+import type { Geometry } from '../geometry/shapes.js';
+import type { DrawingDocument } from '../document/document.js';
+import type { ViewDefinition } from '../views/index.js';
+import { entitiesInView } from '../views/index.js';
+
+/**
+ * Core produces display lists; DRAWING them is the consumer's job.
+ * Canvas/WebGL renderer implementations live in web-editor, never here.
+ */
+export interface DisplayStyle {
+  readonly stroke?: string;
+  readonly width?: number;
+  readonly dash?: readonly number[];
+}
+
+export interface RenderItem {
+  readonly entityId: EntityId;
+  readonly geometry: Geometry;
+  readonly style: DisplayStyle;
+}
+
+export interface Renderer {
+  render(items: readonly RenderItem[]): void;
+}
+
+const DEFAULT_STYLE: DisplayStyle = { stroke: '#e0e0e0', width: 1 };
+
+export function buildDisplayList(doc: DrawingDocument, view: ViewDefinition): RenderItem[] {
+  return entitiesInView(doc, view)
+    .filter((e) => doc.getLayer(e.layerId)?.visible !== false)
+    .map((e) => ({
+      entityId: e.id,
+      geometry: e.getEffectiveGeometry(),
+      style: DEFAULT_STYLE,
+    }));
+}
