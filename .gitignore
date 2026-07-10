@@ -49,3 +49,4 @@ Thumbs.db
 out
 
 vite.config.*.timestamp*
+.nx/polygraph

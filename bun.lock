@@ -74,10 +74,6 @@
         "@nestjs/testing": "^11.0.0",
       },
     },
-    "apps/editor-server-e2e": {
-      "name": "@acip/editor-server-e2e",
-      "version": "0.0.1",
-    },
     "apps/saas": {
       "name": "@acip/saas",
       "version": "0.0.1",
@@ -94,8 +90,6 @@
   },
   "packages": {
     "@acip/editor-server": ["@acip/editor-server@workspace:apps/editor-server"],
-
-    "@acip/editor-server-e2e": ["@acip/editor-server-e2e@workspace:apps/editor-server-e2e"],
 
     "@acip/saas": ["@acip/saas@workspace:apps/saas"],
 
