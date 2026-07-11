@@ -75,6 +75,15 @@ history, new walls use it, and a live Quantities panel updates per commit.
 45 tests. `packages/estimator` will consume this and add measurement rules +
 cost rates.
 
-Next candidates, in rough order: wall joins/corner cleanup, more drafting
+**Wall joins V1 landed 2026-07-12.** Derived (never stored) corner cleanup:
+`topology/junctions.ts` wheel algorithm over pure `WallEnd` descriptors —
+sort by angle, intersect angle-adjacent faces once so neighbors share corners
+exactly; miter-limit clamp and parallel/flush fallbacks. Integration is a
+single seam (`WallEntity.spanQuadJoined` swaps cap corners into terminal
+span quads); plan, mesh, and bounds follow for free. Quantities stay
+centerline-based. See [wall-joins.md](../04-systems/wall-joins.md) for
+decisions and V1 limitations. 55 tests. V2 = T-junctions.
+
+Next candidates, in rough order: T-junctions (wall joins V2), more drafting
 primitives (arc, circle, polyline entities), copy-floor-to-floor, first AI
 agent (command schemas → LLM tool defs via describe()).
