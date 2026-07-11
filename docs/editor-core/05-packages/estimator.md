@@ -2,6 +2,11 @@
 
 Status: **Decided** (design) · **Deferred** (build) · Last updated: 2026-07-11
 
+> **Seed exists (2026-07-11):** `editor-core/src/measurements/quantities.ts`
+> already computes wall net areas/volumes, per-material volumes from assembly
+> layers, and opening counts; web-editor shows them live. The estimator package
+> will consume this and add pluggable measurement rules + cost rates.
+
 A separate package (`packages/estimator`), and the reason the semantic model exists:
 quantity takeoff only works if the model knows "this is a wall with 12m² of tile finish."
 The app's identity — **cost-aware building modeler** — is delivered here.

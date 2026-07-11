@@ -64,6 +64,17 @@ so walls' 3D moves with the datum. web-editor: level picker in the status bar,
 add-level form in the panel, walls created on the active level, per-level plan
 filtering (unassigned entities show on every level). 40 tests.
 
-Next candidates, in rough order: quantities panel (net areas / per-material
-volumes from assembly layers — the estimator seed), wall joins/corner cleanup,
-more drafting primitives (arc, circle, polyline entities), copy-floor-to-floor.
+**Quantities arc landed 2026-07-11 — the estimator seed.** `measurements/
+quantities.ts`: `computeQuantities(doc)` produces wall quantities (length, net
+face area, net volume — openings deducted), per-material volumes split across
+type-catalog assembly layers proportional to thickness, and window/door counts.
+Commands MATERIAL.ADD / TYPE.ADD (material refs validated); WALL.ADD takes
+`typeId` (thickness then derives from the assembly). web-editor seeds a demo
+catalog (block/insulation/plaster, "Block 300") through the bus then clears
+history, new walls use it, and a live Quantities panel updates per commit.
+45 tests. `packages/estimator` will consume this and add measurement rules +
+cost rates.
+
+Next candidates, in rough order: wall joins/corner cleanup, more drafting
+primitives (arc, circle, polyline entities), copy-floor-to-floor, first AI
+agent (command schemas → LLM tool defs via describe()).
