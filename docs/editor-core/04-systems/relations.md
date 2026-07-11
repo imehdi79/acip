@@ -35,6 +35,20 @@ dimensions following geometry.
 - Levels participate in the same machinery: a wall with `topLevelId: L2` recomputes when
   Level 2's elevation changes. Same DAG, same dirty propagation.
 
+### Implementation notes (2026-07-11)
+
+- **Recompute is pull-based**: derived geometry is evaluated lazily on read
+  (`window.getBaseGeometry()` resolves its host through the graph;
+  `wall.getEffectiveGeometry()` collects `IOpeningCutter` attachments). The dirty
+  set from `collectDirty` drives spatial-index updates and the change event; no
+  push/cache pass exists yet — add one only when profiling demands it.
+- **Relation endpoints count as touched**: attach/detach marks both host and
+  hosted dirty (a window snaps to its wall on attach).
+- **Placement param `t` lives in the hosted entity's props**, not in
+  `relation.params` (single update path through `tx.update`); the relation stores
+  the anchor index. Revisit if a generic recompute pass ever needs relation-owned
+  params.
+
 ## Explicitly NOT a constraint solver
 
 A real parametric constraint solver (bidirectional: "keep these lines parallel and this

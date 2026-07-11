@@ -31,6 +31,21 @@ registries, EditorSession facade, native JSON io, and reference implementations
 `nx run editor-core:test` (bun test) and `nx run editor-core:typecheck`.
 
 Known placeholders: NaiveSpatialIndex (linear scan behind the SpatialIndex
-interface — swap for R-tree later), topology/offset/mesh algorithms,
+interface — swap for R-tree later), offset/fillet math, 2D boolean topology,
 annotations/blocks entities, and document-level stores (layers/levels/materials/
 types) are not yet transactional.
+
+**Semantic slice landed 2026-07-11.** WallEntity (IHost + ILevelAware +
+IMeshable: baseline + thickness + height, axis/face anchors, solid spans via
+`topology/intervals`, extrusion with opening bands) and WindowEntity (IHosted +
+IOpeningCutter + IMeshable: placement derived from host and `t`, plan symbol,
+glazing pane mesh; ENTITY.MOVE projects onto the wall axis). Commands WALL.ADD /
+WINDOW.ADD; recompute is pull-based lazy evaluation (see
+[relations](../04-systems/relations.md) implementation notes). web-editor has
+Wall/Window tools and region fill. 25 tests cover the arc, including
+wall-carries-window, cascade + single-undo restore, and mesh opening bands.
+
+Next candidates, in rough order: transactional document stores (unblocks
+LEVEL.ADD and the levels UI), quantities panel (net areas / per-material volumes
+from assembly layers — the estimator seed), window/crossing selection + grips,
+DoorEntity (trivial reuse of IOpeningCutter), more drafting primitives.
