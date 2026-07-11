@@ -84,6 +84,14 @@ span quads); plan, mesh, and bounds follow for free. Quantities stay
 centerline-based. See [wall-joins.md](../04-systems/wall-joins.md) for
 decisions and V1 limitations. 55 tests. V2 = T-junctions.
 
-Next candidates, in rough order: T-junctions (wall joins V2), more drafting
-primitives (arc, circle, polyline entities), copy-floor-to-floor, first AI
-agent (command schemas → LLM tool defs via describe()).
+**Wall joins V2 (T-junctions) landed 2026-07-12.** A wall end touching
+another wall's body butts against its near face (`resolveTeeCap`, pure);
+detection is endpoint-driven, wheel wins over tee, nearest host wins.
+Discovered invariant: wall bounds must include the baseline, because join
+discovery goes through the spatial index and must not depend on the join's
+own output — recorded in [wall-joins.md](../04-systems/wall-joins.md).
+64 tests.
+
+Next candidates, in rough order: more drafting primitives (arc, circle,
+polyline entities), copy-floor-to-floor, first AI agent (command schemas →
+LLM tool defs via describe()).

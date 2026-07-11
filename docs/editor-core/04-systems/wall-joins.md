@@ -1,6 +1,6 @@
 # Wall Joins / Corner Cleanup
 
-Status: **Decided** (V1 shipped 2026-07-12) · V2 deferred
+Status: **Decided** (V1 + V2 T-junctions shipped 2026-07-12)
 
 Walls whose baseline endpoints coincide clean up their shared corner
 automatically — the plan shows a mitered corner instead of two overlapping
@@ -60,6 +60,36 @@ corners into the terminal span quads. Everything downstream is untouched:
 Anchors stay baseline-based, so hosted openings (windows/doors) keep their
 parametric placement regardless of joins.
 
+### Invariant discovered during V2: wall bounds must include the baseline
+
+Join caps can clip the effective body AWAY from a baseline endpoint (a tee
+stops at the host's face). Junction discovery queries the spatial index by
+endpoint, and the spatial index stores bounds — if bounds came only from the
+capped effective geometry, a joined wall's own endpoint could fall outside its
+bbox and discovery would depend on its own output (walls tee'd into a host
+instead of finding each other). `WallEntity.getBounds()` therefore unions the
+effective-geometry bbox with the baseline bbox. Rule for future join-like
+features: **anything used to DISCOVER a derived relationship must be
+independent of that relationship's result.**
+
+## T-junctions (V2)
+
+A wall END touching another wall's BODY away from its endpoints butts against
+that wall's **near face**; the continuous wall is untouched.
+
+- **Detection** (in `junctionCap`, only when no shared-endpoint neighbors
+  exist — the wheel always wins): endpoint within `halfWidth + JOIN_TOLERANCE`
+  of a host's baseline segment, with the perpendicular foot in the segment's
+  interior. Works whether the wall was drawn to the host's centerline (gets
+  clipped back) or snapped to its face (already flush). Nearest host wins.
+- **Math** (`resolveTeeCap`, pure): intersect the ending wall's two face lines
+  with the host's near-face line; the near face is the side the ending wall's
+  direction points toward. Parallel → null (no butt possible, square cap).
+  Shallow incidence corners clamp to the miter limit.
+- **Quantities unchanged** — centerline-based; the plan/mesh area of the tee'd
+  wall shrinks by `halfWidth(host) × thickness` (geometric truth), but takeoff
+  reads the baseline.
+
 ## Known V1 limitations
 
 - **Opening bands at corners**: a window/door sill or lintel band flush against
@@ -70,10 +100,15 @@ parametric placement regardless of joins.
   miter tips ever matters.
 - **Vertical mismatch ignored**: walls of different heights/levels still miter
   in plan; the 3D seam is not resolved.
+- **Wheel-over-tee overlap**: when two walls share an endpoint ON a third
+  wall's body, they miter with each other (wheel priority) and their miter can
+  overlap the host's body in plan. Fills overlap harmlessly; no boolean
+  cleanup in V2.
+- **Crossing (+) junctions**: interior-crossing-interior is not detected —
+  detection is endpoint-driven only.
 
-## V2 (deferred): T-junctions
+## Deferred beyond V2
 
-Endpoint-touching-interior (a wall ending on another wall's face, not its
-endpoint). Plan: detect endpoint-on-segment in `junctionCap`, clip the ending
-wall to the near face of the continuous wall; the continuous wall is untouched.
-Same derived-not-stored rule.
+Per-corner overrides (join opt-out, butt vs miter choice — become stored wall
+properties read by the resolver), crossing junctions, vertical seam
+resolution, boolean cleanup of overlapping plan fills.
