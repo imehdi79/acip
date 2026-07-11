@@ -22,6 +22,9 @@ import type { Mesh3D, MeshDetail } from '../../geometry/mesh/index.js';
 import { extrudeQuad, mergeMeshes } from '../../geometry/mesh/index.js';
 import type { Interval } from '../../topology/intervals.js';
 import { subtractIntervals } from '../../topology/intervals.js';
+import type { EndCap, WallEnd } from '../../topology/junctions.js';
+import { JOIN_TOLERANCE, resolveJunction } from '../../topology/junctions.js';
+import { bboxExpand, bboxFromPoints } from '../../geometry/primitives/bbox.js';
 import type {
   Anchor,
   GripPoint,
@@ -93,6 +96,60 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
     return [add(pa, half), add(pb, half), sub(pb, half), sub(pa, half)];
   }
 
+  /**
+   * Auto-join: walls whose endpoints coincide (within JOIN_TOLERANCE) miter
+   * their caps against each other. Derived on every read, never stored — a
+   * join dissolves the moment a wall is dragged away. Neighbor discovery goes
+   * through the document's spatial index.
+   */
+  private junctionCap(which: 'start' | 'end'): EndCap | null {
+    const doc = this.doc;
+    if (!doc || this.getLength() < JOIN_TOLERANCE) return null;
+    const p = which === 'start' ? this.a : this.b;
+    const away = which === 'start' ? sub(this.b, this.a) : sub(this.a, this.b);
+    const ends: WallEnd[] = [
+      { point: p, direction: normalize(away), halfWidth: this.getThickness() / 2 },
+    ];
+    for (const other of doc.queryBBox(bboxExpand(bboxFromPoints([p]), JOIN_TOLERANCE))) {
+      if (other === this || !(other instanceof WallEntity)) continue;
+      const bl = other.getBaseline();
+      if (distance(bl.a, bl.b) < JOIN_TOLERANCE) continue;
+      let dir: Vector | null = null;
+      if (distance(bl.a, p) <= JOIN_TOLERANCE) dir = normalize(sub(bl.b, bl.a));
+      else if (distance(bl.b, p) <= JOIN_TOLERANCE) dir = normalize(sub(bl.a, bl.b));
+      if (!dir) continue;
+      ends.push({ point: p, direction: dir, halfWidth: other.getThickness() / 2 });
+    }
+    if (ends.length < 2) return null;
+    return resolveJunction(ends)[0];
+  }
+
+  private capsForEnds(): { start: EndCap | null; end: EndCap | null } {
+    return { start: this.junctionCap('start'), end: this.junctionCap('end') };
+  }
+
+  /**
+   * Span quad with junction caps swapped in at terminal spans. The start cap
+   * maps left→+normal directly; the end cap's direction points backwards, so
+   * its left/right land on the −/+ normal corners.
+   */
+  private spanQuadJoined(
+    s0: number,
+    s1: number,
+    caps: { start: EndCap | null; end: EndCap | null },
+  ): [Point, Point, Point, Point] {
+    const quad = this.spanQuad(s0, s1);
+    if (caps.start && s0 <= JOIN_TOLERANCE) {
+      quad[0] = caps.start.left;
+      quad[3] = caps.start.right;
+    }
+    if (caps.end && s1 >= this.getLength() - JOIN_TOLERANCE) {
+      quad[1] = caps.end.right;
+      quad[2] = caps.end.left;
+    }
+    return quad;
+  }
+
   private spanRegion(s0: number, s1: number): RegionShape {
     return { kind: 'region', boundary: this.spanQuad(s0, s1), holes: [] };
   }
@@ -128,7 +185,12 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
       // fully consumed by openings — keep the baseline so bounds stay sane
       return { kind: 'segment', a: this.a, b: this.b };
     }
-    const regions = spans.map((s) => this.spanRegion(s.start, s.end));
+    const caps = this.capsForEnds();
+    const regions: RegionShape[] = spans.map((s) => ({
+      kind: 'region',
+      boundary: this.spanQuadJoined(s.start, s.end, caps),
+      holes: [],
+    }));
     if (regions.length === 1 && spans[0].start === 0 && spans[0].end === this.getLength()) {
       return regions[0];
     }
@@ -205,10 +267,13 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
     const z0 = this.baseElevation();
     const height = this.getHeight();
     const len = this.getLength();
+    const caps = this.capsForEnds();
     const meshes: Mesh3D[] = [];
     for (const span of this.getSolidSpans()) {
-      meshes.push(extrudeQuad(this.spanQuad(span.start, span.end), z0, z0 + height));
+      meshes.push(extrudeQuad(this.spanQuadJoined(span.start, span.end, caps), z0, z0 + height));
     }
+    // opening sill/lintel bands keep square ends — a band flush against a
+    // mitered corner is a known V1 limitation (see docs wall-joins.md)
     for (const spec of this.getOpeningSpecs()) {
       const center = spec.t * len;
       const s0 = Math.max(0, center - spec.width / 2);

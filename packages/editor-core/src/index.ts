@@ -93,8 +93,13 @@ export {
   extrudeQuad,
   mergeMeshes,
 } from './geometry/index.js';
-export type { Loop, BoundaryWithHoles, Interval } from './topology/index.js';
-export { mergeIntervals, subtractIntervals } from './topology/index.js';
+export type { Loop, BoundaryWithHoles, Interval, WallEnd, EndCap } from './topology/index.js';
+export {
+  mergeIntervals,
+  subtractIntervals,
+  resolveJunction,
+  JOIN_TOLERANCE,
+} from './topology/index.js';
 
 // ── entities (Layer 2) ──
 export type {
