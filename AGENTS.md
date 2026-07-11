@@ -27,5 +27,7 @@
 Before working on `packages/editor-core` or related packages (estimator, agents,
 viewer-3d, web-editor integration), **read `docs/editor-core/README.md` first**. It
 indexes the settled architecture decisions (entity contract, command bus, relations,
-levels, 2.5D, materials, plugin seam). Treat items marked "Decided" as settled — do not
-re-derive or re-litigate them unless the user explicitly reopens the topic.
+levels, 2.5D, materials, plugin seam). For `apps/web-editor` work, also read
+`docs/web-editor/README.md` (rendering stack: Canvas2D not Konva, Three.js not R3F;
+layout; input pipeline). Treat items marked "Decided" as settled — do not re-derive
+or re-litigate them unless the user explicitly reopens the topic.
