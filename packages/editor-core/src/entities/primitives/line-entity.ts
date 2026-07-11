@@ -9,10 +9,11 @@ import { applyToPoint } from '../../geometry/primitives/matrix3.js';
 import { distanceToSegment } from '../../geometry/curves/segment.js';
 import type { Geometry } from '../../geometry/shapes.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
+import type { GripPoint, IGrippable } from '../base/capabilities.js';
 import type { Transaction } from '../../document/history/transaction.js';
 
 /** Reference implementation of the Entity contract. */
-export class LineEntity extends Entity {
+export class LineEntity extends Entity implements IGrippable {
   static readonly TYPE = 'line';
 
   readonly type: string = LineEntity.TYPE;
@@ -54,6 +55,20 @@ export class LineEntity extends Entity {
   transform(m: Matrix3, tx: Transaction): void {
     tx.update(this, (e) => {
       e.setPoints(applyToPoint(m, e.a), applyToPoint(m, e.b));
+    });
+  }
+
+  getGrips(): GripPoint[] {
+    return [
+      { index: 0, point: this.a, kind: 'endpoint' },
+      { index: 1, point: this.b, kind: 'endpoint' },
+    ];
+  }
+
+  moveGrip(index: number, to: Point, tx: Transaction): void {
+    tx.update(this, (e) => {
+      if (index === 0) e.a = to;
+      else e.b = to;
     });
   }
 

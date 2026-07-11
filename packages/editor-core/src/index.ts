@@ -54,6 +54,7 @@ export type {
   Mesh3D,
   MeshDetail,
 } from './geometry/index.js';
+export { transformGeometry } from './geometry/shapes.js';
 export {
   point,
   ORIGIN,
@@ -109,6 +110,8 @@ export type {
   IMeshable,
   IOpeningCutter,
   OpeningSpec,
+  GripPoint,
+  IGrippable,
 } from './entities/index.js';
 export {
   Entity,
@@ -117,12 +120,16 @@ export {
   isLevelAware,
   isMeshable,
   cutsOpening,
+  hasGrips,
   LineEntity,
   createLineEntity,
+  HostedOpeningEntity,
   WallEntity,
   createWallEntity,
   WindowEntity,
   createWindowEntity,
+  DoorEntity,
+  createDoorEntity,
 } from './entities/index.js';
 
 // ── document (Layer 2) ──
@@ -164,8 +171,10 @@ export type {
   AddLineParams,
   MoveParams,
   EraseParams,
+  GripMoveParams,
   AddWallParams,
   AddWindowParams,
+  AddDoorParams,
 } from './commands/index.js';
 export {
   paramsSchema,
@@ -174,9 +183,11 @@ export {
   AddLineCommand,
   MoveCommand,
   EraseCommand,
+  GripMoveCommand,
   registerBuiltinCommands,
   AddWallCommand,
   AddWindowCommand,
+  AddDoorCommand,
   registerArchitectureCommands,
   asPoint,
   asIdArray,

@@ -3,10 +3,11 @@ import { ValidationError } from '../common/errors.js';
 import type { Point } from '../geometry/primitives/point.js';
 import { translation } from '../geometry/primitives/matrix3.js';
 import { LineEntity } from '../entities/primitives/line-entity.js';
+import { hasGrips } from '../entities/base/capabilities.js';
 import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
 import type { CommandRegistry } from './command-registry.js';
-import { asIdArray, asPoint } from './validate.js';
+import { asId, asIdArray, asNumber, asPoint } from './validate.js';
 
 export interface AddLineParams {
   a: Point;
@@ -93,8 +94,34 @@ export const EraseCommand: Command<EraseParams, number> = {
   },
 };
 
+export interface GripMoveParams {
+  id: EntityId;
+  index: number;
+  to: Point;
+}
+
+export const GripMoveCommand: Command<GripMoveParams, void> = {
+  name: 'GRIP.MOVE',
+  params: paramsSchema((input) => {
+    const raw = (input ?? {}) as Record<string, unknown>;
+    return {
+      id: asId(raw['id'], 'id'),
+      index: asNumber(raw['index'], 'index'),
+      to: asPoint(raw['to'], 'to'),
+    };
+  }),
+  execute(ctx, params) {
+    const entity = ctx.doc.get(params.id);
+    if (!entity || !hasGrips(entity)) {
+      throw new ValidationError(`entity ${params.id} has no grips`);
+    }
+    entity.moveGrip(params.index, params.to, ctx.tx);
+  },
+};
+
 export function registerBuiltinCommands(registry: CommandRegistry): void {
   registry.register(AddLineCommand);
   registry.register(MoveCommand);
   registry.register(EraseCommand);
+  registry.register(GripMoveCommand);
 }

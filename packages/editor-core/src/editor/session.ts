@@ -9,6 +9,7 @@ import { registerArchitectureCommands } from '../commands/architecture.js';
 import { LineEntity, createLineEntity } from '../entities/primitives/line-entity.js';
 import { WallEntity, createWallEntity } from '../entities/architecture/wall-entity.js';
 import { WindowEntity, createWindowEntity } from '../entities/architecture/window-entity.js';
+import { DoorEntity, createDoorEntity } from '../entities/architecture/door-entity.js';
 import { SelectionSet } from '../selection/index.js';
 import { SnapEngine } from '../snapping/index.js';
 import { MeasurementService } from '../measurements/index.js';
@@ -46,6 +47,7 @@ export class EditorSession {
       this.entityTypes.register({ type: LineEntity.TYPE, create: createLineEntity });
       this.entityTypes.register({ type: WallEntity.TYPE, create: createWallEntity });
       this.entityTypes.register({ type: WindowEntity.TYPE, create: createWindowEntity });
+      this.entityTypes.register({ type: DoorEntity.TYPE, create: createDoorEntity });
       registerBuiltinCommands(this.commands);
       registerArchitectureCommands(this.commands);
     }

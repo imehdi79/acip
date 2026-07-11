@@ -2,17 +2,19 @@ export type { Command, CommandContext, ParamsSchema } from './command.js';
 export { paramsSchema } from './command.js';
 export { CommandRegistry } from './command-registry.js';
 export { CommandBus } from './bus.js';
-export type { AddLineParams, MoveParams, EraseParams } from './builtin.js';
+export type { AddLineParams, MoveParams, EraseParams, GripMoveParams } from './builtin.js';
 export {
   AddLineCommand,
   MoveCommand,
   EraseCommand,
+  GripMoveCommand,
   registerBuiltinCommands,
 } from './builtin.js';
-export type { AddWallParams, AddWindowParams } from './architecture.js';
+export type { AddWallParams, AddWindowParams, AddDoorParams } from './architecture.js';
 export {
   AddWallCommand,
   AddWindowCommand,
+  AddDoorCommand,
   registerArchitectureCommands,
 } from './architecture.js';
 export { asPoint, asIdArray, asId, asNumber, asPositive } from './validate.js';

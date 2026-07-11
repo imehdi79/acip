@@ -24,6 +24,8 @@ import type { Interval } from '../../topology/intervals.js';
 import { subtractIntervals } from '../../topology/intervals.js';
 import type {
   Anchor,
+  GripPoint,
+  IGrippable,
   IHost,
   ILevelAware,
   IMeshable,
@@ -38,7 +40,7 @@ import type { Transaction } from '../../document/history/transaction.js';
  * (windows, doors) on its axis anchor; effective plan geometry is the solid
  * spans between openings; 3D is a straight extrusion with opening bands.
  */
-export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable {
+export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable, IGrippable {
   static readonly TYPE = 'wall';
 
   readonly type: string = WallEntity.TYPE;
@@ -170,6 +172,21 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable 
   transform(m: Matrix3, tx: Transaction): void {
     tx.update(this, (wall) => {
       wall.setBaseline(applyToPoint(m, wall.a), applyToPoint(m, wall.b));
+    });
+  }
+
+  getGrips(): GripPoint[] {
+    return [
+      { index: 0, point: this.a, kind: 'endpoint' },
+      { index: 1, point: this.b, kind: 'endpoint' },
+    ];
+  }
+
+  /** stretch the baseline — hosted openings keep their parametric t and follow */
+  moveGrip(index: number, to: Point, tx: Transaction): void {
+    tx.update(this, (wall) => {
+      if (index === 0) wall.a = to;
+      else wall.b = to;
     });
   }
 

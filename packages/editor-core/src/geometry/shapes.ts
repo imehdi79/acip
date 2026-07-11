@@ -1,6 +1,9 @@
 import type { Point } from './primitives/point.js';
+import { angleOf, length } from './primitives/point.js';
 import type { BBox } from './primitives/bbox.js';
 import { bboxFromPoints, bboxUnion } from './primitives/bbox.js';
+import type { Matrix3 } from './primitives/matrix3.js';
+import { applyToPoint, applyToVector } from './primitives/matrix3.js';
 
 export interface SegmentShape {
   readonly kind: 'segment';
@@ -74,5 +77,46 @@ export function geometryBBox(g: Geometry): BBox {
       }
       return box;
     }
+  }
+}
+
+/**
+ * Apply a similarity transform (translate/rotate/uniform scale) to a geometry.
+ * Circles and arcs assume uniform scale — sufficient for move/rotate/copy.
+ */
+export function transformGeometry(g: Geometry, m: Matrix3): Geometry {
+  switch (g.kind) {
+    case 'segment':
+      return { kind: 'segment', a: applyToPoint(m, g.a), b: applyToPoint(m, g.b) };
+    case 'polyline':
+      return {
+        kind: 'polyline',
+        points: g.points.map((p) => applyToPoint(m, p)),
+        closed: g.closed,
+      };
+    case 'circle':
+      return {
+        kind: 'circle',
+        center: applyToPoint(m, g.center),
+        radius: g.radius * length(applyToVector(m, { x: 1, y: 0 })),
+      };
+    case 'arc': {
+      const rotation = angleOf(applyToVector(m, { x: 1, y: 0 }));
+      return {
+        kind: 'arc',
+        center: applyToPoint(m, g.center),
+        radius: g.radius * length(applyToVector(m, { x: 1, y: 0 })),
+        startAngle: g.startAngle + rotation,
+        endAngle: g.endAngle + rotation,
+      };
+    }
+    case 'region':
+      return {
+        kind: 'region',
+        boundary: g.boundary.map((p) => applyToPoint(m, p)),
+        holes: g.holes.map((hole) => hole.map((p) => applyToPoint(m, p))),
+      };
+    case 'group':
+      return { kind: 'group', children: g.children.map((c) => transformGeometry(c, m)) };
   }
 }

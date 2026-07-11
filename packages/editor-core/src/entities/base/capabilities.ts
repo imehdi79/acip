@@ -3,6 +3,7 @@ import type { Geometry } from '../../geometry/shapes.js';
 import type { Mesh3D, MeshDetail } from '../../geometry/mesh/index.js';
 import type { LevelId, RelationId } from '../../common/id.js';
 import type { JsonObject } from '../../common/json.js';
+import type { Transaction } from '../../document/history/transaction.js';
 import type { Entity } from './entity.js';
 
 /** Where attachments may connect on a host (a wall's centerline, its faces…). */
@@ -57,6 +58,19 @@ export interface IOpeningCutter {
   getOpeningSpec(): OpeningSpec;
 }
 
+/** Editable control points — what selection grips grab onto. */
+export interface GripPoint {
+  readonly index: number;
+  readonly point: Point;
+  readonly kind?: string;
+}
+
+export interface IGrippable {
+  getGrips(): GripPoint[];
+  /** mutation must be registered on the transaction (tx.update) */
+  moveGrip(index: number, to: Point, tx: Transaction): void;
+}
+
 export function isHost(e: Entity): e is Entity & IHost {
   return typeof (e as Partial<IHost>).getAnchors === 'function';
 }
@@ -75,4 +89,8 @@ export function isMeshable(e: Entity): e is Entity & IMeshable {
 
 export function cutsOpening(e: Entity): e is Entity & IOpeningCutter {
   return typeof (e as Partial<IOpeningCutter>).getOpeningSpec === 'function';
+}
+
+export function hasGrips(e: Entity): e is Entity & IGrippable {
+  return typeof (e as Partial<IGrippable>).getGrips === 'function';
 }

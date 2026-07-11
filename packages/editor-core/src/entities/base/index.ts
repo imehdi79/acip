@@ -11,6 +11,8 @@ export type {
   IMeshable,
   IOpeningCutter,
   OpeningSpec,
+  GripPoint,
+  IGrippable,
 } from './capabilities.js';
 export {
   isHost,
@@ -18,4 +20,5 @@ export {
   isLevelAware,
   isMeshable,
   cutsOpening,
+  hasGrips,
 } from './capabilities.js';
