@@ -1,10 +1,7 @@
+import { Editor } from '../../editor/editor';
+
 export function HomePage() {
-  return (
-    <div>
-      <h1>Home</h1>
-      <p>Welcome to the web editor.</p>
-    </div>
-  );
+  return <Editor />;
 }
 
 export default HomePage;

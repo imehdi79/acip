@@ -1,5 +1,23 @@
 {
   "name": "@acip/web-editor",
   "version": "0.0.1",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "@acip/editor-core": "workspace:*",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0"
+  },
+  "nx": {
+    "targets": {
+      "typecheck": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "bun x tsc -p apps/web-editor/tsconfig.app.json --noEmit",
+          "cwd": "{workspaceRoot}"
+        }
+      }
+    }
+  }
 }

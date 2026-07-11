@@ -14,6 +14,11 @@ export default defineConfig(() => ({
     host: 'localhost',
   },
   plugins: [react()],
+  resolve: {
+    // resolve @acip/editor-core to its TypeScript source in dev/build —
+    // no prebuild step (matches customConditions in tsconfig.base.json)
+    conditions: ['@acip/source'],
+  },
   // Uncomment this if you are using workers.
   // worker: {
   //  plugins: [],
