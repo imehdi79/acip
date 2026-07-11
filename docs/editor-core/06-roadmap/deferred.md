@@ -45,7 +45,16 @@ WINDOW.ADD; recompute is pull-based lazy evaluation (see
 Wall/Window tools and region fill. 25 tests cover the arc, including
 wall-carries-window, cascade + single-undo restore, and mesh opening bands.
 
+**Direct-manipulation arc landed 2026-07-11.** IGrippable capability
+(GripPoint + moveGrip) on Line/Wall/hosted openings, GRIP.MOVE command,
+transformGeometry helper, HostedOpeningEntity base class (shared by
+WindowEntity and the new DoorEntity — sill 0, leaf + swing-arc plan symbol,
+DOOR.ADD). web-editor SelectTool now does drag-move with dashed ghost preview,
+grip dragging (stretch a wall and its openings follow parametrically),
+window (L→R, contained) / crossing (R→L, touching) box selection, and a Door
+tool. 32 tests.
+
 Next candidates, in rough order: transactional document stores (unblocks
 LEVEL.ADD and the levels UI), quantities panel (net areas / per-material volumes
-from assembly layers — the estimator seed), window/crossing selection + grips,
-DoorEntity (trivial reuse of IOpeningCutter), more drafting primitives.
+from assembly layers — the estimator seed), wall joins/corner cleanup, more
+drafting primitives (arc, circle, polyline entities).
