@@ -1,6 +1,7 @@
 import type { MaterialId } from '../../common/id.js';
 import { newMaterialId } from '../../common/id.js';
 import type { JsonObject } from '../../common/json.js';
+import { RecordTable } from '../store.js';
 
 export type MaterialUnit = 'm' | 'm2' | 'm3' | 'count';
 
@@ -16,20 +17,10 @@ export interface Material {
   appearance?: JsonObject;
 }
 
-export class MaterialLibrary {
-  private materials = new Map<MaterialId, Material>();
-
+export class MaterialLibrary extends RecordTable<Material> {
   add(material: Omit<Material, 'id'> & { id?: MaterialId }): Material {
     const m: Material = { ...material, id: material.id ?? newMaterialId() };
-    this.materials.set(m.id, m);
+    this.set(m);
     return m;
-  }
-
-  get(id: MaterialId): Material | null {
-    return this.materials.get(id) ?? null;
-  }
-
-  list(): Material[] {
-    return [...this.materials.values()];
   }
 }

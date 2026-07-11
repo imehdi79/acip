@@ -17,4 +17,17 @@ export {
   AddDoorCommand,
   registerArchitectureCommands,
 } from './architecture.js';
+export type {
+  AddLevelParams,
+  UpdateLevelParams,
+  RemoveLevelParams,
+  AddLayerParams,
+} from './document-stores.js';
+export {
+  AddLevelCommand,
+  UpdateLevelCommand,
+  RemoveLevelCommand,
+  AddLayerCommand,
+  registerDocumentStoreCommands,
+} from './document-stores.js';
 export { asPoint, asIdArray, asId, asNumber, asPositive } from './validate.js';

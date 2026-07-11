@@ -6,6 +6,7 @@ import { CommandRegistry } from '../commands/command-registry.js';
 import { CommandBus } from '../commands/bus.js';
 import { registerBuiltinCommands } from '../commands/builtin.js';
 import { registerArchitectureCommands } from '../commands/architecture.js';
+import { registerDocumentStoreCommands } from '../commands/document-stores.js';
 import { LineEntity, createLineEntity } from '../entities/primitives/line-entity.js';
 import { WallEntity, createWallEntity } from '../entities/architecture/wall-entity.js';
 import { WindowEntity, createWindowEntity } from '../entities/architecture/window-entity.js';
@@ -50,6 +51,7 @@ export class EditorSession {
       this.entityTypes.register({ type: DoorEntity.TYPE, create: createDoorEntity });
       registerBuiltinCommands(this.commands);
       registerArchitectureCommands(this.commands);
+      registerDocumentStoreCommands(this.commands);
     }
   }
 

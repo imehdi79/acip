@@ -1,7 +1,9 @@
-export type { DocumentChangeEvent, DocumentEvents } from './document.js';
+export type { DocumentChangeEvent, DocumentEvents, StoreName } from './document.js';
 export { DrawingDocument } from './document.js';
+export type { StoreItem, MutableStore } from './store.js';
+export { RecordTable } from './store.js';
 export type { Layer } from './layer.js';
-export { DEFAULT_LAYER_ID, createDefaultLayer } from './layer.js';
+export { DEFAULT_LAYER_ID, createDefaultLayer, LayerTable } from './layer.js';
 export type { Level } from './levels/index.js';
 export { LevelTable } from './levels/index.js';
 export type { Material, MaterialUnit } from './materials/index.js';

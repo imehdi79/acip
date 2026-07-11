@@ -4,7 +4,19 @@ import type { Entity } from '../../entities/base/entity.js';
 import type { EntityData } from '../../entities/base/data.js';
 import type { PlacementParams } from '../../entities/base/capabilities.js';
 import type { Relation, RelationChange } from '../../relations/types.js';
-import type { DrawingDocument } from '../document.js';
+import type { DrawingDocument, StoreName } from '../document.js';
+import type { StoreItem } from '../store.js';
+
+/** document-store edits (levels, layers, materials, types) — snapshot-based like entities */
+export type StoreChange =
+  | { readonly store: StoreName; readonly op: 'add'; readonly item: StoreItem }
+  | {
+      readonly store: StoreName;
+      readonly op: 'update';
+      readonly before: StoreItem;
+      readonly after: StoreItem;
+    }
+  | { readonly store: StoreName; readonly op: 'remove'; readonly item: StoreItem };
 
 /**
  * The immutable result of one committed command. History replays it for
@@ -20,6 +32,7 @@ export interface CommitRecord {
     readonly updated: readonly { before: EntityData; after: EntityData }[];
     readonly removed: readonly EntityData[];
     readonly relations: readonly RelationChange[];
+    readonly stores: readonly StoreChange[];
   };
   readonly timestamp: number;
 }
@@ -40,6 +53,9 @@ export interface Transaction {
     params: PlacementParams,
   ): Relation;
   detach(relationId: RelationId): void;
+  storeAdd<T extends StoreItem>(store: StoreName, item: T): T;
+  storeUpdate<T extends StoreItem>(store: StoreName, id: string, mutate: (draft: T) => void): void;
+  storeRemove(store: StoreName, id: string): void;
 }
 
 export class TransactionImpl implements Transaction {
@@ -48,6 +64,7 @@ export class TransactionImpl implements Transaction {
   private before = new Map<EntityId, EntityData>();
   private removedEntities = new Map<EntityId, { entity: Entity; data: EntityData }>();
   private relationOps: RelationChange[] = [];
+  private storeOps: StoreChange[] = [];
   private closed = false;
 
   constructor(private doc: DrawingDocument) {}
@@ -117,6 +134,42 @@ export class TransactionImpl implements Transaction {
     this.relationOps.push({ op: 'detach', relation });
   }
 
+  storeAdd<T extends StoreItem>(store: StoreName, item: T): T {
+    this.assertOpen();
+    const table = this.doc._store(store);
+    if (table.has(item.id)) {
+      throw new TransactionError(`${store} item ${item.id} already exists`);
+    }
+    table.set(structuredClone(item));
+    this.storeOps.push({ store, op: 'add', item: structuredClone(item) });
+    return item;
+  }
+
+  storeUpdate<T extends StoreItem>(
+    store: StoreName,
+    id: string,
+    mutate: (draft: T) => void,
+  ): void {
+    this.assertOpen();
+    const table = this.doc._store(store);
+    const current = table.get(id);
+    if (!current) throw new TransactionError(`${store} item ${id} does not exist`);
+    const before = structuredClone(current);
+    const draft = structuredClone(current) as T;
+    mutate(draft);
+    table.set(draft);
+    this.storeOps.push({ store, op: 'update', before, after: structuredClone(draft) });
+  }
+
+  storeRemove(store: StoreName, id: string): void {
+    this.assertOpen();
+    const table = this.doc._store(store);
+    const current = table.get(id);
+    if (!current) throw new TransactionError(`${store} item ${id} does not exist`);
+    table.delete(id);
+    this.storeOps.push({ store, op: 'remove', item: structuredClone(current) });
+  }
+
   commit(commandName: string, params: unknown): CommitRecord {
     this.assertOpen();
     this.closed = true;
@@ -134,7 +187,13 @@ export class TransactionImpl implements Transaction {
     return {
       commandName,
       params,
-      changes: { created, updated, removed, relations: [...this.relationOps] },
+      changes: {
+        created,
+        updated,
+        removed,
+        relations: [...this.relationOps],
+        stores: [...this.storeOps],
+      },
       timestamp: Date.now(),
     };
   }
@@ -142,7 +201,15 @@ export class TransactionImpl implements Transaction {
   rollback(): void {
     this.assertOpen();
     this.closed = true;
-    // reverse relation ops first (they may reference created/removed entities)
+    // reverse store ops first — entities may reference their items
+    for (let i = this.storeOps.length - 1; i >= 0; i--) {
+      const op = this.storeOps[i];
+      const table = this.doc._store(op.store);
+      if (op.op === 'add') table.delete(op.item.id);
+      else if (op.op === 'update') table.set(op.before);
+      else table.set(op.item);
+    }
+    // reverse relation ops next (they may reference created/removed entities)
     for (let i = this.relationOps.length - 1; i >= 0; i--) {
       const op = this.relationOps[i];
       if (op.op === 'attach') this.doc.relations.detach(op.relation.id);

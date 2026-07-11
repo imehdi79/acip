@@ -18,6 +18,7 @@ export function entitiesInView(doc: DrawingDocument, view: ViewDefinition): Enti
   if (view.levelId === null) return doc.all();
   return doc.all().filter((e) => {
     if (!isLevelAware(e)) return true;
-    return e.baseLevelId === view.levelId;
+    // unassigned (null) entities show on every level
+    return e.baseLevelId === null || e.baseLevelId === view.levelId;
   });
 }

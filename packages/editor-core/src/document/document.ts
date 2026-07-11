@@ -1,17 +1,21 @@
-import type { EntityId, LayerId } from '../common/id.js';
+import type { EntityId, LayerId, LevelId } from '../common/id.js';
 import { TypedEventEmitter } from '../common/events.js';
 import { DocumentError } from '../common/errors.js';
 import type { BBox } from '../geometry/primitives/bbox.js';
 import type { Entity } from '../entities/base/entity.js';
+import { isLevelAware } from '../entities/base/capabilities.js';
 import type { Layer } from './layer.js';
-import { createDefaultLayer } from './layer.js';
+import { LayerTable, createDefaultLayer } from './layer.js';
 import { LevelTable } from './levels/index.js';
 import { MaterialLibrary } from './materials/index.js';
 import { TypeCatalog } from './types/index.js';
+import type { MutableStore, StoreItem } from './store.js';
 import type { SpatialIndex } from './spatial/index.js';
 import { NaiveSpatialIndex } from './spatial/index.js';
 import { RelationGraph } from '../relations/relation-graph.js';
 import type { CommitRecord } from './history/transaction.js';
+
+export type StoreName = 'layers' | 'levels' | 'materials' | 'types';
 
 export interface DocumentChangeEvent {
   readonly kind: 'commit' | 'undo' | 'redo';
@@ -27,17 +31,16 @@ export type DocumentEvents = {
 export class DrawingDocument {
   readonly events = new TypedEventEmitter<DocumentEvents>();
   readonly relations = new RelationGraph();
+  readonly layers = new LayerTable();
   readonly levels = new LevelTable();
   readonly materials = new MaterialLibrary();
   readonly types = new TypeCatalog();
 
   private entities = new Map<EntityId, Entity>();
-  private layers = new Map<LayerId, Layer>();
   private spatial: SpatialIndex = new NaiveSpatialIndex();
 
   constructor() {
-    const layer = createDefaultLayer();
-    this.layers.set(layer.id, layer);
+    this.layers.set(createDefaultLayer());
   }
 
   get(id: EntityId): Entity | null {
@@ -66,18 +69,25 @@ export class DrawingDocument {
   }
 
   getLayer(id: LayerId): Layer | null {
-    return this.layers.get(id) ?? null;
-  }
-
-  addLayer(layer: Layer): void {
-    if (this.layers.has(layer.id)) {
-      throw new DocumentError(`layer ${layer.id} already exists`);
-    }
-    this.layers.set(layer.id, layer);
+    return this.layers.get(id);
   }
 
   layersList(): Layer[] {
-    return [...this.layers.values()];
+    return this.layers.list();
+  }
+
+  /** @internal uniform store access for transactions/history */
+  _store(name: StoreName): MutableStore<StoreItem> {
+    switch (name) {
+      case 'layers':
+        return this.layers;
+      case 'levels':
+        return this.levels;
+      case 'materials':
+        return this.materials;
+      case 'types':
+        return this.types;
+    }
   }
 
   /** @internal mutation path for transactions/history only — use the command bus */
@@ -116,6 +126,23 @@ export class DrawingDocument {
     // its wall on attach) — both endpoints count as touched
     for (const op of record.changes.relations) {
       touched.push(op.relation.hostId, op.relation.hostedId);
+    }
+    // a level's elevation change invalidates every entity bound to it
+    const changedLevels = new Set<string>();
+    for (const change of record.changes.stores) {
+      if (change.store !== 'levels') continue;
+      changedLevels.add(change.op === 'update' ? change.after.id : change.item.id);
+    }
+    if (changedLevels.size > 0) {
+      for (const entity of this.entities.values()) {
+        if (
+          isLevelAware(entity) &&
+          entity.baseLevelId &&
+          changedLevels.has(entity.baseLevelId as LevelId as string)
+        ) {
+          touched.push(entity.id);
+        }
+      }
     }
     const dirty = this.relations.collectDirty(touched);
     for (const id of dirty) {

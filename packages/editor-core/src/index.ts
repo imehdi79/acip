@@ -136,6 +136,10 @@ export {
 export type {
   DocumentChangeEvent,
   DocumentEvents,
+  StoreName,
+  StoreItem,
+  MutableStore,
+  StoreChange,
   Layer,
   Level,
   Material,
@@ -149,6 +153,8 @@ export type {
 export {
   DrawingDocument,
   DEFAULT_LAYER_ID,
+  RecordTable,
+  LayerTable,
   LevelTable,
   MaterialLibrary,
   TypeCatalog,
@@ -175,6 +181,10 @@ export type {
   AddWallParams,
   AddWindowParams,
   AddDoorParams,
+  AddLevelParams,
+  UpdateLevelParams,
+  RemoveLevelParams,
+  AddLayerParams,
 } from './commands/index.js';
 export {
   paramsSchema,
@@ -189,6 +199,11 @@ export {
   AddWindowCommand,
   AddDoorCommand,
   registerArchitectureCommands,
+  AddLevelCommand,
+  UpdateLevelCommand,
+  RemoveLevelCommand,
+  AddLayerCommand,
+  registerDocumentStoreCommands,
   asPoint,
   asIdArray,
   asId,

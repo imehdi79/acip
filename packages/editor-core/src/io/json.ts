@@ -36,7 +36,7 @@ export function loadDocument(data: DocumentData, registry: EntityTypeRegistry): 
   const doc = new DrawingDocument();
   for (const layer of data.layers) {
     if ((layer.id as LayerId) === DEFAULT_LAYER_ID) continue;
-    doc.addLayer({ ...layer });
+    doc.layers.set({ ...layer });
   }
   for (const level of data.levels) {
     doc.levels.add(level.name, level.elevation, level.id);

@@ -34,6 +34,16 @@ export class HistoryStack {
     const record = this.undoStack.pop();
     if (!record) return null;
 
+    // stores first: restored entities may reference their items (levels, layers)
+    const stores = record.changes.stores;
+    for (let i = stores.length - 1; i >= 0; i--) {
+      const change = stores[i];
+      const table = this.doc._store(change.store);
+      if (change.op === 'add') table.delete(change.item.id);
+      else if (change.op === 'update') table.set(structuredClone(change.before));
+      else table.set(structuredClone(change.item));
+    }
+
     const rels = record.changes.relations;
     for (let i = rels.length - 1; i >= 0; i--) {
       const op = rels[i];
@@ -61,6 +71,13 @@ export class HistoryStack {
   redo(): CommitRecord | null {
     const record = this.redoStack.pop();
     if (!record) return null;
+
+    for (const change of record.changes.stores) {
+      const table = this.doc._store(change.store);
+      if (change.op === 'add') table.set(structuredClone(change.item));
+      else if (change.op === 'update') table.set(structuredClone(change.after));
+      else table.delete(change.item.id);
+    }
 
     for (const op of record.changes.relations) {
       if (op.op === 'detach') this.doc.relations.detach(op.relation.id);

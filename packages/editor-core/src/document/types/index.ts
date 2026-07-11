@@ -1,6 +1,7 @@
 import type { MaterialId, TypeId } from '../../common/id.js';
 import { newTypeId } from '../../common/id.js';
 import type { JsonObject } from '../../common/json.js';
+import { RecordTable } from '../store.js';
 
 export interface AssemblyLayer {
   readonly materialId: MaterialId;
@@ -20,21 +21,15 @@ export interface EntityTypeDef {
   props?: JsonObject;
 }
 
-export class TypeCatalog {
-  private defs = new Map<TypeId, EntityTypeDef>();
-
+export class TypeCatalog extends RecordTable<EntityTypeDef> {
   add(def: Omit<EntityTypeDef, 'id'> & { id?: TypeId }): EntityTypeDef {
     const d: EntityTypeDef = { ...def, id: def.id ?? newTypeId() };
-    this.defs.set(d.id, d);
+    this.set(d);
     return d;
   }
 
-  get(id: TypeId): EntityTypeDef | null {
-    return this.defs.get(id) ?? null;
-  }
-
-  list(targetType?: string): EntityTypeDef[] {
-    const all = [...this.defs.values()];
+  override list(targetType?: string): EntityTypeDef[] {
+    const all = super.list();
     return targetType ? all.filter((d) => d.targetType === targetType) : all;
   }
 }
