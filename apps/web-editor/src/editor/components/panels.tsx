@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { computeQuantities } from '@acip/editor-core';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useDocRevision, useSelectionIds } from '../hooks';
@@ -42,11 +43,66 @@ export function Panels() {
         </ul>
       </section>
       <LevelsSection />
+      <QuantitiesSection />
       <section>
         <h3>Entities</h3>
         <p>{session.doc.count} in document</p>
       </section>
     </aside>
+  );
+}
+
+function QuantitiesSection() {
+  const session = useSession();
+  useDocRevision(session);
+  const report = computeQuantities(session.doc);
+
+  if (report.walls.length === 0) {
+    return (
+      <section>
+        <h3>Quantities</h3>
+        <p className="muted">Draw walls to see takeoff</p>
+      </section>
+    );
+  }
+
+  return (
+    <section>
+      <h3>Quantities</h3>
+      <dl>
+        <dt>Walls</dt>
+        <dd>{report.walls.length}</dd>
+        <dt>Length</dt>
+        <dd>{report.totals.wallLength.toFixed(2)} m</dd>
+        <dt>Face area</dt>
+        <dd>{report.totals.wallNetFaceArea.toFixed(2)} m²</dd>
+        <dt>Volume</dt>
+        <dd>{report.totals.wallNetVolume.toFixed(2)} m³</dd>
+        <dt>Windows</dt>
+        <dd>{report.totals.windowCount}</dd>
+        <dt>Doors</dt>
+        <dd>{report.totals.doorCount}</dd>
+      </dl>
+      {report.materials.length > 0 && (
+        <>
+          <h3>Materials</h3>
+          <dl>
+            {report.materials.map((m) => (
+              <MaterialRow key={m.materialId} name={m.name} volume={m.volume} />
+            ))}
+          </dl>
+        </>
+      )}
+    </section>
+  );
+}
+
+function MaterialRow({ name, volume }: { name: string; volume: number }) {
+  return (
+    <>
+      <dt>{name}</dt>
+      <dd>{volume.toFixed(2)} m³</dd>
+    </>
   );
 }
 
