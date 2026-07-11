@@ -5,7 +5,10 @@ import { EntityTypeRegistry } from '../registry/entity-registry.js';
 import { CommandRegistry } from '../commands/command-registry.js';
 import { CommandBus } from '../commands/bus.js';
 import { registerBuiltinCommands } from '../commands/builtin.js';
+import { registerArchitectureCommands } from '../commands/architecture.js';
 import { LineEntity, createLineEntity } from '../entities/primitives/line-entity.js';
+import { WallEntity, createWallEntity } from '../entities/architecture/wall-entity.js';
+import { WindowEntity, createWindowEntity } from '../entities/architecture/window-entity.js';
 import { SelectionSet } from '../selection/index.js';
 import { SnapEngine } from '../snapping/index.js';
 import { MeasurementService } from '../measurements/index.js';
@@ -41,7 +44,10 @@ export class EditorSession {
 
     if (options.registerBuiltins !== false) {
       this.entityTypes.register({ type: LineEntity.TYPE, create: createLineEntity });
+      this.entityTypes.register({ type: WallEntity.TYPE, create: createWallEntity });
+      this.entityTypes.register({ type: WindowEntity.TYPE, create: createWindowEntity });
       registerBuiltinCommands(this.commands);
+      registerArchitectureCommands(this.commands);
     }
   }
 

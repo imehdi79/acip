@@ -9,5 +9,13 @@ export type {
   IHosted,
   ILevelAware,
   IMeshable,
+  IOpeningCutter,
+  OpeningSpec,
 } from './capabilities.js';
-export { isHost, isHosted, isLevelAware, isMeshable } from './capabilities.js';
+export {
+  isHost,
+  isHosted,
+  isLevelAware,
+  isMeshable,
+  cutsOpening,
+} from './capabilities.js';

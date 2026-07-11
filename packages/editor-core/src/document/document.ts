@@ -112,6 +112,11 @@ export class DrawingDocument {
       ...record.changes.updated.map((u) => u.after.id as EntityId),
       ...record.changes.removed.map((d) => d.id as EntityId),
     ];
+    // relation edits change derived geometry on both ends (a window snaps to
+    // its wall on attach) — both endpoints count as touched
+    for (const op of record.changes.relations) {
+      touched.push(op.relation.hostId, op.relation.hostedId);
+    }
     const dirty = this.relations.collectDirty(touched);
     for (const id of dirty) {
       const e = this.entities.get(id);

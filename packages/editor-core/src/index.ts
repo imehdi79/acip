@@ -88,8 +88,12 @@ export {
   closestParamOnSegment,
   closestPointOnSegment,
   distanceToSegment,
+  EMPTY_MESH,
+  extrudeQuad,
+  mergeMeshes,
 } from './geometry/index.js';
-export type { Loop, BoundaryWithHoles } from './topology/index.js';
+export type { Loop, BoundaryWithHoles, Interval } from './topology/index.js';
+export { mergeIntervals, subtractIntervals } from './topology/index.js';
 
 // ── entities (Layer 2) ──
 export type {
@@ -103,6 +107,8 @@ export type {
   IHosted,
   ILevelAware,
   IMeshable,
+  IOpeningCutter,
+  OpeningSpec,
 } from './entities/index.js';
 export {
   Entity,
@@ -110,8 +116,13 @@ export {
   isHosted,
   isLevelAware,
   isMeshable,
+  cutsOpening,
   LineEntity,
   createLineEntity,
+  WallEntity,
+  createWallEntity,
+  WindowEntity,
+  createWindowEntity,
 } from './entities/index.js';
 
 // ── document (Layer 2) ──
@@ -153,6 +164,8 @@ export type {
   AddLineParams,
   MoveParams,
   EraseParams,
+  AddWallParams,
+  AddWindowParams,
 } from './commands/index.js';
 export {
   paramsSchema,
@@ -162,6 +175,14 @@ export {
   MoveCommand,
   EraseCommand,
   registerBuiltinCommands,
+  AddWallCommand,
+  AddWindowCommand,
+  registerArchitectureCommands,
+  asPoint,
+  asIdArray,
+  asId,
+  asNumber,
+  asPositive,
 } from './commands/index.js';
 
 // ── engine systems (Layer 3) ──

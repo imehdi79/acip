@@ -9,3 +9,10 @@ export {
   EraseCommand,
   registerBuiltinCommands,
 } from './builtin.js';
+export type { AddWallParams, AddWindowParams } from './architecture.js';
+export {
+  AddWallCommand,
+  AddWindowCommand,
+  registerArchitectureCommands,
+} from './architecture.js';
+export { asPoint, asIdArray, asId, asNumber, asPositive } from './validate.js';

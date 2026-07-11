@@ -50,6 +50,15 @@ export function geometryArea(g: Geometry): number | null {
       for (const hole of g.holes) area -= shoelaceArea(hole);
       return area;
     }
+    case 'group': {
+      // sum of measurable children (a wall's solid spans between openings)
+      let total: number | null = null;
+      for (const child of g.children) {
+        const a = geometryArea(child);
+        if (a !== null) total = (total ?? 0) + a;
+      }
+      return total;
+    }
     default:
       return null;
   }

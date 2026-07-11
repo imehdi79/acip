@@ -24,7 +24,8 @@ export interface IHost {
 }
 
 export interface IHosted {
-  hostRef: RelationId | null;
+  /** derived from the relation graph — the graph is the single source of truth */
+  readonly hostRef: RelationId | null;
   evalPlacement(anchor: Anchor, params: PlacementParams): Placement;
 }
 
@@ -35,6 +36,25 @@ export interface ILevelAware {
 
 export interface IMeshable {
   toMesh(detail: MeshDetail): Mesh3D;
+}
+
+/**
+ * A hosted entity that cuts an opening in its host (window, door).
+ * Dimensions along the host's anchor curve, in host-local terms.
+ */
+export interface OpeningSpec {
+  /** normalized position of the opening center along the anchor (0..1) */
+  readonly t: number;
+  /** opening width in world units */
+  readonly width: number;
+  /** bottom of the opening above the host's base */
+  readonly sill: number;
+  /** vertical extent of the opening */
+  readonly height: number;
+}
+
+export interface IOpeningCutter {
+  getOpeningSpec(): OpeningSpec;
 }
 
 export function isHost(e: Entity): e is Entity & IHost {
@@ -51,4 +71,8 @@ export function isLevelAware(e: Entity): e is Entity & ILevelAware {
 
 export function isMeshable(e: Entity): e is Entity & IMeshable {
   return typeof (e as Partial<IMeshable>).toMesh === 'function';
+}
+
+export function cutsOpening(e: Entity): e is Entity & IOpeningCutter {
+  return typeof (e as Partial<IOpeningCutter>).getOpeningSpec === 'function';
 }

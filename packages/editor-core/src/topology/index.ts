@@ -13,3 +13,6 @@ export interface BoundaryWithHoles {
   readonly boundary: Loop;
   readonly holes: readonly Loop[];
 }
+
+export type { Interval } from './intervals.js';
+export { mergeIntervals, subtractIntervals } from './intervals.js';

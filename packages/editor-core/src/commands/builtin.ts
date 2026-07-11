@@ -6,21 +6,7 @@ import { LineEntity } from '../entities/primitives/line-entity.js';
 import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
 import type { CommandRegistry } from './command-registry.js';
-
-function asPoint(value: unknown, label: string): Point {
-  const p = value as Partial<Point> | null | undefined;
-  if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') {
-    throw new ValidationError(`${label} must be a point {x, y}`);
-  }
-  return { x: p.x, y: p.y };
-}
-
-function asIdArray(value: unknown, label: string): EntityId[] {
-  if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) {
-    throw new ValidationError(`${label} must be an array of entity ids`);
-  }
-  return value as EntityId[];
-}
+import { asIdArray, asPoint } from './validate.js';
 
 export interface AddLineParams {
   a: Point;
