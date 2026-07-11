@@ -217,3 +217,52 @@ body,
   color: #cfd3da;
   font-family: 'Cascadia Mono', Consolas, monospace;
 }
+
+.level-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.level-picker select {
+  background: #262b33;
+  color: #cfd3da;
+  border: 1px solid #333a44;
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 12px;
+}
+
+/* ── levels panel ── */
+.levels-list li {
+  margin-bottom: 2px;
+}
+
+.level-row {
+  width: 100%;
+  text-align: left;
+}
+
+.level-form {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.level-form input {
+  min-width: 0;
+  background: #1b1e23;
+  color: #e8ecf1;
+  border: 1px solid #2c313a;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.level-form input:first-child {
+  flex: 2;
+}
+
+.level-form input:nth-child(2) {
+  flex: 1;
+}

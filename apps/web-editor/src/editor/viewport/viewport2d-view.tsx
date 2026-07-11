@@ -7,7 +7,6 @@ import { drawOverlay, drawScene } from './scene-renderer';
 
 const PICK_PIXELS = 8;
 const SNAP_PIXELS = 10;
-const PLAN_VIEW: ViewDefinition = { kind: 'plan', levelId: null };
 
 function modifiersOf(e: PointerEvent): InputModifiers {
   return { shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey };
@@ -34,10 +33,11 @@ export function Viewport2DView() {
     if (!container || !base || !overlay || !viewport) return;
 
     let baseRaf = 0;
+    const planView = (): ViewDefinition => ({ kind: 'plan', levelId: ui.activeLevelId.get() });
     const redrawBase = () => {
       cancelAnimationFrame(baseRaf);
       baseRaf = requestAnimationFrame(() => {
-        drawScene(base, viewport, session.doc, PLAN_VIEW, new Set(session.selection.list()));
+        drawScene(base, viewport, session.doc, planView(), new Set(session.selection.list()));
       });
     };
     const redrawOverlay = () => drawOverlay(overlay, viewport, ui.overlay.get());
@@ -65,6 +65,7 @@ export function Viewport2DView() {
         redrawOverlay();
       }),
       ui.overlay.subscribe(redrawOverlay),
+      ui.activeLevelId.subscribe(redrawBase),
     ];
     tools.worldTolerance = PICK_PIXELS / viewport.scale;
 

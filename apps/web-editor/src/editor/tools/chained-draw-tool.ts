@@ -16,6 +16,8 @@ export class ChainedDrawTool implements Tool {
     private commandName: string,
     private ui: EditorUi,
     private onFinish: () => void,
+    /** extra command params resolved at dispatch time (e.g. active level) */
+    private extraParams?: () => Record<string, unknown>,
   ) {}
 
   activate(ctx: ToolContext): void {
@@ -38,7 +40,7 @@ export class ChainedDrawTool implements Tool {
       this.ui.prompt.set('Specify next point (Esc to finish)');
       return;
     }
-    ctx.dispatch(this.commandName, { a: this.last, b: e.point });
+    ctx.dispatch(this.commandName, { a: this.last, b: e.point, ...this.extraParams?.() });
     this.last = e.point;
     this.ui.setRubber(null);
   }

@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { useSession } from '../session-context';
+import { useRuntime } from '../runtime';
 import { useDocRevision, useSelectionIds } from '../hooks';
+import { useStoreValue } from '../store';
 
 export function Panels() {
   const session = useSession();
@@ -38,24 +41,77 @@ export function Panels() {
           ))}
         </ul>
       </section>
-      <section>
-        <h3>Levels</h3>
-        {session.doc.levels.list().length === 0 ? (
-          <p className="muted">No levels yet</p>
-        ) : (
-          <ul className="plain-list">
-            {session.doc.levels.list().map((level) => (
-              <li key={level.id}>
-                {level.name} · {level.elevation.toFixed(2)}m
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <LevelsSection />
       <section>
         <h3>Entities</h3>
         <p>{session.doc.count} in document</p>
       </section>
     </aside>
+  );
+}
+
+function LevelsSection() {
+  const session = useSession();
+  const { ui } = useRuntime();
+  const activeLevelId = useStoreValue(ui.activeLevelId);
+  const [name, setName] = useState('');
+  const [elevation, setElevation] = useState('');
+
+  const addLevel = () => {
+    const value = Number(elevation);
+    if (!name.trim() || !Number.isFinite(value)) {
+      ui.appendLog('Level needs a name and a numeric elevation.', 'error');
+      return;
+    }
+    try {
+      const id = session.dispatch('LEVEL.ADD', { name: name.trim(), elevation: value });
+      ui.activeLevelId.set(id as never);
+      setName('');
+      setElevation('');
+    } catch (err) {
+      ui.appendLog(err instanceof Error ? err.message : String(err), 'error');
+    }
+  };
+
+  return (
+    <section>
+      <h3>Levels</h3>
+      {session.doc.levels.list().length === 0 ? (
+        <p className="muted">No levels yet</p>
+      ) : (
+        <ul className="plain-list levels-list">
+          {session.doc.levels.list().map((level) => (
+            <li key={level.id}>
+              <button
+                type="button"
+                className={activeLevelId === level.id ? 'level-row active' : 'level-row'}
+                onClick={() =>
+                  ui.activeLevelId.set(activeLevelId === level.id ? null : level.id)
+                }
+              >
+                {level.name} · {level.elevation.toFixed(2)}m
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="level-form">
+        <input
+          placeholder="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.stopPropagation()}
+        />
+        <input
+          placeholder="Elev."
+          value={elevation}
+          onChange={(e) => setElevation(e.target.value)}
+          onKeyDown={(e) => e.stopPropagation()}
+        />
+        <button type="button" onClick={addLevel}>
+          +
+        </button>
+      </div>
+    </section>
   );
 }

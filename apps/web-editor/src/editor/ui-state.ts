@@ -1,4 +1,4 @@
-import type { Geometry, Point, SnapPoint } from '@acip/editor-core';
+import type { Geometry, LevelId, Point, SnapPoint } from '@acip/editor-core';
 import { ValueStore } from './store';
 
 export type ViewTab = 'plan' | '3d';
@@ -32,6 +32,8 @@ export class EditorUi {
   readonly log = new ValueStore<readonly LogEntry[]>([]);
   readonly activeToolId = new ValueStore<string>('select');
   readonly viewTab = new ValueStore<ViewTab>('plan');
+  /** null = "all levels"; new walls are assigned to the active level */
+  readonly activeLevelId = new ValueStore<LevelId | null>(null);
   readonly overlay = new ValueStore<OverlayState>(EMPTY_OVERLAY);
 
   appendLog(text: string, kind: LogEntry['kind'] = 'info'): void {

@@ -24,7 +24,12 @@ export function createRuntime(session: EditorSession): EditorRuntime {
   const tolerance = () => tools.worldTolerance;
   tools.register(new SelectTool(ui, tolerance));
   tools.register(new ChainedDrawTool('line', 'LINE', 'LINE.ADD', ui, finish));
-  tools.register(new ChainedDrawTool('wall', 'WALL', 'WALL.ADD', ui, finish));
+  tools.register(
+    new ChainedDrawTool('wall', 'WALL', 'WALL.ADD', ui, finish, () => {
+      const levelId = ui.activeLevelId.get();
+      return levelId ? { levelId } : {};
+    }),
+  );
   tools.register(new HostedPlaceTool('window', 'WINDOW', 'WINDOW.ADD', ui, tolerance, finish));
   tools.register(new HostedPlaceTool('door', 'DOOR', 'DOOR.ADD', ui, tolerance, finish));
   tools.useById('select');
