@@ -4,6 +4,8 @@ import { useStoreValue } from '../store';
 const TOOLS = [
   { id: 'select', label: 'Sel', title: 'Select' },
   { id: 'line', label: '╱', title: 'Line (LINE)' },
+  { id: 'wall', label: '▭', title: 'Wall (WALL)' },
+  { id: 'window', label: '◫', title: 'Window (WINDOW)' },
 ];
 
 export function ToolPalette() {

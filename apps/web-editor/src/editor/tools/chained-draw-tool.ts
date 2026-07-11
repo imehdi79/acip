@@ -2,16 +2,18 @@ import type { Point, Tool, ToolContext, ToolInputEvent } from '@acip/editor-core
 import type { EditorUi } from '../ui-state';
 
 /**
- * Reference draw tool. Gathers points interactively, then dispatches the same
- * LINE.ADD an agent would call with params upfront. Chained placement
- * (AutoCAD-style): each click continues from the last point until Escape.
+ * Shared state machine for two-point chained drawing (LINE, WALL): gathers
+ * points interactively, then dispatches the same command an agent would call
+ * with params upfront. Each click continues from the last point until Escape.
  */
-export class LineTool implements Tool {
-  readonly id = 'line';
+export class ChainedDrawTool implements Tool {
   private ctx: ToolContext | null = null;
   private last: Point | null = null;
 
   constructor(
+    readonly id: string,
+    private label: string,
+    private commandName: string,
     private ui: EditorUi,
     private onFinish: () => void,
   ) {}
@@ -19,7 +21,7 @@ export class LineTool implements Tool {
   activate(ctx: ToolContext): void {
     this.ctx = ctx;
     this.last = null;
-    this.ui.prompt.set('LINE — specify first point');
+    this.ui.prompt.set(`${this.label} — specify first point`);
   }
 
   deactivate(): void {
@@ -36,7 +38,7 @@ export class LineTool implements Tool {
       this.ui.prompt.set('Specify next point (Esc to finish)');
       return;
     }
-    ctx.dispatch('LINE.ADD', { a: this.last, b: e.point });
+    ctx.dispatch(this.commandName, { a: this.last, b: e.point });
     this.last = e.point;
     this.ui.setRubber(null);
   }
@@ -52,7 +54,7 @@ export class LineTool implements Tool {
     if (this.last) {
       this.last = null;
       this.ui.setRubber(null);
-      this.ui.prompt.set('LINE — specify first point');
+      this.ui.prompt.set(`${this.label} — specify first point`);
     } else {
       this.onFinish();
     }

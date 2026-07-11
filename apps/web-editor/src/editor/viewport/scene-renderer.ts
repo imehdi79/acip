@@ -1,4 +1,4 @@
-import type { DrawingDocument, Geometry, ViewDefinition } from '@acip/editor-core';
+import type { DrawingDocument, Geometry, RegionShape, ViewDefinition } from '@acip/editor-core';
 import { buildDisplayList } from '@acip/editor-core';
 import type { Viewport2D } from './viewport2d';
 import type { OverlayState } from '../ui-state';
@@ -12,7 +12,14 @@ const COLORS = {
   selected: '#4da3ff',
   snap: '#ffd24d',
   rubber: '#9aa4b0',
+  regionFill: 'rgba(143, 163, 184, 0.16)',
+  regionFillSelected: 'rgba(77, 163, 255, 0.28)',
 };
+
+function collectRegions(g: Geometry, out: RegionShape[]): void {
+  if (g.kind === 'region') out.push(g);
+  else if (g.kind === 'group') for (const child of g.children) collectRegions(child, out);
+}
 
 function pathGeometry(ctx: CanvasRenderingContext2D, g: Geometry): void {
   switch (g.kind) {
@@ -123,6 +130,15 @@ export function drawScene(
 
   for (const item of buildDisplayList(doc, view)) {
     const isSelected = selection.has(item.entityId);
+    // solid regions (wall spans) get a light fill under the stroke
+    const regions: RegionShape[] = [];
+    collectRegions(item.geometry, regions);
+    if (regions.length > 0) {
+      ctx.fillStyle = isSelected ? COLORS.regionFillSelected : COLORS.regionFill;
+      ctx.beginPath();
+      for (const region of regions) pathGeometry(ctx, region);
+      ctx.fill('evenodd');
+    }
     ctx.strokeStyle = isSelected ? COLORS.selected : (item.style.stroke ?? '#e0e0e0');
     // divide by scale so line weights stay zoom-independent
     ctx.lineWidth = ((item.style.width ?? 1) * (isSelected ? 2.5 : 1.5)) / viewport.scale;
