@@ -54,7 +54,16 @@ grip dragging (stretch a wall and its openings follow parametrically),
 window (L→R, contained) / crossing (R→L, touching) box selection, and a Door
 tool. 32 tests.
 
-Next candidates, in rough order: transactional document stores (unblocks
-LEVEL.ADD and the levels UI), quantities panel (net areas / per-material volumes
-from assembly layers — the estimator seed), wall joins/corner cleanup, more
-drafting primitives (arc, circle, polyline entities).
+**Transactional stores + levels arc landed 2026-07-11.** Document stores
+(layers, levels, materials, types) now share a MutableStore/RecordTable
+abstraction and are mutated through the transaction (`storeAdd`/`storeUpdate`/
+`storeRemove`, snapshot-based like entities; `CommitRecord.changes.stores`).
+Commands: LEVEL.ADD / LEVEL.UPDATE / LEVEL.REMOVE (blocked while in use) /
+LAYER.ADD — all undoable. A level's elevation change marks its entities dirty,
+so walls' 3D moves with the datum. web-editor: level picker in the status bar,
+add-level form in the panel, walls created on the active level, per-level plan
+filtering (unassigned entities show on every level). 40 tests.
+
+Next candidates, in rough order: quantities panel (net areas / per-material
+volumes from assembly layers — the estimator seed), wall joins/corner cleanup,
+more drafting primitives (arc, circle, polyline entities), copy-floor-to-floor.

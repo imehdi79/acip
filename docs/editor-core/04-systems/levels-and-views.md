@@ -29,3 +29,10 @@ Levels force it: **one document, many views**. A floor plan is not a drawing —
   - `View3D` — collects derived meshes, **read-only in v1**
   - Later: sections/elevations are just another ViewDefinition with a cut plane
 - **Viewports in web-editor render Views, never the raw document.**
+
+### Implementation note (2026-07-11)
+
+Level-unassigned entities (`baseLevelId: null`) are visible in **every** plan
+view, not only the "all levels" view — friendlier while drawings mix
+level-aware and plain drafting entities. Level store changes propagate dirty to
+entities bound to that level (elevation change moves their 3D).
