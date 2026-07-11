@@ -185,6 +185,8 @@ export type {
   UpdateLevelParams,
   RemoveLevelParams,
   AddLayerParams,
+  AddMaterialParams,
+  AddTypeParams,
 } from './commands/index.js';
 export {
   paramsSchema,
@@ -203,6 +205,8 @@ export {
   UpdateLevelCommand,
   RemoveLevelCommand,
   AddLayerCommand,
+  AddMaterialCommand,
+  AddTypeCommand,
   registerDocumentStoreCommands,
   asPoint,
   asIdArray,
@@ -216,6 +220,8 @@ export type { SelectionEvents } from './selection/index.js';
 export { SelectionSet } from './selection/index.js';
 export { SnapEngine } from './snapping/index.js';
 export { MeasurementService, geometryLength, geometryArea } from './measurements/index.js';
+export type { WallQuantity, MaterialQuantity, QuantityReport } from './measurements/index.js';
+export { computeQuantities } from './measurements/index.js';
 export type { ViewDefinition } from './views/index.js';
 export { entitiesInView } from './views/index.js';
 export type { DisplayStyle, RenderItem, Renderer } from './rendering/index.js';

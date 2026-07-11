@@ -64,6 +64,9 @@ export function geometryArea(g: Geometry): number | null {
   }
 }
 
+export type { WallQuantity, MaterialQuantity, QuantityReport } from './quantities.js';
+export { computeQuantities } from './quantities.js';
+
 /**
  * Read-only queries over EFFECTIVE geometry (openings already subtracted) —
  * what the estimator and agents consume.

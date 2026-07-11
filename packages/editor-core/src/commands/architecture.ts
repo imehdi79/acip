@@ -1,4 +1,4 @@
-import type { EntityId, LevelId } from '../common/id.js';
+import type { EntityId, LevelId, TypeId } from '../common/id.js';
 import { ValidationError } from '../common/errors.js';
 import type { Point } from '../geometry/primitives/point.js';
 import { isHost } from '../entities/base/capabilities.js';
@@ -16,6 +16,7 @@ export interface AddWallParams {
   thickness?: number;
   height?: number;
   levelId?: LevelId;
+  typeId?: TypeId;
 }
 
 export const AddWallCommand: Command<AddWallParams, EntityId> = {
@@ -29,14 +30,19 @@ export const AddWallCommand: Command<AddWallParams, EntityId> = {
     if (raw['thickness'] !== undefined) params.thickness = asPositive(raw['thickness'], 'thickness');
     if (raw['height'] !== undefined) params.height = asPositive(raw['height'], 'height');
     if (raw['levelId'] !== undefined) params.levelId = asId(raw['levelId'], 'levelId') as string as LevelId;
+    if (raw['typeId'] !== undefined) params.typeId = asId(raw['typeId'], 'typeId') as string as TypeId;
     return params;
   }),
   execute(ctx, params) {
+    if (params.typeId !== undefined && !ctx.doc.types.has(params.typeId)) {
+      throw new ValidationError(`type ${params.typeId} does not exist`);
+    }
     const wall = new WallEntity();
     wall.setBaseline(params.a, params.b);
     if (params.thickness !== undefined) wall.thickness = params.thickness;
     if (params.height !== undefined) wall.vertical = { height: params.height };
     if (params.levelId !== undefined) wall.baseLevelId = params.levelId;
+    if (params.typeId !== undefined) wall.typeRef = params.typeId;
     ctx.tx.create(wall);
     return wall.id;
   },
