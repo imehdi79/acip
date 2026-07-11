@@ -4,6 +4,7 @@ import {
   WallEntity,
   point,
   resolveJunction,
+  resolveTeeCap,
 } from '../src/index.js';
 import type { EntityId, Point, WallEnd } from '../src/index.js';
 
@@ -63,6 +64,55 @@ describe('resolveJunction — pure wheel math', () => {
       expect(Number.isFinite(cap.left.x)).toBe(true);
       expect(Number.isFinite(cap.right.y)).toBe(true);
     }
+  });
+});
+
+describe('resolveTeeCap — pure butt math', () => {
+  // continuous wall along x-axis, near face y = H
+  const facePoint = point(0, H);
+  const faceDir = point(1, 0);
+
+  test('perpendicular tee butts flush against the face', () => {
+    const cap = resolveTeeCap(
+      { point: point(2, 0), direction: point(0, 1), halfWidth: H },
+      facePoint,
+      faceDir,
+    );
+    expectPoint(cap!.left, 2 - H, H);
+    expectPoint(cap!.right, 2 + H, H);
+  });
+
+  test('angled tee bevels along the face', () => {
+    const s = Math.SQRT1_2;
+    const cap = resolveTeeCap(
+      { point: point(2, 0), direction: point(s, s), halfWidth: H },
+      facePoint,
+      faceDir,
+    );
+    // both corners land on the face line, offset asymmetrically
+    expect(cap!.left.y).toBeCloseTo(H, 9);
+    expect(cap!.right.y).toBeCloseTo(H, 9);
+    expect(cap!.left.x).not.toBeCloseTo(cap!.right.x, 9);
+  });
+
+  test('parallel wall cannot butt — returns null', () => {
+    const cap = resolveTeeCap(
+      { point: point(2, 0), direction: point(1, 0), halfWidth: H },
+      facePoint,
+      faceDir,
+    );
+    expect(cap).toBeNull();
+  });
+
+  test('shallow incidence is clamped to the miter limit', () => {
+    const deg5 = (5 * Math.PI) / 180;
+    const cap = resolveTeeCap(
+      { point: point(2, 0), direction: point(Math.cos(deg5), Math.sin(deg5)), halfWidth: H },
+      facePoint,
+      faceDir,
+    );
+    expect(Math.hypot(cap!.left.x - 2, cap!.left.y)).toBeLessThanOrEqual(8 * H + 1e-9);
+    expect(Math.hypot(cap!.right.x - 2, cap!.right.y)).toBeLessThanOrEqual(8 * H + 1e-9);
   });
 });
 
@@ -145,6 +195,71 @@ describe('WallEntity — derived auto-joins', () => {
     expect(hasCorner(boundaryOf(session, wallA), 0, H)).toBe(true); // square again
     session.redo();
     expect(hasCorner(boundaryOf(session, wallA), H, H)).toBe(true); // mitered again
+  });
+
+  test('wall ending on another wall interior butts against the near face', () => {
+    const session = new EditorSession();
+    const host = addWall(session, 0, 0, 10, 0);
+    const tee = addWall(session, 5, 0, 5, 3); // endpoint on host's centerline
+
+    // tee's plan stops at the host's near face y = H
+    const teeBounds = boundaryOf(session, tee);
+    expect(hasCorner(teeBounds, 5 - H, H)).toBe(true);
+    expect(hasCorner(teeBounds, 5 + H, H)).toBe(true);
+    expect(hasCorner(teeBounds, 5 - H, 0)).toBe(false);
+    // clipped back: area is (3 − H) × 0.3
+    expect(session.measure.areaOf(tee)).toBeCloseTo((3 - H) * 0.3, 9);
+
+    // the continuous wall is untouched — still a plain 4-corner rectangle
+    const hostBounds = boundaryOf(session, host);
+    expect(hostBounds.length).toBe(4);
+    expect(hasCorner(hostBounds, 0, H)).toBe(true);
+    expect(hasCorner(hostBounds, 10, -H)).toBe(true);
+  });
+
+  test('tee mesh stops at the host face', () => {
+    const session = new EditorSession();
+    addWall(session, 0, 0, 10, 0);
+    const tee = addWall(session, 5, 0, 5, 3);
+    const mesh = (session.doc.get(tee) as WallEntity).toMesh('medium');
+    for (let i = 1; i < mesh.positions.length; i += 3) {
+      expect(mesh.positions[i]).toBeGreaterThanOrEqual(H - 1e-9);
+    }
+  });
+
+  test('endpoint snapped to the host face joins flush without clipping', () => {
+    const session = new EditorSession();
+    addWall(session, 0, 0, 10, 0);
+    const tee = addWall(session, 5, H, 5, 3); // starts exactly on the face
+    const bounds = boundaryOf(session, tee);
+    expect(hasCorner(bounds, 5 - H, H)).toBe(true);
+    expect(hasCorner(bounds, 5 + H, H)).toBe(true);
+    expect(session.measure.areaOf(tee)).toBeCloseTo((3 - H) * 0.3, 9);
+  });
+
+  test('shortening the host past the tee point dissolves the join', () => {
+    const session = new EditorSession();
+    const host = addWall(session, 0, 0, 10, 0);
+    const tee = addWall(session, 5, 0, 5, 3);
+    session.dispatch('GRIP.MOVE', { id: host, index: 1, to: point(3, 0) });
+    const bounds = boundaryOf(session, tee);
+    expect(hasCorner(bounds, 5 - H, 0)).toBe(true); // square cap again
+    expect(hasCorner(bounds, 5 - H, H)).toBe(false);
+  });
+
+  test('shared-endpoint wheel wins over a tee candidate', () => {
+    const session = new EditorSession();
+    addWall(session, 0, 0, 10, 0); // host body under the junction
+    const wallA = addWall(session, 5, 0, 5, 3);
+    const wallB = addWall(session, 5, 0, 8, 3); // shares (5,0) with wallA
+    // both walls miter against each other (wheel), not butt against the host
+    const boundsA = boundaryOf(session, wallA);
+    const boundsB = boundaryOf(session, wallB);
+    expect(hasCorner(boundsA, 5 - H, H)).toBe(false); // not the tee butt corner
+    for (const p of [...boundsA, ...boundsB]) {
+      expect(Number.isFinite(p.x)).toBe(true);
+      expect(Number.isFinite(p.y)).toBe(true);
+    }
   });
 
   test('a window keeps its placement when its wall joins another', () => {

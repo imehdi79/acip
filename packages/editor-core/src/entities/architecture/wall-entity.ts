@@ -6,6 +6,7 @@ import type { Point, Vector } from '../../geometry/primitives/point.js';
 import {
   add,
   distance,
+  dot,
   lerp,
   midpoint,
   normalize,
@@ -16,15 +17,16 @@ import {
 } from '../../geometry/primitives/point.js';
 import type { Matrix3 } from '../../geometry/primitives/matrix3.js';
 import { applyToPoint } from '../../geometry/primitives/matrix3.js';
-import { distanceToSegment } from '../../geometry/curves/segment.js';
+import { closestPointOnSegment, distanceToSegment } from '../../geometry/curves/segment.js';
 import type { Geometry, RegionShape } from '../../geometry/shapes.js';
 import type { Mesh3D, MeshDetail } from '../../geometry/mesh/index.js';
 import { extrudeQuad, mergeMeshes } from '../../geometry/mesh/index.js';
 import type { Interval } from '../../topology/intervals.js';
 import { subtractIntervals } from '../../topology/intervals.js';
 import type { EndCap, WallEnd } from '../../topology/junctions.js';
-import { JOIN_TOLERANCE, resolveJunction } from '../../topology/junctions.js';
-import { bboxExpand, bboxFromPoints } from '../../geometry/primitives/bbox.js';
+import { JOIN_TOLERANCE, resolveJunction, resolveTeeCap } from '../../topology/junctions.js';
+import type { BBox } from '../../geometry/primitives/bbox.js';
+import { bboxExpand, bboxFromPoints, bboxUnion } from '../../geometry/primitives/bbox.js';
 import type {
   Anchor,
   GripPoint,
@@ -120,8 +122,41 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
       if (!dir) continue;
       ends.push({ point: p, direction: dir, halfWidth: other.getThickness() / 2 });
     }
-    if (ends.length < 2) return null;
-    return resolveJunction(ends)[0];
+    // shared-endpoint junctions win; a lone end may still tee into a wall body
+    if (ends.length >= 2) return resolveJunction(ends)[0];
+    return this.teeCap(ends[0]);
+  }
+
+  /**
+   * T-junction (joins V2): this end touches the BODY of another wall away
+   * from its endpoints — butt against that wall's near face. The continuous
+   * wall is untouched. Nearest host wins if several qualify.
+   */
+  private teeCap(selfEnd: WallEnd): EndCap | null {
+    const doc = this.doc;
+    if (!doc) return null;
+    const p = selfEnd.point;
+    let best: { cap: EndCap; dist: number } | null = null;
+    for (const other of doc.queryBBox(bboxExpand(bboxFromPoints([p]), JOIN_TOLERANCE))) {
+      if (other === this || !(other instanceof WallEntity)) continue;
+      const bl = other.getBaseline();
+      if (distance(bl.a, bl.b) < JOIN_TOLERANCE) continue;
+      const foot = closestPointOnSegment(p, bl.a, bl.b);
+      const halfB = other.getThickness() / 2;
+      const dist = distance(p, foot);
+      if (dist > halfB + JOIN_TOLERANCE) continue;
+      // near the host's endpoints this is an L/corner case, not a T
+      if (distance(foot, bl.a) <= JOIN_TOLERANCE || distance(foot, bl.b) <= JOIN_TOLERANCE) {
+        continue;
+      }
+      const u = normalize(sub(bl.b, bl.a));
+      const n = perpendicular(u);
+      // near face = the side of the host's centerline this wall extends toward
+      const side = dot(selfEnd.direction, n) >= 0 ? 1 : -1;
+      const cap = resolveTeeCap(selfEnd, add(bl.a, scale(n, side * halfB)), u);
+      if (cap && (best === null || dist < best.dist)) best = { cap, dist };
+    }
+    return best?.cap ?? null;
   }
 
   private capsForEnds(): { start: EndCap | null; end: EndCap | null } {
@@ -176,6 +211,17 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
 
   getBaseGeometry(): Geometry {
     return this.spanRegion(0, this.getLength());
+  }
+
+  /**
+   * Bounds always include the baseline. Join caps can clip the effective
+   * body AWAY from a baseline endpoint (a tee stops at the host's face), and
+   * junction discovery queries the spatial index by endpoint — bounds must
+   * therefore stay cap-independent around endpoints or joins would depend on
+   * their own output.
+   */
+  override getBounds(): BBox {
+    return bboxUnion(super.getBounds(), bboxFromPoints([this.a, this.b]));
   }
 
   override getEffectiveGeometry(): Geometry {

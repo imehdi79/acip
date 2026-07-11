@@ -52,6 +52,11 @@ function squareCap(end: WallEnd): EndCap {
   return { left: add(end.point, n), right: sub(end.point, n) };
 }
 
+function clampToLimit(pt: Point, junction: Point, limit: number): Point {
+  if (distance(pt, junction) <= limit) return pt;
+  return add(junction, scale(normalize(sub(pt, junction)), limit));
+}
+
 /**
  * Corner shared between wall `a` and its counter-clockwise neighbor `b`:
  * a's left face intersected with b's right face. Null when the faces are
@@ -63,11 +68,26 @@ function cornerBetween(a: WallEnd, b: WallEnd, junction: Point): Point | null {
   const pb = sub(b.point, scale(perpendicular(b.direction), b.halfWidth));
   const pt = intersectLines(pa, a.direction, pb, b.direction);
   if (!pt) return null;
-  const limit = MITER_LIMIT * Math.max(a.halfWidth, b.halfWidth);
-  if (distance(pt, junction) > limit) {
-    return add(junction, scale(normalize(sub(pt, junction)), limit));
-  }
-  return pt;
+  return clampToLimit(pt, junction, MITER_LIMIT * Math.max(a.halfWidth, b.halfWidth));
+}
+
+/**
+ * T-junction cap: the ending wall butts against the continuous wall's near
+ * face, described as the line through `facePoint` along `faceDir`. Both of
+ * the ending wall's face lines are intersected with that face; at shallow
+ * incidence the corners are clamped to the miter limit. Null when the ending
+ * wall runs parallel to the face (no clean butt exists).
+ */
+export function resolveTeeCap(end: WallEnd, facePoint: Point, faceDir: Vector): EndCap | null {
+  const n = scale(perpendicular(end.direction), end.halfWidth);
+  const left = intersectLines(add(end.point, n), end.direction, facePoint, faceDir);
+  const right = intersectLines(sub(end.point, n), end.direction, facePoint, faceDir);
+  if (!left || !right) return null;
+  const limit = MITER_LIMIT * end.halfWidth;
+  return {
+    left: clampToLimit(left, end.point, limit),
+    right: clampToLimit(right, end.point, limit),
+  };
 }
 
 /**

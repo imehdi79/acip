@@ -17,4 +17,4 @@ export interface BoundaryWithHoles {
 export type { Interval } from './intervals.js';
 export { mergeIntervals, subtractIntervals } from './intervals.js';
 export type { WallEnd, EndCap } from './junctions.js';
-export { resolveJunction, JOIN_TOLERANCE } from './junctions.js';
+export { resolveJunction, resolveTeeCap, JOIN_TOLERANCE } from './junctions.js';

@@ -98,6 +98,7 @@ export {
   mergeIntervals,
   subtractIntervals,
   resolveJunction,
+  resolveTeeCap,
   JOIN_TOLERANCE,
 } from './topology/index.js';
 
