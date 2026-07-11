@@ -1,5 +1,11 @@
-import type { DrawingDocument, Geometry, RegionShape, ViewDefinition } from '@acip/editor-core';
-import { buildDisplayList } from '@acip/editor-core';
+import type {
+  DrawingDocument,
+  EntityId,
+  Geometry,
+  RegionShape,
+  ViewDefinition,
+} from '@acip/editor-core';
+import { buildDisplayList, hasGrips } from '@acip/editor-core';
 import type { Viewport2D } from './viewport2d';
 import type { OverlayState } from '../ui-state';
 
@@ -14,7 +20,16 @@ const COLORS = {
   rubber: '#9aa4b0',
   regionFill: 'rgba(143, 163, 184, 0.16)',
   regionFillSelected: 'rgba(77, 163, 255, 0.28)',
+  grip: '#4da3ff',
+  gripBorder: '#0e1116',
+  ghost: '#8fd0ff',
+  boxWindow: 'rgba(77, 163, 255, 0.12)',
+  boxWindowBorder: '#4da3ff',
+  boxCrossing: 'rgba(102, 187, 106, 0.12)',
+  boxCrossingBorder: '#66bb6a',
 };
+
+export const GRIP_PIXELS = 4;
 
 function collectRegions(g: Geometry, out: RegionShape[]): void {
   if (g.kind === 'region') out.push(g);
@@ -146,6 +161,21 @@ export function drawScene(
     pathGeometry(ctx, item.geometry);
     ctx.stroke();
   }
+
+  // grips for selected entities — fixed pixel size, drawn in screen space
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  for (const id of selection) {
+    const entity = doc.get(id as EntityId);
+    if (!entity || !hasGrips(entity)) continue;
+    for (const grip of entity.getGrips()) {
+      const s = viewport.toScreen(grip.point);
+      ctx.fillStyle = COLORS.grip;
+      ctx.strokeStyle = COLORS.gripBorder;
+      ctx.lineWidth = 1;
+      ctx.fillRect(s.x - GRIP_PIXELS, s.y - GRIP_PIXELS, GRIP_PIXELS * 2, GRIP_PIXELS * 2);
+      ctx.strokeRect(s.x - GRIP_PIXELS, s.y - GRIP_PIXELS, GRIP_PIXELS * 2, GRIP_PIXELS * 2);
+    }
+  }
 }
 
 export function drawOverlay(
@@ -158,6 +188,42 @@ export function drawOverlay(
   const dpr = window.devicePixelRatio || 1;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+
+  if (overlay.ghost) {
+    // dashed preview of geometry being drag-moved, in world space
+    ctx.setTransform(
+      dpr * viewport.scale,
+      0,
+      0,
+      -dpr * viewport.scale,
+      dpr * viewport.offsetX,
+      dpr * viewport.offsetY,
+    );
+    ctx.strokeStyle = COLORS.ghost;
+    ctx.lineWidth = 1.5 / viewport.scale;
+    ctx.setLineDash([6 / viewport.scale, 4 / viewport.scale]);
+    ctx.beginPath();
+    for (const g of overlay.ghost) pathGeometry(ctx, g);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  if (overlay.box) {
+    const a = viewport.toScreen(overlay.box.a);
+    const b = viewport.toScreen(overlay.box.b);
+    const x = Math.min(a.x, b.x);
+    const y = Math.min(a.y, b.y);
+    const w = Math.abs(b.x - a.x);
+    const h = Math.abs(b.y - a.y);
+    ctx.fillStyle = overlay.box.crossing ? COLORS.boxCrossing : COLORS.boxWindow;
+    ctx.strokeStyle = overlay.box.crossing ? COLORS.boxCrossingBorder : COLORS.boxWindowBorder;
+    ctx.lineWidth = 1;
+    if (overlay.box.crossing) ctx.setLineDash([5, 3]);
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+  }
 
   if (overlay.rubber) {
     const a = viewport.toScreen(overlay.rubber.a);

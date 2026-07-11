@@ -1,4 +1,4 @@
-import type { Point, SnapPoint } from '@acip/editor-core';
+import type { Geometry, Point, SnapPoint } from '@acip/editor-core';
 import { ValueStore } from './store';
 
 export type ViewTab = 'plan' | '3d';
@@ -8,12 +8,22 @@ export interface LogEntry {
   readonly kind: 'info' | 'error' | 'echo';
 }
 
+export interface SelectionBox {
+  readonly a: Point;
+  readonly b: Point;
+  /** right-to-left drag = crossing selection (green dashed, touch counts) */
+  readonly crossing: boolean;
+}
+
 export interface OverlayState {
   readonly snap: SnapPoint | null;
   readonly rubber: { a: Point; b: Point } | null;
+  /** translated preview geometry while drag-moving */
+  readonly ghost: readonly Geometry[] | null;
+  readonly box: SelectionBox | null;
 }
 
-const EMPTY_OVERLAY: OverlayState = { snap: null, rubber: null };
+const EMPTY_OVERLAY: OverlayState = { snap: null, rubber: null, ghost: null, box: null };
 
 /** Chrome-facing UI state; the viewport and tools write, React chrome subscribes. */
 export class EditorUi {
@@ -36,6 +46,14 @@ export class EditorUi {
 
   setRubber(rubber: OverlayState['rubber']): void {
     this.overlay.set({ ...this.overlay.get(), rubber });
+  }
+
+  setGhost(ghost: OverlayState['ghost']): void {
+    this.overlay.set({ ...this.overlay.get(), ghost });
+  }
+
+  setBox(box: OverlayState['box']): void {
+    this.overlay.set({ ...this.overlay.get(), box });
   }
 
   clearOverlay(): void {

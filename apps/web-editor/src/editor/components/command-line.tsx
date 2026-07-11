@@ -33,6 +33,10 @@ export function CommandLine() {
         case 'WIN':
           tools.useById('window');
           break;
+        case 'DOOR':
+        case 'D':
+          tools.useById('door');
+          break;
         case 'ERASE':
         case 'E': {
           const ids = session.selection.list();
@@ -73,7 +77,7 @@ export function CommandLine() {
         <span className="command-prompt">{prompt}</span>
         <input
           value={input}
-          placeholder="Command (LINE, WALL, WINDOW, ERASE, UNDO, REDO)…"
+          placeholder="Command (LINE, WALL, WINDOW, DOOR, ERASE, UNDO, REDO)…"
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {

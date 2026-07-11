@@ -6,6 +6,7 @@ const TOOLS = [
   { id: 'line', label: '╱', title: 'Line (LINE)' },
   { id: 'wall', label: '▭', title: 'Wall (WALL)' },
   { id: 'window', label: '◫', title: 'Window (WINDOW)' },
+  { id: 'door', label: '◧', title: 'Door (DOOR)' },
 ];
 
 export function ToolPalette() {

@@ -4,12 +4,14 @@ import type { EditorUi } from '../ui-state';
 
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
-/** Click a wall to place a window at that position along its axis. */
-export class WindowTool implements Tool {
-  readonly id = 'window';
+/** Click a wall to place a hosted opening (window, door) at that axis position. */
+export class HostedPlaceTool implements Tool {
   private ctx: ToolContext | null = null;
 
   constructor(
+    readonly id: string,
+    private label: string,
+    private commandName: string,
     private ui: EditorUi,
     private getTolerance: () => number,
     private onFinish: () => void,
@@ -17,7 +19,7 @@ export class WindowTool implements Tool {
 
   activate(ctx: ToolContext): void {
     this.ctx = ctx;
-    this.ui.prompt.set('WINDOW — click a wall to place');
+    this.ui.prompt.set(`${this.label} — click a wall to place`);
   }
 
   deactivate(): void {
@@ -42,7 +44,7 @@ export class WindowTool implements Tool {
     const ab = sub(b, a);
     const lenSq = dot(ab, ab);
     const t = lenSq === 0 ? 0.5 : clamp01(dot(sub(e.point, a), ab) / lenSq);
-    ctx.dispatch('WINDOW.ADD', { wallId: wall.id, t });
+    ctx.dispatch(this.commandName, { wallId: wall.id, t });
   }
 
   onPointerMove(): void {}
