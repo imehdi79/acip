@@ -289,6 +289,7 @@ export interface AddMaterialParams {
   name: string;
   unit?: MaterialUnit;
   hatch?: string;
+  costCode?: string;
 }
 
 export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
@@ -306,6 +307,7 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
         params.unit = raw['unit'] as MaterialUnit;
       }
       if (raw['hatch'] !== undefined) params.hatch = asName(raw['hatch'], 'hatch');
+      if (raw['costCode'] !== undefined) params.costCode = asName(raw['costCode'], 'costCode');
       return params;
     },
     () =>
@@ -314,6 +316,7 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
           name: S.string('material name, e.g. "Concrete block"'),
           unit: S.enum(MATERIAL_UNITS, 'measurement unit (default m3)'),
           hatch: S.string('optional 2D hatch pattern name'),
+          costCode: S.string('optional cost-item key for estimator rate tables'),
         },
         ['name'],
       ),
@@ -325,6 +328,7 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
       unit: params.unit ?? 'm3',
     };
     if (params.hatch !== undefined) material.hatch = params.hatch;
+    if (params.costCode !== undefined) material.costCode = params.costCode;
     ctx.tx.storeAdd('materials', material);
     return material.id;
   },

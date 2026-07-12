@@ -15,6 +15,8 @@ export interface Material {
   unit: MaterialUnit;
   hatch?: string;
   appearance?: JsonObject;
+  /** cost-item key rate tables resolve against — core stores it, never prices it */
+  costCode?: string;
 }
 
 export class MaterialLibrary extends RecordTable<Material> {
