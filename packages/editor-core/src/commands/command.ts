@@ -33,6 +33,8 @@ export interface CommandContext {
  */
 export interface Command<P = unknown, R = unknown> {
   readonly name: string;
+  /** one-line summary — surfaces in LLM tool definitions and command help */
+  readonly description?: string;
   readonly params: ParamsSchema<P>;
   execute(ctx: CommandContext, params: P): R;
 }

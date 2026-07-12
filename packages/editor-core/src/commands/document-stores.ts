@@ -9,6 +9,7 @@ import type { AssemblyLayer, EntityTypeDef } from '../document/types/index.js';
 import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
 import type { CommandRegistry } from './command-registry.js';
+import { S } from './schema.js';
 import { asId, asNumber, asPositive } from './validate.js';
 
 const MATERIAL_UNITS: readonly MaterialUnit[] = ['m', 'm2', 'm3', 'count'];
@@ -27,13 +28,24 @@ export interface AddLevelParams {
 
 export const AddLevelCommand: Command<AddLevelParams, LevelId> = {
   name: 'LEVEL.ADD',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    return {
-      name: asName(raw['name'], 'name'),
-      elevation: asNumber(raw['elevation'], 'elevation'),
-    };
-  }),
+  description: 'Create a level (floor datum) at an elevation. Returns the new level id.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return {
+        name: asName(raw['name'], 'name'),
+        elevation: asNumber(raw['elevation'], 'elevation'),
+      };
+    },
+    () =>
+      S.object(
+        {
+          name: S.string('level name, e.g. "Ground floor"'),
+          elevation: S.number('elevation above origin in meters'),
+        },
+        ['name', 'elevation'],
+      ),
+  ),
   execute(ctx, params) {
     const level: Level = { id: newLevelId(), name: params.name, elevation: params.elevation };
     ctx.tx.storeAdd('levels', level);
@@ -49,16 +61,29 @@ export interface UpdateLevelParams {
 
 export const UpdateLevelCommand: Command<UpdateLevelParams, void> = {
   name: 'LEVEL.UPDATE',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    const params: UpdateLevelParams = { id: asId(raw['id'], 'id') as string as LevelId };
-    if (raw['name'] !== undefined) params.name = asName(raw['name'], 'name');
-    if (raw['elevation'] !== undefined) params.elevation = asNumber(raw['elevation'], 'elevation');
-    if (params.name === undefined && params.elevation === undefined) {
-      throw new ValidationError('provide name and/or elevation');
-    }
-    return params;
-  }),
+  description:
+    'Rename a level and/or change its elevation. Entities on the level move vertically with it.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: UpdateLevelParams = { id: asId(raw['id'], 'id') as string as LevelId };
+      if (raw['name'] !== undefined) params.name = asName(raw['name'], 'name');
+      if (raw['elevation'] !== undefined) params.elevation = asNumber(raw['elevation'], 'elevation');
+      if (params.name === undefined && params.elevation === undefined) {
+        throw new ValidationError('provide name and/or elevation');
+      }
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          id: S.id('level id'),
+          name: S.string('new name'),
+          elevation: S.number('new elevation in meters'),
+        },
+        ['id'],
+      ),
+  ),
   execute(ctx, params) {
     ctx.tx.storeUpdate<Level>('levels', params.id, (level) => {
       if (params.name !== undefined) level.name = params.name;
@@ -73,10 +98,14 @@ export interface RemoveLevelParams {
 
 export const RemoveLevelCommand: Command<RemoveLevelParams, void> = {
   name: 'LEVEL.REMOVE',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    return { id: asId(raw['id'], 'id') as string as LevelId };
-  }),
+  description: 'Delete a level. Fails while any entity still references it.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return { id: asId(raw['id'], 'id') as string as LevelId };
+    },
+    () => S.object({ id: S.id('level id') }, ['id']),
+  ),
   execute(ctx, params) {
     const inUse = ctx.doc.all().some((e) => isLevelAware(e) && e.baseLevelId === params.id);
     if (inUse) {
@@ -92,10 +121,14 @@ export interface AddLayerParams {
 
 export const AddLayerCommand: Command<AddLayerParams, LayerId> = {
   name: 'LAYER.ADD',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    return { name: asName(raw['name'], 'name') };
-  }),
+  description: 'Create a drawing layer. Returns the new layer id.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return { name: asName(raw['name'], 'name') };
+    },
+    () => S.object({ name: S.string('layer name') }, ['name']),
+  ),
   execute(ctx, params) {
     const layer: Layer = { id: newLayerId(), name: params.name, visible: true, locked: false };
     ctx.tx.storeAdd('layers', layer);
@@ -111,18 +144,31 @@ export interface AddMaterialParams {
 
 export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
   name: 'MATERIAL.ADD',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    const params: AddMaterialParams = { name: asName(raw['name'], 'name') };
-    if (raw['unit'] !== undefined) {
-      if (!MATERIAL_UNITS.includes(raw['unit'] as MaterialUnit)) {
-        throw new ValidationError(`unit must be one of ${MATERIAL_UNITS.join(', ')}`);
+  description:
+    'Add a material to the library (used by type-catalog assembly layers and quantity takeoff). Returns the new material id.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: AddMaterialParams = { name: asName(raw['name'], 'name') };
+      if (raw['unit'] !== undefined) {
+        if (!MATERIAL_UNITS.includes(raw['unit'] as MaterialUnit)) {
+          throw new ValidationError(`unit must be one of ${MATERIAL_UNITS.join(', ')}`);
+        }
+        params.unit = raw['unit'] as MaterialUnit;
       }
-      params.unit = raw['unit'] as MaterialUnit;
-    }
-    if (raw['hatch'] !== undefined) params.hatch = asName(raw['hatch'], 'hatch');
-    return params;
-  }),
+      if (raw['hatch'] !== undefined) params.hatch = asName(raw['hatch'], 'hatch');
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          name: S.string('material name, e.g. "Concrete block"'),
+          unit: S.enum(MATERIAL_UNITS, 'measurement unit (default m3)'),
+          hatch: S.string('optional 2D hatch pattern name'),
+        },
+        ['name'],
+      ),
+  ),
   execute(ctx, params) {
     const material: Material = {
       id: newMaterialId(),
@@ -143,26 +189,48 @@ export interface AddTypeParams {
 
 export const AddTypeCommand: Command<AddTypeParams, TypeId> = {
   name: 'TYPE.ADD',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    const params: AddTypeParams = {
-      targetType: asName(raw['targetType'], 'targetType'),
-      name: asName(raw['name'], 'name'),
-    };
-    if (raw['layers'] !== undefined) {
-      if (!Array.isArray(raw['layers'])) {
-        throw new ValidationError('layers must be an array');
+  description:
+    'Add an entity type to the catalog, e.g. a wall type with material assembly layers whose thicknesses sum to the wall thickness. Returns the new type id.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: AddTypeParams = {
+        targetType: asName(raw['targetType'], 'targetType'),
+        name: asName(raw['name'], 'name'),
+      };
+      if (raw['layers'] !== undefined) {
+        if (!Array.isArray(raw['layers'])) {
+          throw new ValidationError('layers must be an array');
+        }
+        params.layers = raw['layers'].map((layer, i) => {
+          const l = layer as Record<string, unknown>;
+          return {
+            materialId: asId(l['materialId'], `layers[${i}].materialId`) as string as MaterialId,
+            thickness: asPositive(l['thickness'], `layers[${i}].thickness`),
+          };
+        });
       }
-      params.layers = raw['layers'].map((layer, i) => {
-        const l = layer as Record<string, unknown>;
-        return {
-          materialId: asId(l['materialId'], `layers[${i}].materialId`) as string as MaterialId,
-          thickness: asPositive(l['thickness'], `layers[${i}].thickness`),
-        };
-      });
-    }
-    return params;
-  }),
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          targetType: S.string('entity type this applies to, e.g. "wall"'),
+          name: S.string('catalog name, e.g. "Block 300 (20+5+5)"'),
+          layers: S.array(
+            S.object(
+              {
+                materialId: S.id('material id from the library'),
+                thickness: S.number('layer thickness in meters'),
+              },
+              ['materialId', 'thickness'],
+            ),
+            'assembly layers, outermost first',
+          ),
+        },
+        ['targetType', 'name'],
+      ),
+  ),
   execute(ctx, params) {
     if (params.layers) {
       for (const layer of params.layers) {

@@ -219,7 +219,12 @@ export {
   asId,
   asNumber,
   asPositive,
+  S,
 } from './commands/index.js';
+
+// ── LLM projections (Layer 3) ──
+export type { ToolDefinition, DescribeDocumentOptions } from './llm/index.js';
+export { toolDefinitions, toolNameFromCommand, commandNameFromTool, describeDocument } from './llm/index.js';
 
 // ── engine systems (Layer 3) ──
 export type { SelectionEvents } from './selection/index.js';

@@ -1,4 +1,5 @@
 import type { EntityId } from '../../common/id.js';
+import { DocumentError } from '../../common/errors.js';
 import type { EntityData } from '../../entities/base/data.js';
 import type { EntityTypeRegistry } from '../../registry/entity-registry.js';
 import type { DrawingDocument } from '../document.js';
@@ -7,10 +8,16 @@ import type { CommitRecord } from './transaction.js';
 /**
  * Undo/redo by replaying commit-record snapshots. Redo re-applies after-state
  * (never re-executes commands) — deterministic by construction.
+ *
+ * Each stack entry is a GROUP of one or more commit records undone/redone
+ * atomically. Normal dispatches are groups of one; beginGroup()/endGroup()
+ * collapse a run of dispatches (an agent run, a multi-step tool) into a
+ * single Ctrl+Z.
  */
 export class HistoryStack {
-  private undoStack: CommitRecord[] = [];
-  private redoStack: CommitRecord[] = [];
+  private undoStack: CommitRecord[][] = [];
+  private redoStack: CommitRecord[][] = [];
+  private group: CommitRecord[] | null = null;
 
   constructor(
     private doc: DrawingDocument,
@@ -18,8 +25,31 @@ export class HistoryStack {
   ) {}
 
   push(record: CommitRecord): void {
-    this.undoStack.push(record);
+    if (this.group) this.group.push(record);
+    else this.undoStack.push([record]);
     this.redoStack = [];
+  }
+
+  /** subsequent pushes accumulate into one undo entry until endGroup() */
+  beginGroup(): void {
+    if (this.group) throw new DocumentError('history group already open');
+    this.group = [];
+  }
+
+  endGroup(): void {
+    const group = this.group;
+    this.group = null;
+    if (group && group.length > 0) this.undoStack.push(group);
+  }
+
+  /** group everything fn dispatches — safe across await points */
+  async runGrouped<T>(fn: () => Promise<T>): Promise<T> {
+    this.beginGroup();
+    try {
+      return await fn();
+    } finally {
+      this.endGroup();
+    }
   }
 
   get canUndo(): boolean {
@@ -30,10 +60,35 @@ export class HistoryStack {
     return this.redoStack.length > 0;
   }
 
-  undo(): CommitRecord | null {
-    const record = this.undoStack.pop();
-    if (!record) return null;
+  undo(): readonly CommitRecord[] | null {
+    if (this.group) throw new DocumentError('cannot undo while a history group is open');
+    const entry = this.undoStack.pop();
+    if (!entry) return null;
+    for (let i = entry.length - 1; i >= 0; i--) {
+      this.undoRecord(entry[i]);
+    }
+    this.redoStack.push(entry);
+    return entry;
+  }
 
+  redo(): readonly CommitRecord[] | null {
+    if (this.group) throw new DocumentError('cannot redo while a history group is open');
+    const entry = this.redoStack.pop();
+    if (!entry) return null;
+    for (const record of entry) {
+      this.redoRecord(record);
+    }
+    this.undoStack.push(entry);
+    return entry;
+  }
+
+  clear(): void {
+    this.undoStack = [];
+    this.redoStack = [];
+    this.group = null;
+  }
+
+  private undoRecord(record: CommitRecord): void {
     // stores first: restored entities may reference their items (levels, layers)
     const stores = record.changes.stores;
     for (let i = stores.length - 1; i >= 0; i--) {
@@ -63,15 +118,10 @@ export class HistoryStack {
       this.applyState(before);
     }
 
-    this.redoStack.push(record);
     this.doc._emitChange('undo', record);
-    return record;
   }
 
-  redo(): CommitRecord | null {
-    const record = this.redoStack.pop();
-    if (!record) return null;
-
+  private redoRecord(record: CommitRecord): void {
     for (const change of record.changes.stores) {
       const table = this.doc._store(change.store);
       if (change.op === 'add') table.set(structuredClone(change.item));
@@ -95,14 +145,7 @@ export class HistoryStack {
       this.applyState(after);
     }
 
-    this.undoStack.push(record);
     this.doc._emitChange('redo', record);
-    return record;
-  }
-
-  clear(): void {
-    this.undoStack = [];
-    this.redoStack = [];
   }
 
   private restoreEntity(data: EntityData): void {

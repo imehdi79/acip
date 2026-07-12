@@ -59,11 +59,11 @@ export class EditorSession {
     return this.bus.dispatch<R>(name, params);
   }
 
-  undo(): CommitRecord | null {
+  undo(): readonly CommitRecord[] | null {
     return this.history.undo();
   }
 
-  redo(): CommitRecord | null {
+  redo(): readonly CommitRecord[] | null {
     return this.history.redo();
   }
 }

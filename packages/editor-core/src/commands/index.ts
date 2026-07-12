@@ -35,3 +35,4 @@ export {
   registerDocumentStoreCommands,
 } from './document-stores.js';
 export { asPoint, asIdArray, asId, asNumber, asPositive } from './validate.js';
+export { S } from './schema.js';

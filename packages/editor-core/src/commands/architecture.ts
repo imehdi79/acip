@@ -8,6 +8,7 @@ import { DoorEntity } from '../entities/architecture/door-entity.js';
 import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
 import type { CommandRegistry } from './command-registry.js';
+import { S } from './schema.js';
 import { asId, asNumber, asPoint, asPositive } from './validate.js';
 
 export interface AddWallParams {
@@ -21,18 +22,34 @@ export interface AddWallParams {
 
 export const AddWallCommand: Command<AddWallParams, EntityId> = {
   name: 'WALL.ADD',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    const params: AddWallParams = {
-      a: asPoint(raw['a'], 'a'),
-      b: asPoint(raw['b'], 'b'),
-    };
-    if (raw['thickness'] !== undefined) params.thickness = asPositive(raw['thickness'], 'thickness');
-    if (raw['height'] !== undefined) params.height = asPositive(raw['height'], 'height');
-    if (raw['levelId'] !== undefined) params.levelId = asId(raw['levelId'], 'levelId') as string as LevelId;
-    if (raw['typeId'] !== undefined) params.typeId = asId(raw['typeId'], 'typeId') as string as TypeId;
-    return params;
-  }),
+  description:
+    'Create a wall along a baseline from a to b. Walls sharing endpoints auto-join their corners. Returns the new entity id.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: AddWallParams = {
+        a: asPoint(raw['a'], 'a'),
+        b: asPoint(raw['b'], 'b'),
+      };
+      if (raw['thickness'] !== undefined) params.thickness = asPositive(raw['thickness'], 'thickness');
+      if (raw['height'] !== undefined) params.height = asPositive(raw['height'], 'height');
+      if (raw['levelId'] !== undefined) params.levelId = asId(raw['levelId'], 'levelId') as string as LevelId;
+      if (raw['typeId'] !== undefined) params.typeId = asId(raw['typeId'], 'typeId') as string as TypeId;
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          a: S.point('baseline start'),
+          b: S.point('baseline end'),
+          thickness: S.number('wall thickness in meters (default 0.3; ignored when typeId has assembly layers)'),
+          height: S.number('wall height in meters (default 3)'),
+          levelId: S.id('optional level (floor) id the wall sits on'),
+          typeId: S.id('optional wall type id from the type catalog; thickness then derives from its assembly layers'),
+        },
+        ['a', 'b'],
+      ),
+  ),
   execute(ctx, params) {
     if (params.typeId !== undefined && !ctx.doc.types.has(params.typeId)) {
       throw new ValidationError(`type ${params.typeId} does not exist`);
@@ -58,16 +75,31 @@ export interface AddWindowParams {
 
 export const AddWindowCommand: Command<AddWindowParams, EntityId> = {
   name: 'WINDOW.ADD',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    return {
-      wallId: asId(raw['wallId'], 'wallId'),
-      t: asNumber(raw['t'], 't'),
-      width: asPositive(raw['width'], 'width', 1.0),
-      sill: asNumber(raw['sill'], 'sill', 0.9),
-      height: asPositive(raw['height'], 'height', 1.2),
-    };
-  }),
+  description:
+    'Place a window in a wall at parametric position t along its baseline. The window follows the wall when it moves. Returns the new entity id.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return {
+        wallId: asId(raw['wallId'], 'wallId'),
+        t: asNumber(raw['t'], 't'),
+        width: asPositive(raw['width'], 'width', 1.0),
+        sill: asNumber(raw['sill'], 'sill', 0.9),
+        height: asPositive(raw['height'], 'height', 1.2),
+      };
+    },
+    () =>
+      S.object(
+        {
+          wallId: S.id('id of the host wall'),
+          t: S.number('position along the wall baseline, 0 = start, 1 = end'),
+          width: S.number('opening width in meters (default 1.0)'),
+          sill: S.number('sill height above the wall base in meters (default 0.9)'),
+          height: S.number('opening height in meters (default 1.2)'),
+        },
+        ['wallId', 't'],
+      ),
+  ),
   execute(ctx, params) {
     const host = ctx.doc.get(params.wallId);
     if (!host || !isHost(host)) {
@@ -94,22 +126,37 @@ export interface AddDoorParams {
 
 export const AddDoorCommand: Command<AddDoorParams, EntityId> = {
   name: 'DOOR.ADD',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    const params: AddDoorParams = {
-      wallId: asId(raw['wallId'], 'wallId'),
-      t: asNumber(raw['t'], 't'),
-      width: asPositive(raw['width'], 'width', 0.9),
-      height: asPositive(raw['height'], 'height', 2.1),
-    };
-    if (raw['swing'] !== undefined) {
-      if (raw['swing'] !== 1 && raw['swing'] !== -1) {
-        throw new ValidationError('swing must be 1 or -1');
+  description:
+    'Place a door in a wall at parametric position t along its baseline (sill is always 0). Returns the new entity id.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: AddDoorParams = {
+        wallId: asId(raw['wallId'], 'wallId'),
+        t: asNumber(raw['t'], 't'),
+        width: asPositive(raw['width'], 'width', 0.9),
+        height: asPositive(raw['height'], 'height', 2.1),
+      };
+      if (raw['swing'] !== undefined) {
+        if (raw['swing'] !== 1 && raw['swing'] !== -1) {
+          throw new ValidationError('swing must be 1 or -1');
+        }
+        params.swing = raw['swing'];
       }
-      params.swing = raw['swing'];
-    }
-    return params;
-  }),
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          wallId: S.id('id of the host wall'),
+          t: S.number('position along the wall baseline, 0 = start, 1 = end'),
+          width: S.number('door width in meters (default 0.9)'),
+          height: S.number('door height in meters (default 2.1)'),
+          swing: S.enum([1, -1], 'swing direction relative to the wall normal (default 1)'),
+        },
+        ['wallId', 't'],
+      ),
+  ),
   execute(ctx, params) {
     const host = ctx.doc.get(params.wallId);
     if (!host || !isHost(host)) {

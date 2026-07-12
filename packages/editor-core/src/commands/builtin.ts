@@ -7,6 +7,7 @@ import { hasGrips } from '../entities/base/capabilities.js';
 import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
 import type { CommandRegistry } from './command-registry.js';
+import { S } from './schema.js';
 import { asId, asIdArray, asNumber, asPoint } from './validate.js';
 
 export interface AddLineParams {
@@ -17,20 +18,32 @@ export interface AddLineParams {
 
 export const AddLineCommand: Command<AddLineParams, EntityId> = {
   name: 'LINE.ADD',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    const result: AddLineParams = {
-      a: asPoint(raw['a'], 'a'),
-      b: asPoint(raw['b'], 'b'),
-    };
-    if (raw['layerId'] !== undefined) {
-      if (typeof raw['layerId'] !== 'string') {
-        throw new ValidationError('layerId must be a string');
+  description: 'Draw a straight line segment between two points. Returns the new entity id.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const result: AddLineParams = {
+        a: asPoint(raw['a'], 'a'),
+        b: asPoint(raw['b'], 'b'),
+      };
+      if (raw['layerId'] !== undefined) {
+        if (typeof raw['layerId'] !== 'string') {
+          throw new ValidationError('layerId must be a string');
+        }
+        result.layerId = raw['layerId'] as LayerId;
       }
-      result.layerId = raw['layerId'] as LayerId;
-    }
-    return result;
-  }),
+      return result;
+    },
+    () =>
+      S.object(
+        {
+          a: S.point('start point'),
+          b: S.point('end point'),
+          layerId: S.id('optional layer id; defaults to the active layer'),
+        },
+        ['a', 'b'],
+      ),
+  ),
   execute(ctx, params) {
     const line = new LineEntity();
     line.setPoints(params.a, params.b);
@@ -47,13 +60,25 @@ export interface MoveParams {
 
 export const MoveCommand: Command<MoveParams, number> = {
   name: 'ENTITY.MOVE',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    return {
-      ids: asIdArray(raw['ids'], 'ids'),
-      delta: asPoint(raw['delta'], 'delta'),
-    };
-  }),
+  description:
+    'Translate entities by a delta vector. Hosted entities (windows, doors) stay on their host. Returns how many entities moved.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return {
+        ids: asIdArray(raw['ids'], 'ids'),
+        delta: asPoint(raw['delta'], 'delta'),
+      };
+    },
+    () =>
+      S.object(
+        {
+          ids: S.array(S.id('entity id'), 'entities to move'),
+          delta: S.point('translation vector in meters'),
+        },
+        ['ids', 'delta'],
+      ),
+  ),
   execute(ctx, params) {
     const m = translation(params.delta);
     let moved = 0;
@@ -73,10 +98,15 @@ export interface EraseParams {
 
 export const EraseCommand: Command<EraseParams, number> = {
   name: 'ENTITY.ERASE',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    return { ids: asIdArray(raw['ids'], 'ids') };
-  }),
+  description:
+    'Delete entities. Hosted entities are erased with their host (a wall takes its windows). Returns how many entities were erased.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return { ids: asIdArray(raw['ids'], 'ids') };
+    },
+    () => S.object({ ids: S.array(S.id('entity id'), 'entities to erase') }, ['ids']),
+  ),
   execute(ctx, params) {
     let erased = 0;
     const visit = (id: EntityId): void => {
@@ -102,14 +132,27 @@ export interface GripMoveParams {
 
 export const GripMoveCommand: Command<GripMoveParams, void> = {
   name: 'GRIP.MOVE',
-  params: paramsSchema((input) => {
-    const raw = (input ?? {}) as Record<string, unknown>;
-    return {
-      id: asId(raw['id'], 'id'),
-      index: asNumber(raw['index'], 'index'),
-      to: asPoint(raw['to'], 'to'),
-    };
-  }),
+  description:
+    'Drag one grip point of an entity to a new position (stretch a wall endpoint, slide a window along its wall).',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return {
+        id: asId(raw['id'], 'id'),
+        index: asNumber(raw['index'], 'index'),
+        to: asPoint(raw['to'], 'to'),
+      };
+    },
+    () =>
+      S.object(
+        {
+          id: S.id('entity id'),
+          index: S.number('grip index, as returned by the entity (walls: 0 = start, 1 = end)'),
+          to: S.point('new grip position'),
+        },
+        ['id', 'index', 'to'],
+      ),
+  ),
   execute(ctx, params) {
     const entity = ctx.doc.get(params.id);
     if (!entity || !hasGrips(entity)) {
