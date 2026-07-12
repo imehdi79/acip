@@ -10,6 +10,13 @@ export {
   GripMoveCommand,
   registerBuiltinCommands,
 } from './builtin.js';
+export type { AddCircleParams, AddArcParams, AddPolylineParams } from './primitives.js';
+export {
+  AddCircleCommand,
+  AddArcCommand,
+  AddPolylineCommand,
+  registerPrimitiveCommands,
+} from './primitives.js';
 export type { AddWallParams, AddWindowParams, AddDoorParams } from './architecture.js';
 export {
   AddWallCommand,

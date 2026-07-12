@@ -5,6 +5,7 @@ export type SnapKind =
   | 'endpoint'
   | 'midpoint'
   | 'center'
+  | 'quadrant'
   | 'node'
   | 'intersection'
   | 'perpendicular'

@@ -5,9 +5,13 @@ import { EntityTypeRegistry } from '../registry/entity-registry.js';
 import { CommandRegistry } from '../commands/command-registry.js';
 import { CommandBus } from '../commands/bus.js';
 import { registerBuiltinCommands } from '../commands/builtin.js';
+import { registerPrimitiveCommands } from '../commands/primitives.js';
 import { registerArchitectureCommands } from '../commands/architecture.js';
 import { registerDocumentStoreCommands } from '../commands/document-stores.js';
 import { LineEntity, createLineEntity } from '../entities/primitives/line-entity.js';
+import { CircleEntity, createCircleEntity } from '../entities/primitives/circle-entity.js';
+import { ArcEntity, createArcEntity } from '../entities/primitives/arc-entity.js';
+import { PolylineEntity, createPolylineEntity } from '../entities/primitives/polyline-entity.js';
 import { WallEntity, createWallEntity } from '../entities/architecture/wall-entity.js';
 import { WindowEntity, createWindowEntity } from '../entities/architecture/window-entity.js';
 import { DoorEntity, createDoorEntity } from '../entities/architecture/door-entity.js';
@@ -48,10 +52,14 @@ export class EditorSession {
 
     if (options.registerBuiltins !== false) {
       this.entityTypes.register({ type: LineEntity.TYPE, create: createLineEntity });
+      this.entityTypes.register({ type: CircleEntity.TYPE, create: createCircleEntity });
+      this.entityTypes.register({ type: ArcEntity.TYPE, create: createArcEntity });
+      this.entityTypes.register({ type: PolylineEntity.TYPE, create: createPolylineEntity });
       this.entityTypes.register({ type: WallEntity.TYPE, create: createWallEntity });
       this.entityTypes.register({ type: WindowEntity.TYPE, create: createWindowEntity });
       this.entityTypes.register({ type: DoorEntity.TYPE, create: createDoorEntity });
       registerBuiltinCommands(this.commands);
+      registerPrimitiveCommands(this.commands);
       registerArchitectureCommands(this.commands);
       registerDocumentStoreCommands(this.commands);
     }
