@@ -1,6 +1,6 @@
 # AI Agents — Integration Model
 
-Status: **Decided** (integration model) · **Open** (which agent first) · Last updated: 2026-07-11
+Status: **Decided** (integration model; first agent = drafter, shipped 2026-07-12) · Last updated: 2026-07-12
 
 Multiple AI agents will be added later as independent packages (`packages/agents/*`,
 e.g. `@acip/agent-drafter`, `@acip/agent-dimension`). This requirement shaped the core
@@ -39,11 +39,50 @@ Subscribes to change events → queries geometry via measurements + spatial inde
 dispatches `DIM` commands → arrives as one transaction the user can undo. Zero core
 changes required.
 
-## Candidate first agents (Open — pick one to drive SDK priorities)
+## First agent: `@acip/agent-drafter` (Decided, shipped 2026-07-12)
 
-- Drafting from a prompt (NL → commands)
-- Auto-dimensioning
+Drafting from a prompt (NL → commands) was chosen because it was the only
+candidate buildable with today's entities — auto-dimensioning needs dimension
+entities, compliance needs rule data, cost optimization needs the estimator
+package. It exercises the whole contract end to end.
+
+### The core surface it consumes: `src/llm/` (Layer 3)
+
+- **`toolDefinitions(registry)`** — projects the command registry into an LLM
+  tool catalog (Anthropic Messages shape: name/description/input_schema).
+  Every command's `describe()` (built with the `S` schema builders in
+  `commands/schema.ts`) doubles as its tool schema; `description` on the
+  Command doubles as the tool description. Tool names map dots to
+  underscores (`WALL.ADD` ⇄ `WALL_ADD`) because tool names must match
+  `^[a-zA-Z0-9_-]+$`; command names never contain underscores, so the
+  mapping is lossless.
+- **`describeDocument(doc)`** — LLM-legible digest: catalogs (levels, layers,
+  materials, types), entities as their `saveData()` envelopes (persisted
+  truth, nothing derived), host relations, quantity totals. Capped by
+  `maxEntities` (default 200) with a truncation marker.
+
+### Single Ctrl+Z: history groups
+
+`HistoryStack.beginGroup()/endGroup()/runGrouped(fn)` collapse a run of
+dispatches into one undo entry (stack entries are groups of commit records).
+The agent wraps its whole run in `runGrouped` — safe across await points,
+released on error, partial work still undoes atomically. Caveat: user
+dispatches issued *during* an open group would join it; the web-editor does
+not yet run agents concurrently with user editing.
+
+### The agent loop (in the package, not core)
+
+`DrafterAgent.run(prompt)`: system prompt (drawing rules: meters, +y up,
+walls auto-join, parametric t placement) + document digest + tool catalog →
+model returns tool calls → each call dispatches through the bus →
+**validation errors return to the model as `is_error` tool results so it can
+self-correct** → loop until a text-only reply or `maxTurns`. The LLM client
+is an injected interface (`LlmClient`); tests script a fake, production uses
+the fetch-based `AnthropicClient` (no SDK dependency — headless everywhere
+the core runs).
+
+## Remaining candidates (build later, same contract)
+
+- Auto-dimensioning (needs dimension entities)
 - Code-compliance checking
 - Cost optimization (pairs with the [estimator](estimator.md))
-
-The first agent chosen determines which core APIs need to be excellent earliest.

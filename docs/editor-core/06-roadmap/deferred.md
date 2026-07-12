@@ -13,7 +13,7 @@ Last updated: 2026-07-11
 | **Sections / elevations** | Deferred | Land as `ViewDefinition` with a cut plane. |
 | **Roofs / freeform surfaces** | Deferred | Start as extrusions with slope parameter; OpenCascade-via-WASM as an island if ever truly needed. |
 | **Parametric constraint solver** | Maybe never | Host relations (one-directional DAG) deliberately are NOT this. See [relations](../04-systems/relations.md). |
-| **`editor-sdk` package** | Build when first external package lands | Until then `editor-core/src/index.ts` is the SDK contract. |
+| **`editor-sdk` package** | Still deferred — first external package (agent-drafter, 2026-07-12) consumes `editor-core/src/index.ts` directly | Split into a real package when a second consumer or versioning pain appears. |
 
 ## Open questions
 
@@ -92,6 +92,19 @@ discovery goes through the spatial index and must not depend on the join's
 own output — recorded in [wall-joins.md](../04-systems/wall-joins.md).
 64 tests.
 
-Next candidates, in rough order: more drafting primitives (arc, circle,
-polyline entities), copy-floor-to-floor, first AI agent (command schemas →
-LLM tool defs via describe()).
+**First AI agent landed 2026-07-12 — `@acip/agent-drafter` (NL → commands).**
+Core grew the `llm/` projections (`toolDefinitions`: registry → Anthropic-shape
+tool catalog, dot⇄underscore name mapping; `describeDocument`: catalogs +
+saveData envelopes + relations + quantity totals), `describe()` schemas +
+descriptions on all 13 commands (S builders in `commands/schema.ts`), and
+history groups (`beginGroup`/`endGroup`/`runGrouped`) so a whole agent run is
+one Ctrl+Z. The agent package proves the plugin seam: depends only on the SDK
+barrel, injectable `LlmClient` (scripted fake in tests, fetch-based
+`AnthropicClient` for production), validation errors feed back as `is_error`
+tool results for self-correction. Workspaces now include `packages/agents/*`.
+See [ai-agents.md](../05-packages/ai-agents.md). 72 core + 3 agent tests.
+
+Next candidates, in rough order: wire the drafter into web-editor (prompt box
++ API key setting), more drafting primitives (arc, circle, polyline entities),
+copy-floor-to-floor, estimator package (rules + rates over the quantities
+seed).

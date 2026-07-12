@@ -15,7 +15,8 @@ packages/
   editor-sdk/          # LATER: thin, stable API surface for external packages
   estimator/           # LATER: quantity takeoff + BOQ + cost  (see 05-packages/estimator.md)
   viewer-3d/           # LATER: WebGL/three.js viewer consuming derived meshes
-  agents/*             # LATER: @acip/agent-* packages (drafting, dimensioning, compliance…)
+  agents/*             # @acip/agent-* packages — first landed: agents/drafter
+                       # (NL → commands, 2026-07-12); later: dimensioning, compliance…
 ```
 
 ## Dependency rules

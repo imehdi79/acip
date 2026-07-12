@@ -50,6 +50,8 @@ src/
 ├── rendering/         # Renderer INTERFACE + display list + tessellation ONLY;
 │                      # Canvas/WebGL implementations live in web-editor
 ├── io/                # native JSON format, DXF; IFC later — all via the type registry
+├── llm/               # LLM projections: command registry → tool defs,
+│                      # document → digest. Core never talks to a model itself.
 │
 │                      ── LAYER 4: facade ──
 ├── editor/            # EditorSession: wires document + commands + tools + selection.
