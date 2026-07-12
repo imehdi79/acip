@@ -108,6 +108,13 @@ export class RelationGraph {
     return [...this.relations.values()];
   }
 
+  /** @internal for document reset only */
+  _clear(): void {
+    this.relations.clear();
+    this.byHost.clear();
+    this.byHosted.clear();
+  }
+
   private store(relation: Relation): void {
     this.relations.set(relation.id, relation);
     let hostSet = this.byHost.get(relation.hostId);

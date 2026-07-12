@@ -14,6 +14,8 @@ import { DoorEntity, createDoorEntity } from '../entities/architecture/door-enti
 import { SelectionSet } from '../selection/index.js';
 import { SnapEngine } from '../snapping/index.js';
 import { MeasurementService } from '../measurements/index.js';
+import type { DocumentData } from '../io/index.js';
+import { loadDocumentInto, saveDocument } from '../io/index.js';
 
 export interface EditorSessionOptions {
   doc?: DrawingDocument;
@@ -65,5 +67,25 @@ export class EditorSession {
 
   redo(): readonly CommitRecord[] | null {
     return this.history.redo();
+  }
+
+  save(): DocumentData {
+    return saveDocument(this.doc);
+  }
+
+  /** replace document content in place — every doc reference stays valid */
+  open(data: DocumentData): void {
+    this.selection.clear();
+    this.history.clear();
+    this.doc._reset();
+    loadDocumentInto(this.doc, data, this.entityTypes);
+    this.doc._emitLoad();
+  }
+
+  newDocument(): void {
+    this.selection.clear();
+    this.history.clear();
+    this.doc._reset();
+    this.doc._emitLoad();
   }
 }

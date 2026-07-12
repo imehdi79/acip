@@ -239,7 +239,7 @@ export type { DisplayStyle, RenderItem, Renderer } from './rendering/index.js';
 export { buildDisplayList } from './rendering/index.js';
 export type { InputModifiers, ToolInputEvent, ToolContext, Tool } from './tools/index.js';
 export type { DocumentData } from './io/index.js';
-export { saveDocument, loadDocument } from './io/index.js';
+export { saveDocument, loadDocument, loadDocumentInto } from './io/index.js';
 
 // ── facade (Layer 4) ──
 export type { EditorSessionOptions } from './editor/index.js';

@@ -18,7 +18,7 @@ import type { CommitRecord } from './history/transaction.js';
 export type StoreName = 'layers' | 'levels' | 'materials' | 'types';
 
 export interface DocumentChangeEvent {
-  readonly kind: 'commit' | 'undo' | 'redo';
+  readonly kind: 'commit' | 'undo' | 'redo' | 'load';
   readonly record: CommitRecord;
   /** downstream entities invalidated via the relation graph */
   readonly dirty: readonly EntityId[];
@@ -113,6 +113,38 @@ export class DrawingDocument {
   /** @internal keeps the spatial index in sync after a registered mutation */
   _entityChanged(entity: Entity): void {
     this.spatial.update(entity.id, entity.getBounds());
+  }
+
+  /**
+   * @internal wipe everything for open/new. Callers (EditorSession.open)
+   * must clear history and selection themselves, then _emitLoad() once the
+   * new content is in place.
+   */
+  _reset(): void {
+    for (const entity of this.entities.values()) {
+      entity._detachFromDocument();
+    }
+    this.entities.clear();
+    this.spatial = new NaiveSpatialIndex();
+    this.relations._clear();
+    for (const store of [this.layers, this.levels, this.materials, this.types]) {
+      for (const item of store.list()) store.delete(item.id);
+    }
+    this.layers.set(createDefaultLayer());
+  }
+
+  /** @internal one whole-document event after open/new — everything re-reads */
+  _emitLoad(): void {
+    this.events.emit('change', {
+      kind: 'load',
+      record: {
+        commandName: 'DOC.LOAD',
+        params: null,
+        changes: { created: [], updated: [], removed: [], relations: [], stores: [] },
+        timestamp: Date.now(),
+      },
+      dirty: [],
+    });
   }
 
   /** @internal emitted once per committed/undone/redone transaction */

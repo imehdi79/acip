@@ -1,7 +1,5 @@
-import type { LayerId } from '../common/id.js';
 import type { EntityData } from '../entities/base/data.js';
 import type { Layer } from '../document/layer.js';
-import { DEFAULT_LAYER_ID } from '../document/layer.js';
 import type { Level } from '../document/levels/index.js';
 import type { Material } from '../document/materials/index.js';
 import type { EntityTypeDef } from '../document/types/index.js';
@@ -32,10 +30,14 @@ export function saveDocument(doc: DrawingDocument): DocumentData {
   };
 }
 
-export function loadDocument(data: DocumentData, registry: EntityTypeRegistry): DrawingDocument {
-  const doc = new DrawingDocument();
+/** populate an EMPTY (fresh or _reset) document in place */
+export function loadDocumentInto(
+  doc: DrawingDocument,
+  data: DocumentData,
+  registry: EntityTypeRegistry,
+): void {
   for (const layer of data.layers) {
-    if ((layer.id as LayerId) === DEFAULT_LAYER_ID) continue;
+    // the default layer already exists — overwrite keeps saved edits to it
     doc.layers.set({ ...layer });
   }
   for (const level of data.levels) {
@@ -53,5 +55,10 @@ export function loadDocument(data: DocumentData, registry: EntityTypeRegistry): 
   for (const relation of data.relations) {
     doc.relations.restore(relation);
   }
+}
+
+export function loadDocument(data: DocumentData, registry: EntityTypeRegistry): DrawingDocument {
+  const doc = new DrawingDocument();
+  loadDocumentInto(doc, data, registry);
   return doc;
 }
