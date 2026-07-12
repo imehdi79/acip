@@ -116,6 +116,60 @@ export const RemoveLevelCommand: Command<RemoveLevelParams, void> = {
   },
 };
 
+export interface DuplicateLevelParams {
+  sourceLevelId: LevelId;
+  name: string;
+  elevation: number;
+}
+
+export const DuplicateLevelCommand: Command<DuplicateLevelParams, LevelId> = {
+  name: 'LEVEL.DUPLICATE',
+  description:
+    'Copy a whole floor: creates a new level at the given elevation and clones every entity on the source level, including hosted windows/doors with their placements. Returns the new level id.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return {
+        sourceLevelId: asId(raw['sourceLevelId'], 'sourceLevelId') as string as LevelId,
+        name: asName(raw['name'], 'name'),
+        elevation: asNumber(raw['elevation'], 'elevation'),
+      };
+    },
+    () =>
+      S.object(
+        {
+          sourceLevelId: S.id('level to copy from'),
+          name: S.string('name for the new level'),
+          elevation: S.number('elevation of the new level in meters'),
+        },
+        ['sourceLevelId', 'name', 'elevation'],
+      ),
+  ),
+  execute(ctx, params) {
+    if (!ctx.doc.levels.has(params.sourceLevelId)) {
+      throw new ValidationError(`level ${params.sourceLevelId} does not exist`);
+    }
+    const level: Level = { id: newLevelId(), name: params.name, elevation: params.elevation };
+    ctx.tx.storeAdd('levels', level);
+
+    for (const entity of ctx.doc.all()) {
+      if (!isLevelAware(entity) || entity.baseLevelId !== params.sourceLevelId) continue;
+      const copy = entity.clone();
+      if (isLevelAware(copy)) copy.baseLevelId = level.id;
+      ctx.tx.create(copy);
+      // hosted entities (windows, doors) follow their host onto the new floor
+      for (const relation of ctx.doc.relations.relationsOfHost(entity.id)) {
+        const hosted = ctx.doc.get(relation.hostedId);
+        if (!hosted) continue;
+        const hostedCopy = hosted.clone();
+        ctx.tx.create(hostedCopy);
+        ctx.tx.attach(copy.id, hostedCopy.id, relation.anchorIndex, { ...relation.params });
+      }
+    }
+    return level.id;
+  },
+};
+
 export interface AddLayerParams {
   name: string;
   color?: string;
@@ -349,6 +403,7 @@ export function registerDocumentStoreCommands(registry: CommandRegistry): void {
   registry.register(AddLevelCommand);
   registry.register(UpdateLevelCommand);
   registry.register(RemoveLevelCommand);
+  registry.register(DuplicateLevelCommand);
   registry.register(AddLayerCommand);
   registry.register(UpdateLayerCommand);
   registry.register(RemoveLayerCommand);
