@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { IconEye, IconEyeOff, IconLock, IconLockOpen, IconTrash } from '@tabler/icons-react';
+import {
+  IconCopy,
+  IconEye,
+  IconEyeOff,
+  IconLock,
+  IconLockOpen,
+  IconTrash,
+} from '@tabler/icons-react';
 import { DEFAULT_LAYER_ID, computeQuantities } from '@acip/editor-core';
 import type { Layer } from '@acip/editor-core';
 import { useSession } from '../session-context';
@@ -236,7 +243,7 @@ function LevelsSection() {
       ) : (
         <ul className="plain-list levels-list">
           {session.doc.levels.list().map((level) => (
-            <li key={level.id}>
+            <li key={level.id} className="level-item">
               <button
                 type="button"
                 className={activeLevelId === level.id ? 'level-row active' : 'level-row'}
@@ -245,6 +252,26 @@ function LevelsSection() {
                 }
               >
                 {level.name} · {level.elevation.toFixed(2)}m
+              </button>
+              <button
+                type="button"
+                className="layer-flag"
+                title="Duplicate floor (entities + openings)"
+                onClick={() => {
+                  try {
+                    const id = session.dispatch('LEVEL.DUPLICATE', {
+                      sourceLevelId: level.id,
+                      name: `${level.name} copy`,
+                      elevation: level.elevation + 3,
+                    });
+                    ui.activeLevelId.set(id as never);
+                    ui.appendLog(`Duplicated ${level.name} — one undo step.`);
+                  } catch (err) {
+                    ui.appendLog(err instanceof Error ? err.message : String(err), 'error');
+                  }
+                }}
+              >
+                <IconCopy size={14} stroke={1.75} />
               </button>
             </li>
           ))}

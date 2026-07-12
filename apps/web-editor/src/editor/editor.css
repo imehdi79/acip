@@ -352,6 +352,16 @@ body,
   margin-bottom: 2px;
 }
 
+.levels-list .level-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.levels-list .level-row {
+  flex: 1;
+}
+
 .level-row {
   width: 100%;
   text-align: left;
