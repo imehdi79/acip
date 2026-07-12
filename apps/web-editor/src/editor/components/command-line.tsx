@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { IconKey, IconSparkles } from '@tabler/icons-react';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useStoreValue } from '../store';
+import { getApiKey, runDrafter, setApiKey } from '../agent';
 
 export function CommandLine() {
   const session = useSession();
@@ -88,6 +90,67 @@ export function CommandLine() {
           }}
         />
       </div>
+      <AgentRow />
+    </div>
+  );
+}
+
+function AgentRow() {
+  const session = useSession();
+  const { ui } = useRuntime();
+  const busy = useStoreValue(ui.agentBusy);
+  const [prompt, setPrompt] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [key, setKey] = useState(getApiKey);
+
+  const submit = () => {
+    const text = prompt.trim();
+    if (!text || busy) return;
+    setPrompt('');
+    void runDrafter(session, ui, text);
+  };
+
+  const saveKey = () => {
+    setApiKey(key);
+    setShowKey(false);
+    ui.appendLog(key.trim() ? 'API key saved (this browser only).' : 'API key cleared.');
+  };
+
+  return (
+    <div className="agent-row">
+      <IconSparkles size={16} stroke={1.75} className={busy ? 'agent-icon busy' : 'agent-icon'} />
+      <input
+        value={prompt}
+        disabled={busy}
+        placeholder={
+          busy ? 'Agent is drawing…' : 'Ask the agent — e.g. "draw a 6 by 4 m room with a door"'
+        }
+        onChange={(e) => setPrompt(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') submit();
+          e.stopPropagation();
+        }}
+      />
+      {showKey && (
+        <input
+          type="password"
+          className="key-input"
+          placeholder="sk-ant-…"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') saveKey();
+            e.stopPropagation();
+          }}
+        />
+      )}
+      <button
+        type="button"
+        title={showKey ? 'Save API key' : 'Set Anthropic API key'}
+        onClick={() => (showKey ? saveKey() : setShowKey(true))}
+      >
+        <IconKey size={16} stroke={1.75} />
+      </button>
     </div>
   );
 }

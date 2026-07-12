@@ -32,6 +32,9 @@
   "references": [
     {
       "path": "../../packages/editor-core/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/agents/drafter/tsconfig.lib.json"
     }
   ]
 }

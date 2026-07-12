@@ -35,6 +35,8 @@ export class EditorUi {
   /** null = "all levels"; new walls are assigned to the active level */
   readonly activeLevelId = new ValueStore<LevelId | null>(null);
   readonly overlay = new ValueStore<OverlayState>(EMPTY_OVERLAY);
+  /** true while the drafter agent is running (input disabled, viewport live) */
+  readonly agentBusy = new ValueStore<boolean>(false);
 
   appendLog(text: string, kind: LogEntry['kind'] = 'info'): void {
     this.log.set([...this.log.get().slice(-99), { text, kind }]);

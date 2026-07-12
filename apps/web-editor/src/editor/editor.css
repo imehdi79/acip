@@ -209,6 +209,59 @@ body,
   border-color: #4da3ff;
 }
 
+/* ── agent row ── */
+.agent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 6px;
+}
+
+.agent-icon {
+  color: #b18cff;
+  flex-shrink: 0;
+}
+
+.agent-icon.busy {
+  animation: agent-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes agent-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.agent-row input {
+  flex: 1;
+  background: #1b1e23;
+  color: #e8ecf1;
+  border: 1px solid #2c313a;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  outline: none;
+}
+
+.agent-row input:focus {
+  border-color: #b18cff;
+}
+
+.agent-row input:disabled {
+  opacity: 0.6;
+}
+
+.agent-row .key-input {
+  flex: 0 0 220px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+}
+
+.agent-row button {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 6px;
+}
+
 /* ── status bar ── */
 .status-bar {
   display: flex;
