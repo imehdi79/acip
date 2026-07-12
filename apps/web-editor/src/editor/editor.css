@@ -67,6 +67,15 @@ body,
   font-size: 12px;
 }
 
+/* icon-bearing chrome buttons: center the svg against the label */
+.top-bar button,
+.tool-palette button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
 .editor-shell button:hover:not(:disabled) {
   background: #2f3540;
 }
@@ -216,6 +225,13 @@ body,
   min-width: 120px;
   color: #cfd3da;
   font-family: 'Cascadia Mono', Consolas, monospace;
+}
+
+.status-bar .coords,
+.status-bar .status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .level-picker {

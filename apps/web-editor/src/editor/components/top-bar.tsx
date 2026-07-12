@@ -1,12 +1,14 @@
+import { IconArrowBackUp, IconArrowForwardUp, IconCube, IconGrid4x4 } from '@tabler/icons-react';
+import type { Icon } from '@tabler/icons-react';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useDocRevision } from '../hooks';
 import { useStoreValue } from '../store';
 import type { ViewTab } from '../ui-state';
 
-const TABS: { id: ViewTab; label: string }[] = [
-  { id: 'plan', label: 'Plan' },
-  { id: '3d', label: '3D' },
+const TABS: { id: ViewTab; icon: Icon; label: string }[] = [
+  { id: 'plan', icon: IconGrid4x4, label: 'Plan' },
+  { id: '3d', icon: IconCube, label: '3D' },
 ];
 
 export function TopBar() {
@@ -25,7 +27,8 @@ export function TopBar() {
           onClick={() => session.undo()}
           title="Undo (Ctrl+Z)"
         >
-          ⟲ Undo
+          <IconArrowBackUp size={16} stroke={1.75} />
+          Undo
         </button>
         <button
           type="button"
@@ -33,7 +36,8 @@ export function TopBar() {
           onClick={() => session.redo()}
           title="Redo (Ctrl+Y)"
         >
-          ⟳ Redo
+          <IconArrowForwardUp size={16} stroke={1.75} />
+          Redo
         </button>
       </div>
       <div className="top-bar-group tabs">
@@ -44,6 +48,7 @@ export function TopBar() {
             className={activeTab === tab.id ? 'active' : ''}
             onClick={() => ui.viewTab.set(tab.id)}
           >
+            <tab.icon size={16} stroke={1.75} />
             {tab.label}
           </button>
         ))}

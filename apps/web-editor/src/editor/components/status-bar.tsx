@@ -1,3 +1,4 @@
+import { IconCrosshair, IconMagnet, IconStack2 } from '@tabler/icons-react';
 import type { LevelId } from '@acip/editor-core';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
@@ -16,10 +17,15 @@ export function StatusBar() {
   return (
     <footer className="status-bar">
       <span className="coords">
+        <IconCrosshair size={14} stroke={1.75} />
         {coords ? `${coords.x.toFixed(2)}, ${coords.y.toFixed(2)}` : '—'}
       </span>
-      <span>OSNAP END MID</span>
+      <span className="status-item">
+        <IconMagnet size={14} stroke={1.75} />
+        OSNAP END MID
+      </span>
       <label className="level-picker">
+        <IconStack2 size={14} stroke={1.75} />
         Level
         <select
           value={activeLevelId ?? ''}

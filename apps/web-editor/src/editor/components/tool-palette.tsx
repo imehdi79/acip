@@ -1,12 +1,14 @@
+import { IconDoor, IconLine, IconPointer, IconWall, IconWindow } from '@tabler/icons-react';
+import type { Icon } from '@tabler/icons-react';
 import { useRuntime } from '../runtime';
 import { useStoreValue } from '../store';
 
-const TOOLS = [
-  { id: 'select', label: 'Sel', title: 'Select' },
-  { id: 'line', label: '╱', title: 'Line (LINE)' },
-  { id: 'wall', label: '▭', title: 'Wall (WALL)' },
-  { id: 'window', label: '◫', title: 'Window (WINDOW)' },
-  { id: 'door', label: '◧', title: 'Door (DOOR)' },
+const TOOLS: { id: string; icon: Icon; title: string }[] = [
+  { id: 'select', icon: IconPointer, title: 'Select' },
+  { id: 'line', icon: IconLine, title: 'Line (LINE)' },
+  { id: 'wall', icon: IconWall, title: 'Wall (WALL)' },
+  { id: 'window', icon: IconWindow, title: 'Window (WINDOW)' },
+  { id: 'door', icon: IconDoor, title: 'Door (DOOR)' },
 ];
 
 export function ToolPalette() {
@@ -23,7 +25,7 @@ export function ToolPalette() {
           className={activeId === tool.id ? 'active' : ''}
           onClick={() => tools.useById(tool.id)}
         >
-          {tool.label}
+          <tool.icon size={20} stroke={1.75} />
         </button>
       ))}
     </aside>

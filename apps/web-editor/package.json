@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@acip/editor-core": "workspace:*",
+    "@tabler/icons-react": "^3.31.0",
     "three": "^0.170.0"
   },
   "devDependencies": {
