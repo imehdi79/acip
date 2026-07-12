@@ -5,6 +5,7 @@ import { ToolManager } from './tools/tool-manager';
 import { SelectTool } from './tools/select-tool';
 import { ChainedDrawTool } from './tools/chained-draw-tool';
 import { HostedPlaceTool } from './tools/hosted-place-tool';
+import { ArcTool, CircleTool, PolylineTool } from './tools/circle-tool';
 
 export interface EditorRuntime {
   readonly ui: EditorUi;
@@ -59,6 +60,9 @@ export function createRuntime(session: EditorSession): EditorRuntime {
   };
   tools.register(new SelectTool(ui, tolerance));
   tools.register(new ChainedDrawTool('line', 'LINE', 'LINE.ADD', ui, finish, activeLayer));
+  tools.register(new CircleTool(ui, finish, activeLayer));
+  tools.register(new ArcTool(ui, finish, activeLayer));
+  tools.register(new PolylineTool(ui, tolerance, finish, activeLayer));
   tools.register(
     new ChainedDrawTool('wall', 'WALL', 'WALL.ADD', ui, finish, () => {
       const levelId = ui.activeLevelId.get();

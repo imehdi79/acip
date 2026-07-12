@@ -27,6 +27,19 @@ export function CommandLine() {
         case 'L':
           tools.useById('line');
           break;
+        case 'CIRCLE':
+        case 'C':
+          tools.useById('circle');
+          break;
+        case 'ARC':
+        case 'A':
+          tools.useById('arc');
+          break;
+        case 'POLYLINE':
+        case 'PLINE':
+        case 'PL':
+          tools.useById('polyline');
+          break;
         case 'WALL':
         case 'W':
           tools.useById('wall');

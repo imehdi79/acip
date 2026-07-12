@@ -1,4 +1,13 @@
-import { IconDoor, IconLine, IconPointer, IconWall, IconWindow } from '@tabler/icons-react';
+import {
+  IconCircle,
+  IconDoor,
+  IconLine,
+  IconPointer,
+  IconTimeline,
+  IconVectorSpline,
+  IconWall,
+  IconWindow,
+} from '@tabler/icons-react';
 import type { Icon } from '@tabler/icons-react';
 import { useRuntime } from '../runtime';
 import { useStoreValue } from '../store';
@@ -6,6 +15,9 @@ import { useStoreValue } from '../store';
 const TOOLS: { id: string; icon: Icon; title: string }[] = [
   { id: 'select', icon: IconPointer, title: 'Select' },
   { id: 'line', icon: IconLine, title: 'Line (LINE)' },
+  { id: 'circle', icon: IconCircle, title: 'Circle (CIRCLE)' },
+  { id: 'arc', icon: IconVectorSpline, title: 'Arc (ARC)' },
+  { id: 'polyline', icon: IconTimeline, title: 'Polyline (PLINE)' },
   { id: 'wall', icon: IconWall, title: 'Wall (WALL)' },
   { id: 'window', icon: IconWindow, title: 'Window (WINDOW)' },
   { id: 'door', icon: IconDoor, title: 'Door (DOOR)' },

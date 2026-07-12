@@ -55,7 +55,7 @@ function EditorShell() {
         }
         return;
       }
-      if (e.key === 'Escape') runtime.tools.key('Escape');
+      if (e.key === 'Escape' || e.key === 'Enter') runtime.tools.key(e.key);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
