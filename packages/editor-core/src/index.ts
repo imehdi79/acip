@@ -191,6 +191,8 @@ export type {
   UpdateLevelParams,
   RemoveLevelParams,
   AddLayerParams,
+  UpdateLayerParams,
+  RemoveLayerParams,
   AddMaterialParams,
   AddTypeParams,
 } from './commands/index.js';
@@ -211,6 +213,8 @@ export {
   UpdateLevelCommand,
   RemoveLevelCommand,
   AddLayerCommand,
+  UpdateLayerCommand,
+  RemoveLayerCommand,
   AddMaterialCommand,
   AddTypeCommand,
   registerDocumentStoreCommands,
@@ -234,7 +238,7 @@ export { MeasurementService, geometryLength, geometryArea } from './measurements
 export type { WallQuantity, MaterialQuantity, QuantityReport } from './measurements/index.js';
 export { computeQuantities } from './measurements/index.js';
 export type { ViewDefinition } from './views/index.js';
-export { entitiesInView } from './views/index.js';
+export { entitiesInView, isEntityVisible, isEntityInteractive } from './views/index.js';
 export type { DisplayStyle, RenderItem, Renderer } from './rendering/index.js';
 export { buildDisplayList } from './rendering/index.js';
 export type { InputModifiers, ToolInputEvent, ToolContext, Tool } from './tools/index.js';

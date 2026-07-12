@@ -30,7 +30,13 @@ export function describeDocument(
   const digest: Record<string, JsonValue> = {
     counts: { entities: all.length, byType },
     levels: doc.levels.list().map((l) => ({ id: l.id, name: l.name, elevation: l.elevation })),
-    layers: doc.layersList().map((l) => ({ id: l.id, name: l.name })),
+    layers: doc.layersList().map((l) => ({
+      id: l.id,
+      name: l.name,
+      visible: l.visible,
+      locked: l.locked,
+      ...(l.color ? { color: l.color } : {}),
+    })),
     materials: doc.materials.list().map((m) => ({ id: m.id, name: m.name, unit: m.unit })),
     types: doc.types.list().map((t) => ({
       id: t.id,

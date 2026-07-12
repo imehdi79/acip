@@ -22,6 +22,8 @@ export type {
   UpdateLevelParams,
   RemoveLevelParams,
   AddLayerParams,
+  UpdateLayerParams,
+  RemoveLayerParams,
   AddMaterialParams,
   AddTypeParams,
 } from './document-stores.js';
@@ -30,6 +32,8 @@ export {
   UpdateLevelCommand,
   RemoveLevelCommand,
   AddLayerCommand,
+  UpdateLayerCommand,
+  RemoveLayerCommand,
   AddMaterialCommand,
   AddTypeCommand,
   registerDocumentStoreCommands,

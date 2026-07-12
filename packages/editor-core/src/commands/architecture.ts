@@ -1,4 +1,4 @@
-import type { EntityId, LevelId, TypeId } from '../common/id.js';
+import type { EntityId, LayerId, LevelId, TypeId } from '../common/id.js';
 import { ValidationError } from '../common/errors.js';
 import type { Point } from '../geometry/primitives/point.js';
 import { isHost } from '../entities/base/capabilities.js';
@@ -18,6 +18,7 @@ export interface AddWallParams {
   height?: number;
   levelId?: LevelId;
   typeId?: TypeId;
+  layerId?: LayerId;
 }
 
 export const AddWallCommand: Command<AddWallParams, EntityId> = {
@@ -35,6 +36,7 @@ export const AddWallCommand: Command<AddWallParams, EntityId> = {
       if (raw['height'] !== undefined) params.height = asPositive(raw['height'], 'height');
       if (raw['levelId'] !== undefined) params.levelId = asId(raw['levelId'], 'levelId') as string as LevelId;
       if (raw['typeId'] !== undefined) params.typeId = asId(raw['typeId'], 'typeId') as string as TypeId;
+      if (raw['layerId'] !== undefined) params.layerId = asId(raw['layerId'], 'layerId') as string as LayerId;
       return params;
     },
     () =>
@@ -46,6 +48,7 @@ export const AddWallCommand: Command<AddWallParams, EntityId> = {
           height: S.number('wall height in meters (default 3)'),
           levelId: S.id('optional level (floor) id the wall sits on'),
           typeId: S.id('optional wall type id from the type catalog; thickness then derives from its assembly layers'),
+          layerId: S.id('optional layer id; defaults to the active layer'),
         },
         ['a', 'b'],
       ),
@@ -60,6 +63,7 @@ export const AddWallCommand: Command<AddWallParams, EntityId> = {
     if (params.height !== undefined) wall.vertical = { height: params.height };
     if (params.levelId !== undefined) wall.baseLevelId = params.levelId;
     if (params.typeId !== undefined) wall.typeRef = params.typeId;
+    if (params.layerId !== undefined) wall.layerId = params.layerId;
     ctx.tx.create(wall);
     return wall.id;
   },

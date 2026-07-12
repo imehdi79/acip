@@ -3,6 +3,7 @@ import { distance } from '../geometry/primitives/point.js';
 import { bboxExpand, bboxFromPoints } from '../geometry/primitives/bbox.js';
 import type { SnapKind, SnapPoint } from '../entities/base/snap.js';
 import type { DrawingDocument } from '../document/document.js';
+import { isEntityVisible } from '../views/index.js';
 
 /**
  * Gathers entity-provided snap points near the cursor and picks the closest
@@ -17,6 +18,7 @@ export class SnapEngine {
     let best: SnapPoint | null = null;
     let bestDist = Infinity;
     for (const entity of this.doc.queryBBox(area)) {
+      if (!isEntityVisible(this.doc, entity)) continue; // locked still snaps; hidden never
       for (const sp of entity.getSnapPoints(filter)) {
         const d = distance(cursor, sp.point);
         if (d <= tolerance && d < bestDist) {

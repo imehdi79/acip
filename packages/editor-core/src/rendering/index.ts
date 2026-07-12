@@ -2,7 +2,7 @@ import type { EntityId } from '../common/id.js';
 import type { Geometry } from '../geometry/shapes.js';
 import type { DrawingDocument } from '../document/document.js';
 import type { ViewDefinition } from '../views/index.js';
-import { entitiesInView } from '../views/index.js';
+import { entitiesInView, isEntityVisible } from '../views/index.js';
 
 /**
  * Core produces display lists; DRAWING them is the consumer's job.
@@ -28,10 +28,13 @@ const DEFAULT_STYLE: DisplayStyle = { stroke: '#e0e0e0', width: 1 };
 
 export function buildDisplayList(doc: DrawingDocument, view: ViewDefinition): RenderItem[] {
   return entitiesInView(doc, view)
-    .filter((e) => doc.getLayer(e.layerId)?.visible !== false)
-    .map((e) => ({
-      entityId: e.id,
-      geometry: e.getEffectiveGeometry(),
-      style: DEFAULT_STYLE,
-    }));
+    .filter((e) => isEntityVisible(doc, e))
+    .map((e) => {
+      const color = doc.getLayer(e.layerId)?.color;
+      return {
+        entityId: e.id,
+        geometry: e.getEffectiveGeometry(),
+        style: color ? { stroke: color, width: 1 } : DEFAULT_STYLE,
+      };
+    });
 }

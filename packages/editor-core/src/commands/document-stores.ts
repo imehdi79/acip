@@ -4,6 +4,7 @@ import { ValidationError } from '../common/errors.js';
 import { isLevelAware } from '../entities/base/capabilities.js';
 import type { Level } from '../document/levels/index.js';
 import type { Layer } from '../document/layer.js';
+import { DEFAULT_LAYER_ID } from '../document/layer.js';
 import type { Material, MaterialUnit } from '../document/materials/index.js';
 import type { AssemblyLayer, EntityTypeDef } from '../document/types/index.js';
 import type { Command } from './command.js';
@@ -117,6 +118,7 @@ export const RemoveLevelCommand: Command<RemoveLevelParams, void> = {
 
 export interface AddLayerParams {
   name: string;
+  color?: string;
 }
 
 export const AddLayerCommand: Command<AddLayerParams, LayerId> = {
@@ -125,14 +127,107 @@ export const AddLayerCommand: Command<AddLayerParams, LayerId> = {
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
-      return { name: asName(raw['name'], 'name') };
+      const params: AddLayerParams = { name: asName(raw['name'], 'name') };
+      if (raw['color'] !== undefined) params.color = asName(raw['color'], 'color');
+      return params;
     },
-    () => S.object({ name: S.string('layer name') }, ['name']),
+    () =>
+      S.object(
+        {
+          name: S.string('layer name'),
+          color: S.string('optional CSS stroke color, e.g. "#e0b34d"'),
+        },
+        ['name'],
+      ),
   ),
   execute(ctx, params) {
     const layer: Layer = { id: newLayerId(), name: params.name, visible: true, locked: false };
+    if (params.color !== undefined) layer.color = params.color;
     ctx.tx.storeAdd('layers', layer);
     return layer.id;
+  },
+};
+
+export interface UpdateLayerParams {
+  id: LayerId;
+  name?: string;
+  visible?: boolean;
+  locked?: boolean;
+  color?: string;
+}
+
+export const UpdateLayerCommand: Command<UpdateLayerParams, void> = {
+  name: 'LAYER.UPDATE',
+  description:
+    'Rename a layer, toggle visibility (hidden entities disappear from render and snap) or lock (locked entities cannot be selected), or set its color.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: UpdateLayerParams = { id: asId(raw['id'], 'id') as string as LayerId };
+      if (raw['name'] !== undefined) params.name = asName(raw['name'], 'name');
+      if (raw['visible'] !== undefined) {
+        if (typeof raw['visible'] !== 'boolean') throw new ValidationError('visible must be boolean');
+        params.visible = raw['visible'];
+      }
+      if (raw['locked'] !== undefined) {
+        if (typeof raw['locked'] !== 'boolean') throw new ValidationError('locked must be boolean');
+        params.locked = raw['locked'];
+      }
+      if (raw['color'] !== undefined) params.color = asName(raw['color'], 'color');
+      if (
+        params.name === undefined &&
+        params.visible === undefined &&
+        params.locked === undefined &&
+        params.color === undefined
+      ) {
+        throw new ValidationError('provide name, visible, locked, and/or color');
+      }
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          id: S.id('layer id'),
+          name: S.string('new name'),
+          visible: S.boolean('show/hide the layer'),
+          locked: S.boolean('lock/unlock the layer'),
+          color: S.string('CSS stroke color'),
+        },
+        ['id'],
+      ),
+  ),
+  execute(ctx, params) {
+    ctx.tx.storeUpdate<Layer>('layers', params.id, (layer) => {
+      if (params.name !== undefined) layer.name = params.name;
+      if (params.visible !== undefined) layer.visible = params.visible;
+      if (params.locked !== undefined) layer.locked = params.locked;
+      if (params.color !== undefined) layer.color = params.color;
+    });
+  },
+};
+
+export interface RemoveLayerParams {
+  id: LayerId;
+}
+
+export const RemoveLayerCommand: Command<RemoveLayerParams, void> = {
+  name: 'LAYER.REMOVE',
+  description: 'Delete a layer. Fails for the default layer or while entities still use it.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return { id: asId(raw['id'], 'id') as string as LayerId };
+    },
+    () => S.object({ id: S.id('layer id') }, ['id']),
+  ),
+  execute(ctx, params) {
+    if (params.id === DEFAULT_LAYER_ID) {
+      throw new ValidationError('the default layer cannot be removed');
+    }
+    if (ctx.doc.all().some((e) => e.layerId === params.id)) {
+      throw new ValidationError(`layer ${params.id} is in use by entities`);
+    }
+    ctx.tx.storeRemove('layers', params.id);
   },
 };
 
@@ -255,6 +350,8 @@ export function registerDocumentStoreCommands(registry: CommandRegistry): void {
   registry.register(UpdateLevelCommand);
   registry.register(RemoveLevelCommand);
   registry.register(AddLayerCommand);
+  registry.register(UpdateLayerCommand);
+  registry.register(RemoveLayerCommand);
   registry.register(AddMaterialCommand);
   registry.register(AddTypeCommand);
 }

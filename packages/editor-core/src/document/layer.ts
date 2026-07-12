@@ -7,6 +7,8 @@ export interface Layer {
   name: string;
   visible: boolean;
   locked: boolean;
+  /** ByLayer stroke color (CSS); renderers fall back to their default */
+  color?: string;
 }
 
 export const DEFAULT_LAYER_ID = '0' as LayerId;
