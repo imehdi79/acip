@@ -125,6 +125,16 @@ is THE rule; every read path routes through it, so future entity types
 inherit correct layer behavior. web-editor: active layer (new entities land
 on it), panel rows with color swatch / eye / lock / delete. 81 tests.
 
-Next candidates, in rough order: more drafting primitives (arc, circle,
-polyline entities), copy-floor-to-floor, estimator package (rules + rates
-over the quantities seed).
+**Drafting primitives landed 2026-07-12.** Circle/Arc/Polyline entities
+(grips: circle center+quadrants, arc center+endpoints, polyline vertices;
+snap: center/quadrant added to SnapKind), curve math in geometry/curves
+(distanceToCircle/Arc/Polyline, isAngleInArc with wrap-around),
+CIRCLE.ADD / ARC.ADD / POLYLINE.ADD (all with layerId + describe()
+schemas — the agent gains them automatically). web-editor tools: circle
+(2-click, live ghost), arc (center/start/end, CCW, ghost), polyline
+(chained clicks, Enter finishes, click-first-vertex closes, one dispatch
+= one undo). Renderer/measure needed zero changes — the Geometry union
+and layer predicates already covered every kind. 89 tests.
+
+Next candidates, in rough order: copy-floor-to-floor, estimator package
+(rules + rates over the quantities seed).
