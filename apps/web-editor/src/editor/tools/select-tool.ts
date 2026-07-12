@@ -4,6 +4,7 @@ import {
   bboxFromPoints,
   distance,
   hasGrips,
+  isEntityInteractive,
   sub,
   transformGeometry,
   translation,
@@ -149,7 +150,9 @@ export class SelectTool implements Tool {
     const ctx = this.ctx;
     if (!ctx) return null;
     const area = bboxExpand(bboxFromPoints([point]), tolerance);
-    const hits = ctx.doc.queryBBox(area).filter((ent) => ent.hitTest(point, tolerance));
+    const hits = ctx.doc
+      .queryBBox(area)
+      .filter((ent) => isEntityInteractive(ctx.doc, ent) && ent.hitTest(point, tolerance));
     return hits[hits.length - 1] ?? null;
   }
 
@@ -194,6 +197,7 @@ export class SelectTool implements Tool {
     const box = bboxFromPoints([mode.start, end]);
     const crossing = end.x < mode.start.x;
     const candidates = ctx.doc.queryBBox(box).filter((ent) => {
+      if (!isEntityInteractive(ctx.doc, ent)) return false;
       if (crossing) return true; // bbox intersection is enough for crossing
       const b = ent.getBounds();
       return b.minX >= box.minX && b.maxX <= box.maxX && b.minY >= box.minY && b.maxY <= box.maxY;

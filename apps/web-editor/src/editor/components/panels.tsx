@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { computeQuantities } from '@acip/editor-core';
+import { IconEye, IconEyeOff, IconLock, IconLockOpen, IconTrash } from '@tabler/icons-react';
+import { DEFAULT_LAYER_ID, computeQuantities } from '@acip/editor-core';
+import type { Layer } from '@acip/editor-core';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useDocRevision, useSelectionIds } from '../hooks';
@@ -34,14 +36,7 @@ export function Panels() {
           </dl>
         )}
       </section>
-      <section>
-        <h3>Layers</h3>
-        <ul className="plain-list">
-          {session.doc.layersList().map((layer) => (
-            <li key={layer.id}>{layer.name}</li>
-          ))}
-        </ul>
-      </section>
+      <LayersSection />
       <LevelsSection />
       <QuantitiesSection />
       <section>
@@ -103,6 +98,110 @@ function MaterialRow({ name, volume }: { name: string; volume: number }) {
       <dt>{name}</dt>
       <dd>{volume.toFixed(2)} m³</dd>
     </>
+  );
+}
+
+function LayersSection() {
+  const session = useSession();
+  const { ui } = useRuntime();
+  useDocRevision(session);
+  const activeLayerId = useStoreValue(ui.activeLayerId);
+  const [name, setName] = useState('');
+
+  const dispatch = (command: string, params: unknown) => {
+    try {
+      return session.dispatch(command, params);
+    } catch (err) {
+      ui.appendLog(err instanceof Error ? err.message : String(err), 'error');
+      return null;
+    }
+  };
+
+  const addLayer = () => {
+    if (!name.trim()) return;
+    const id = dispatch('LAYER.ADD', { name: name.trim() });
+    if (id) {
+      ui.activeLayerId.set(id as never);
+      setName('');
+    }
+  };
+
+  return (
+    <section>
+      <h3>Layers</h3>
+      <ul className="plain-list layers-list">
+        {session.doc.layersList().map((layer: Layer) => {
+          const isActive =
+            activeLayerId === layer.id || (activeLayerId === null && layer.id === DEFAULT_LAYER_ID);
+          return (
+            <li key={layer.id} className="layer-row">
+              <input
+                type="color"
+                className="layer-color"
+                title="Layer color"
+                value={layer.color ?? '#e0e0e0'}
+                onChange={(e) => dispatch('LAYER.UPDATE', { id: layer.id, color: e.target.value })}
+              />
+              <button
+                type="button"
+                className={isActive ? 'layer-name active' : 'layer-name'}
+                title="Set active layer"
+                onClick={() =>
+                  ui.activeLayerId.set(layer.id === DEFAULT_LAYER_ID ? null : (layer.id as never))
+                }
+              >
+                {layer.name}
+              </button>
+              <button
+                type="button"
+                className="layer-flag"
+                title={layer.visible ? 'Hide layer' : 'Show layer'}
+                onClick={() =>
+                  dispatch('LAYER.UPDATE', { id: layer.id, visible: !layer.visible })
+                }
+              >
+                {layer.visible ? <IconEye size={14} stroke={1.75} /> : <IconEyeOff size={14} stroke={1.75} />}
+              </button>
+              <button
+                type="button"
+                className="layer-flag"
+                title={layer.locked ? 'Unlock layer' : 'Lock layer'}
+                onClick={() => dispatch('LAYER.UPDATE', { id: layer.id, locked: !layer.locked })}
+              >
+                {layer.locked ? <IconLock size={14} stroke={1.75} /> : <IconLockOpen size={14} stroke={1.75} />}
+              </button>
+              {layer.id !== DEFAULT_LAYER_ID && (
+                <button
+                  type="button"
+                  className="layer-flag"
+                  title="Delete layer (must be empty)"
+                  onClick={() => {
+                    if (activeLayerId === layer.id) ui.activeLayerId.set(null);
+                    dispatch('LAYER.REMOVE', { id: layer.id });
+                  }}
+                >
+                  <IconTrash size={14} stroke={1.75} />
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <div className="level-form">
+        <input
+          placeholder="New layer"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') addLayer();
+            e.stopPropagation();
+          }}
+        />
+        <button type="button" onClick={addLayer}>
+          +
+        </button>
+      </div>
+    </section>
   );
 }
 

@@ -1,4 +1,4 @@
-import type { Geometry, LevelId, Point, SnapPoint } from '@acip/editor-core';
+import type { Geometry, LayerId, LevelId, Point, SnapPoint } from '@acip/editor-core';
 import { ValueStore } from './store';
 
 export type ViewTab = 'plan' | '3d';
@@ -34,6 +34,8 @@ export class EditorUi {
   readonly viewTab = new ValueStore<ViewTab>('plan');
   /** null = "all levels"; new walls are assigned to the active level */
   readonly activeLevelId = new ValueStore<LevelId | null>(null);
+  /** null = default layer; new entities land on the active layer */
+  readonly activeLayerId = new ValueStore<LayerId | null>(null);
   readonly overlay = new ValueStore<OverlayState>(EMPTY_OVERLAY);
   /** true while the drafter agent is running (input disabled, viewport live) */
   readonly agentBusy = new ValueStore<boolean>(false);

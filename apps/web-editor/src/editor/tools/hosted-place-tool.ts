@@ -1,5 +1,12 @@
 import type { Tool, ToolContext, ToolInputEvent } from '@acip/editor-core';
-import { WallEntity, bboxExpand, bboxFromPoints, dot, sub } from '@acip/editor-core';
+import {
+  WallEntity,
+  bboxExpand,
+  bboxFromPoints,
+  dot,
+  isEntityInteractive,
+  sub,
+} from '@acip/editor-core';
 import type { EditorUi } from '../ui-state';
 
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
@@ -34,7 +41,7 @@ export class HostedPlaceTool implements Tool {
     const walls = ctx.doc
       .queryBBox(area)
       .filter((ent): ent is WallEntity => ent instanceof WallEntity)
-      .filter((wall) => wall.hitTest(e.point, tolerance));
+      .filter((wall) => isEntityInteractive(ctx.doc, wall) && wall.hitTest(e.point, tolerance));
     const wall = walls[walls.length - 1];
     if (!wall) {
       this.ui.appendLog('No wall under cursor.', 'error');

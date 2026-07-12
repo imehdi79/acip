@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { isMeshable } from '@acip/editor-core';
+import { isEntityVisible, isMeshable } from '@acip/editor-core';
 import { useSession } from '../session-context';
 
 /**
@@ -55,7 +55,7 @@ export function Viewer3D() {
         if (child instanceof THREE.Mesh) (child.geometry as THREE.BufferGeometry).dispose();
       }
       for (const entity of session.doc.all()) {
-        if (!isMeshable(entity)) continue;
+        if (!isMeshable(entity) || !isEntityVisible(session.doc, entity)) continue;
         const mesh3d = entity.toMesh('medium');
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute(

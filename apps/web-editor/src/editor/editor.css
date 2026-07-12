@@ -302,6 +302,51 @@ body,
   font-size: 12px;
 }
 
+/* ── layers panel ── */
+.layers-list .layer-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.layer-color {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #333a44;
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.layers-list .layer-name {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border-color: transparent;
+}
+
+.layers-list .layer-name.active {
+  background: #33507a;
+  border-color: #4da3ff;
+  color: #ffffff;
+}
+
+.layers-list .layer-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 4px;
+  background: none;
+  border-color: transparent;
+  color: #7d8794;
+}
+
+.layers-list .layer-flag:hover {
+  color: #cfd3da;
+}
+
 /* ── levels panel ── */
 .levels-list li {
   margin-bottom: 2px;
