@@ -9,6 +9,8 @@ import {
 } from '@tabler/icons-react';
 import { DEFAULT_LAYER_ID, computeQuantities } from '@acip/editor-core';
 import type { Layer } from '@acip/editor-core';
+import { assembleBoq, defaultRules } from '@acip/estimator';
+import { DEMO_RATES } from '../rates';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useDocRevision, useSelectionIds } from '../hooks';
@@ -95,7 +97,46 @@ function QuantitiesSection() {
           </dl>
         </>
       )}
+      <CostSection />
     </section>
+  );
+}
+
+/** live BOQ: default measurement rules + demo rates, recomputed per commit */
+function CostSection() {
+  const session = useSession();
+  const boq = assembleBoq(session.doc, { rules: defaultRules(), rates: DEMO_RATES });
+  if (boq.lines.length === 0) return null;
+  return (
+    <>
+      <h3>Cost (demo rates)</h3>
+      <dl>
+        {boq.lines.map((line) => (
+          <CostRow
+            key={line.costCode}
+            label={line.description}
+            value={
+              line.amount !== null
+                ? `${line.amount.toFixed(0)} ${boq.currency}`
+                : `${line.quantity.toFixed(2)} ${line.unit} (no rate)`
+            }
+          />
+        ))}
+        <dt className="cost-total">Total</dt>
+        <dd className="cost-total">
+          {boq.total.toFixed(0)} {boq.currency}
+        </dd>
+      </dl>
+    </>
+  );
+}
+
+function CostRow({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </>
   );
 }
 

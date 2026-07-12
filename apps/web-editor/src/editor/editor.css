@@ -302,6 +302,13 @@ body,
   font-size: 12px;
 }
 
+.panels .cost-total {
+  border-top: 1px solid #2c313a;
+  padding-top: 3px;
+  color: #8fd08f;
+  font-weight: 600;
+}
+
 /* ── layers panel ── */
 .layers-list .layer-row {
   display: flex;

@@ -23,9 +23,21 @@ export function seedCatalog(session: EditorSession): TypeId | null {
     return session.doc.types.list('wall')[0].id;
   }
   try {
-    const block = session.dispatch<MaterialId>('MATERIAL.ADD', { name: 'Concrete block', unit: 'm3' });
-    const insulation = session.dispatch<MaterialId>('MATERIAL.ADD', { name: 'Insulation', unit: 'm3' });
-    const plaster = session.dispatch<MaterialId>('MATERIAL.ADD', { name: 'Plaster', unit: 'm3' });
+    const block = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Concrete block',
+      unit: 'm3',
+      costCode: 'block',
+    });
+    const insulation = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Insulation',
+      unit: 'm3',
+      costCode: 'insulation',
+    });
+    const plaster = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Plaster',
+      unit: 'm3',
+      costCode: 'plaster',
+    });
     const typeId = session.dispatch<TypeId>('TYPE.ADD', {
       targetType: 'wall',
       name: 'Block 300 (20+5+5)',

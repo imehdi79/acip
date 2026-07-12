@@ -5,6 +5,7 @@
   "dependencies": {
     "@acip/agent-drafter": "workspace:*",
     "@acip/editor-core": "workspace:*",
+    "@acip/estimator": "workspace:*",
     "@tabler/icons-react": "^3.31.0",
     "three": "^0.170.0"
   },

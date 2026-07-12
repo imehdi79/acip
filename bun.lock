@@ -93,6 +93,7 @@
       "dependencies": {
         "@acip/agent-drafter": "workspace:*",
         "@acip/editor-core": "workspace:*",
+        "@acip/estimator": "workspace:*",
         "@tabler/icons-react": "^3.31.0",
         "three": "^0.170.0",
       },
@@ -115,6 +116,14 @@
         "@swc/helpers": "~0.5.18",
       },
     },
+    "packages/estimator": {
+      "name": "@acip/estimator",
+      "version": "0.0.1",
+      "dependencies": {
+        "@acip/editor-core": "workspace:*",
+        "@swc/helpers": "~0.5.18",
+      },
+    },
     "packages/ui": {
       "name": "@ui",
       "version": "0.0.1",
@@ -126,6 +135,8 @@
     "@acip/editor-core": ["@acip/editor-core@workspace:packages/editor-core"],
 
     "@acip/editor-server": ["@acip/editor-server@workspace:apps/editor-server"],
+
+    "@acip/estimator": ["@acip/estimator@workspace:packages/estimator"],
 
     "@acip/saas": ["@acip/saas@workspace:apps/saas"],
 
