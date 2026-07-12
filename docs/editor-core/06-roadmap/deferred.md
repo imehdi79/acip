@@ -136,5 +136,12 @@ schemas — the agent gains them automatically). web-editor tools: circle
 = one undo). Renderer/measure needed zero changes — the Geometry union
 and layer predicates already covered every kind. 89 tests.
 
-Next candidates, in rough order: copy-floor-to-floor, estimator package
-(rules + rates over the quantities seed).
+**Copy floor to floor landed 2026-07-12.** LEVEL.DUPLICATE clones every
+level-aware entity onto a new level and re-attaches cloned hosted openings
+(windows/doors keep parametric placements) — one command, one transaction,
+one undo. web-editor: copy button per level row (+3 m default). Nested
+hosting (hosted entities hosting others) is not traversed — revisit when it
+exists. 92 tests.
+
+Next candidates, in rough order: estimator package (rules + rates over the
+quantities seed).
