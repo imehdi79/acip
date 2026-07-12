@@ -104,7 +104,13 @@ barrel, injectable `LlmClient` (scripted fake in tests, fetch-based
 tool results for self-correction. Workspaces now include `packages/agents/*`.
 See [ai-agents.md](../05-packages/ai-agents.md). 72 core + 3 agent tests.
 
-Next candidates, in rough order: wire the drafter into web-editor (prompt box
-+ API key setting), more drafting primitives (arc, circle, polyline entities),
-copy-floor-to-floor, estimator package (rules + rates over the quantities
-seed).
+**Drafter wired into web-editor 2026-07-12.** Prompt row under the command
+line (NL face of the same bus), key in localStorage with the
+browser-direct-access header, live per-command log via `onDispatch`, busy
+state, single-undo runs. See [web-editor 04-agent.md](../../web-editor/04-agent.md).
+
+Next candidates, in rough order: save/open (io/ exists, no UI — work
+evaporates on refresh), layers completion (visibility/lock/color/active
+layer through render + pick paths), more drafting primitives (arc, circle,
+polyline entities), copy-floor-to-floor, estimator package (rules + rates
+over the quantities seed).

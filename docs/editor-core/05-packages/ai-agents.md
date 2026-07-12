@@ -79,7 +79,11 @@ model returns tool calls → each call dispatches through the bus →
 self-correct** → loop until a text-only reply or `maxTurns`. The LLM client
 is an injected interface (`LlmClient`); tests script a fake, production uses
 the fetch-based `AnthropicClient` (no SDK dependency — headless everywhere
-the core runs).
+the core runs). `onDispatch` streams per-command progress to UIs;
+`dangerouslyAllowBrowser` opts into direct browser calls (required CORS
+header) for the user's-own-key case — hosted deployments proxy via
+editor-server. web-editor wires this as a prompt row under the command line
+(see [web-editor 04-agent.md](../../web-editor/04-agent.md)).
 
 ## Remaining candidates (build later, same contract)
 

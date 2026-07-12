@@ -10,6 +10,7 @@ document) bind everything here.
 | [01-rendering-stack.md](01-rendering-stack.md) | Canvas 2D (not Konva), Three.js (not R3F) — decisions + rationale |
 | [02-layout.md](02-layout.md) | The editor shell layout and component inventory |
 | [03-architecture.md](03-architecture.md) | Session ownership, imperative viewport island, input pipeline, state sync |
+| [04-agent.md](04-agent.md) | Drafter prompt box, API key handling, browser-direct caveat |
 
 ## The golden rules of the app layer
 
