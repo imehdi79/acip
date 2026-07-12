@@ -1,9 +1,18 @@
-import { IconArrowBackUp, IconArrowForwardUp, IconCube, IconGrid4x4 } from '@tabler/icons-react';
+import {
+  IconArrowBackUp,
+  IconArrowForwardUp,
+  IconCube,
+  IconDeviceFloppy,
+  IconFile,
+  IconFolderOpen,
+  IconGrid4x4,
+} from '@tabler/icons-react';
 import type { Icon } from '@tabler/icons-react';
 import { useSession } from '../session-context';
-import { useRuntime } from '../runtime';
+import { useRuntime, seedCatalog } from '../runtime';
 import { useDocRevision } from '../hooks';
 import { useStoreValue } from '../store';
+import { openFromFile, saveToFile } from '../files';
 import type { ViewTab } from '../ui-state';
 
 const TABS: { id: ViewTab; icon: Icon; label: string }[] = [
@@ -20,6 +29,35 @@ export function TopBar() {
   return (
     <header className="top-bar">
       <span className="brand">acip editor</span>
+      <div className="top-bar-group">
+        <button
+          type="button"
+          title="New drawing"
+          onClick={() => {
+            if (
+              session.doc.count > 0 &&
+              !window.confirm('Start a new drawing? The current one stays in autosave until you draw.')
+            ) {
+              return;
+            }
+            session.newDocument();
+            seedCatalog(session);
+            ui.activeLevelId.set(null);
+            ui.appendLog('New drawing.');
+          }}
+        >
+          <IconFile size={16} stroke={1.75} />
+          New
+        </button>
+        <button type="button" title="Open .acip.json" onClick={() => openFromFile(session, ui)}>
+          <IconFolderOpen size={16} stroke={1.75} />
+          Open
+        </button>
+        <button type="button" title="Save to file" onClick={() => saveToFile(session, ui)}>
+          <IconDeviceFloppy size={16} stroke={1.75} />
+          Save
+        </button>
+      </div>
       <div className="top-bar-group">
         <button
           type="button"

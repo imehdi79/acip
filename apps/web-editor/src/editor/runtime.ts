@@ -9,15 +9,15 @@ import { HostedPlaceTool } from './tools/hosted-place-tool';
 export interface EditorRuntime {
   readonly ui: EditorUi;
   readonly tools: ToolManager;
-  /** default wall type for new walls (seeded demo catalog) */
-  readonly defaultWallTypeId: TypeId | null;
 }
 
 /**
  * Demo catalog so quantities have materials to report against. Runs through
  * the command bus, then clears history so seeding isn't an undo step.
+ * Skips itself when the document already has a wall type (autosave restore,
+ * opened file). Also called after "New" to keep the demo catalog available.
  */
-function seedCatalog(session: EditorSession): TypeId | null {
+export function seedCatalog(session: EditorSession): TypeId | null {
   if (session.doc.types.list('wall').length > 0) {
     return session.doc.types.list('wall')[0].id;
   }
@@ -43,7 +43,7 @@ function seedCatalog(session: EditorSession): TypeId | null {
 
 export function createRuntime(session: EditorSession): EditorRuntime {
   const ui = new EditorUi();
-  const defaultWallTypeId = seedCatalog(session);
+  seedCatalog(session);
   const toolCtx: ToolContext = {
     doc: session.doc,
     selection: session.selection,
@@ -58,16 +58,18 @@ export function createRuntime(session: EditorSession): EditorRuntime {
   tools.register(
     new ChainedDrawTool('wall', 'WALL', 'WALL.ADD', ui, finish, () => {
       const levelId = ui.activeLevelId.get();
+      // resolved live — New/Open replace the catalog under a running session
+      const wallTypes = session.doc.types.list('wall');
       return {
         ...(levelId ? { levelId } : {}),
-        ...(defaultWallTypeId ? { typeId: defaultWallTypeId } : {}),
+        ...(wallTypes.length > 0 ? { typeId: wallTypes[0].id } : {}),
       };
     }),
   );
   tools.register(new HostedPlaceTool('window', 'WINDOW', 'WINDOW.ADD', ui, tolerance, finish));
   tools.register(new HostedPlaceTool('door', 'DOOR', 'DOOR.ADD', ui, tolerance, finish));
   tools.useById('select');
-  return { ui, tools, defaultWallTypeId };
+  return { ui, tools };
 }
 
 export const RuntimeContext = createContext<EditorRuntime | null>(null);
