@@ -1,11 +1,16 @@
 # Estimator — Quantity Takeoff / BOQ / Cost
 
-Status: **Decided** (design) · **Deferred** (build) · Last updated: 2026-07-11
+Status: **Shipped** (v1, 2026-07-12) · Last updated: 2026-07-12
 
-> **Seed exists (2026-07-11):** `editor-core/src/measurements/quantities.ts`
-> already computes wall net areas/volumes, per-material volumes from assembly
-> layers, and opening counts; web-editor shows them live. The estimator package
-> will consume this and add pluggable measurement rules + cost rates.
+> **V1 shipped:** `packages/estimator` (`@acip/estimator`). Pipeline: takeoff
+> facts (walls: gross volume, per-opening deductions, resolved assembly) →
+> measurement rules (policy: `deducts` filter + `factor` multiplier; built-ins:
+> small-opening threshold, waste allowance) → assembly-proportional split →
+> rate table (data: costCode → unitCost) → BOQ lines + total + missingRates.
+> `Estimator` class recomputes per committed transaction (live price ticking).
+> `Material.costCode` is the core-side hook (one inert string — core never
+> prices). web-editor shows a Cost section under Quantities with demo rates.
+> The core quantities seed stays as the FACTS layer; this package is POLICY.
 
 A separate package (`packages/estimator`), and the reason the semantic model exists:
 quantity takeoff only works if the model knows "this is a wall with 12m² of tile finish."

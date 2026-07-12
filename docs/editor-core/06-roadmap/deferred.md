@@ -143,5 +143,16 @@ one undo. web-editor: copy button per level row (+3 m default). Nested
 hosting (hosted entities hosting others) is not traversed — revisit when it
 exists. 92 tests.
 
-Next candidates, in rough order: estimator package (rules + rates over the
-quantities seed).
+**Estimator package landed 2026-07-12 — the third tenant of the plugin
+seam.** `@acip/estimator`: takeoff facts → pluggable measurement rules
+(small-opening threshold, waste factor) → assembly split → rate tables
+(data) → BOQ with total and missing-rate flags; `Estimator` class recomputes
+per commit (live price ticking). Core grew exactly one field:
+`Material.costCode`. web-editor: Cost section with demo EUR rates.
+See [estimator.md](../05-packages/estimator.md). 92 core + 6 agent +
+6 estimator tests.
+
+Next candidates: slabs/floor entities (feeds 3D + BOQ richness), dimensions/
+annotations (unlocks the auto-dimension agent), T-junction... crossing wall
+joins, cost-optimization agent over the estimator's objective function,
+editor-server (persistence/collab/agent host).
