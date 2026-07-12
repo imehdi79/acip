@@ -116,7 +116,15 @@ same doc instance so every reference stays valid. web-editor: New/Open/Save
 in the top bar, `.acip.json` download/upload, debounced localStorage
 autosave restored before catalog seeding. 76 tests.
 
-Next candidates, in rough order: layers completion (visibility/lock/color/
-active layer through render + pick paths), more drafting primitives (arc,
-circle, polyline entities), copy-floor-to-floor, estimator package (rules +
-rates over the quantities seed).
+**Layers completed 2026-07-12.** Layer gains `color` (ByLayer stroke);
+LAYER.UPDATE (name/visible/locked/color) and LAYER.REMOVE (blocked for
+default or in-use); WALL.ADD takes layerId. One pair of core predicates —
+`isEntityVisible` (render, snap, 3D) and `isEntityInteractive` (pick, box
+select, hosted placement; locked = visible + snappable but untouchable) —
+is THE rule; every read path routes through it, so future entity types
+inherit correct layer behavior. web-editor: active layer (new entities land
+on it), panel rows with color swatch / eye / lock / delete. 81 tests.
+
+Next candidates, in rough order: more drafting primitives (arc, circle,
+polyline entities), copy-floor-to-floor, estimator package (rules + rates
+over the quantities seed).
