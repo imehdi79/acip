@@ -44,3 +44,13 @@ face of the command bus, the app's identity.
 View tabs switch the mounted viewport component (Canvas2D with a
 `ViewDefinition{plan, levelId}` vs `Viewer3D`); both feed from the same
 document.
+
+## Icons (Decided 2026-07-12)
+
+**`@tabler/icons-react`** — chosen for its stroke-based 24px style (matches
+the canvas linework) and literal architecture glyphs (`IconWall`, `IconDoor`,
+`IconWindow`, `IconMagnet` for OSNAP, `IconStack2` for levels) that other
+packs lack. Named imports tree-shake under Vite (~4 kB for the chrome set).
+House style: `stroke={1.75}`, 20px in the tool palette, 16px in bars.
+Future domain-specific icons (join modes, plan/3D variants) are hand-drawn
+SVGs on the same 24px stroke grid in a local `icons/` folder.
