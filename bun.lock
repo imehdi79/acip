@@ -98,6 +98,14 @@
         "@types/three": "^0.170.0",
       },
     },
+    "packages/agents/drafter": {
+      "name": "@acip/agent-drafter",
+      "version": "0.0.1",
+      "dependencies": {
+        "@acip/editor-core": "workspace:*",
+        "@swc/helpers": "~0.5.18",
+      },
+    },
     "packages/editor-core": {
       "name": "@acip/editor-core",
       "version": "0.0.1",
@@ -111,6 +119,8 @@
     },
   },
   "packages": {
+    "@acip/agent-drafter": ["@acip/agent-drafter@workspace:packages/agents/drafter"],
+
     "@acip/editor-core": ["@acip/editor-core@workspace:packages/editor-core"],
 
     "@acip/editor-server": ["@acip/editor-server@workspace:apps/editor-server"],

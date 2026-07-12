@@ -1,0 +1,57 @@
+{
+  "name": "@acip/agent-drafter",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@acip/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "nx": {
+    "name": "agent-drafter",
+    "sourceRoot": "packages/agents/drafter/src",
+    "targets": {
+      "build": {
+        "executor": "@nx/js:swc",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "outputPath": "packages/agents/drafter/dist",
+          "main": "packages/agents/drafter/src/index.ts",
+          "tsConfig": "packages/agents/drafter/tsconfig.lib.json",
+          "skipTypeCheck": true,
+          "stripLeadingPaths": true
+        }
+      },
+      "typecheck": {
+        "executor": "nx:run-commands",
+        "dependsOn": ["^build"],
+        "options": {
+          "command": "bun x tsc -p packages/agents/drafter/tsconfig.lib.json --noEmit",
+          "cwd": "{workspaceRoot}"
+        }
+      },
+      "test": {
+        "executor": "nx:run-commands",
+        "dependsOn": ["^build"],
+        "options": {
+          "command": "bun test",
+          "cwd": "packages/agents/drafter"
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "@acip/editor-core": "workspace:*",
+    "@swc/helpers": "~0.5.18"
+  }
+}
