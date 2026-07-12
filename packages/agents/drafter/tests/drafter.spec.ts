@@ -49,13 +49,17 @@ describe('DrafterAgent — NL to commands through the bus', () => {
     ]);
 
     const agent = new DrafterAgent(session, llm);
-    const result = await agent.run('draw a 6 by 4 meter room');
+    const live: string[] = [];
+    const result = await agent.run('draw a 6 by 4 meter room', {
+      onDispatch: (entry) => live.push(entry.command),
+    });
 
     expect(result.stopped).toBe('completed');
     expect(result.turns).toBe(2);
     expect(result.summary).toContain('6x4 room');
     expect(result.dispatched).toHaveLength(4);
     expect(result.dispatched.every((d) => d.ok)).toBe(true);
+    expect(live).toEqual(['WALL.ADD', 'WALL.ADD', 'WALL.ADD', 'WALL.ADD']);
     expect(session.doc.count).toBe(4);
 
     // the whole agent run undoes with a single Ctrl+Z

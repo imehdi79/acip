@@ -6,6 +6,12 @@ export interface AnthropicClientOptions {
   model?: string;
   maxTokens?: number;
   baseUrl?: string;
+  /**
+   * Required for direct calls from a browser (CORS is refused without it).
+   * Only sensible when the key belongs to the person at the keyboard —
+   * a shared deployment should proxy through a server instead.
+   */
+  dangerouslyAllowBrowser?: boolean;
   /** injectable for tests and non-standard runtimes */
   fetchFn?: typeof fetch;
 }
@@ -19,6 +25,7 @@ export class AnthropicClient implements LlmClient {
   private readonly model: string;
   private readonly maxTokens: number;
   private readonly baseUrl: string;
+  private readonly allowBrowser: boolean;
   private readonly fetchFn: typeof fetch;
 
   constructor(options: AnthropicClientOptions) {
@@ -26,17 +33,22 @@ export class AnthropicClient implements LlmClient {
     this.model = options.model ?? 'claude-fable-5';
     this.maxTokens = options.maxTokens ?? 4096;
     this.baseUrl = options.baseUrl ?? 'https://api.anthropic.com';
+    this.allowBrowser = options.dangerouslyAllowBrowser ?? false;
     this.fetchFn = options.fetchFn ?? fetch;
   }
 
   async complete(request: LlmRequest): Promise<LlmTurn> {
+    const headers: Record<string, string> = {
+      'x-api-key': this.apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    };
+    if (this.allowBrowser) {
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    }
     const response = await this.fetchFn(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
-      headers: {
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         model: this.model,
         max_tokens: this.maxTokens,

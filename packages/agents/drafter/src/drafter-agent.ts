@@ -30,6 +30,8 @@ export interface DrafterRunResult {
 
 export interface DrafterRunOptions {
   maxTurns?: number;
+  /** fires after every dispatch (success or failure) — live progress for UIs */
+  onDispatch?: (entry: DispatchLogEntry) => void;
 }
 
 const SYSTEM_PROMPT = `You are a drafting agent for a cost-aware building modeler (CAD).
@@ -92,27 +94,38 @@ export class DrafterAgent {
           return { summary, dispatched, turns: turn, stopped: 'completed' as const };
         }
 
-        const results: ToolResultBlock[] = toolUses.map((use) => this.execute(use, dispatched));
+        const results: ToolResultBlock[] = toolUses.map((use) =>
+          this.execute(use, dispatched, options.onDispatch),
+        );
         messages.push({ role: 'user', content: results });
       }
       return { summary, dispatched, turns: maxTurns, stopped: 'max-turns' as const };
     });
   }
 
-  private execute(use: ToolUseBlock, log: DispatchLogEntry[]): ToolResultBlock {
+  private execute(
+    use: ToolUseBlock,
+    log: DispatchLogEntry[],
+    onDispatch?: (entry: DispatchLogEntry) => void,
+  ): ToolResultBlock {
     const command = commandNameFromTool(use.name);
+    let entry: DispatchLogEntry;
+    let result: ToolResultBlock;
     try {
-      const result = this.session.dispatch(command, use.input);
-      log.push({ command, params: use.input, ok: true, result });
-      return {
+      const value = this.session.dispatch(command, use.input);
+      entry = { command, params: use.input, ok: true, result: value };
+      result = {
         type: 'tool_result',
         tool_use_id: use.id,
-        content: JSON.stringify({ result: result ?? null }),
+        content: JSON.stringify({ result: value ?? null }),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      log.push({ command, params: use.input, ok: false, error: message });
-      return { type: 'tool_result', tool_use_id: use.id, content: message, is_error: true };
+      entry = { command, params: use.input, ok: false, error: message };
+      result = { type: 'tool_result', tool_use_id: use.id, content: message, is_error: true };
     }
+    log.push(entry);
+    onDispatch?.(entry);
+    return result;
   }
 }
