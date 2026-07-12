@@ -8,6 +8,19 @@ ONE `EditorSession` per editor instance, created once (React context with a
 lazy initializer), never recreated on re-render. React renders the chrome;
 the session and its document live outside the React render cycle.
 
+## Persistence (Decided 2026-07-12)
+
+Open/New replace the document **in place** (`session.open(data)` /
+`session.newDocument()` → core `_reset` + `loadDocumentInto` + one `load`
+change event) — the doc instance never changes, so the imperative viewport,
+tools, and agent keep their references; everything re-reads on the load
+event. Save downloads `drawing.acip.json` (the native `DocumentData`
+format). Autosave: debounced 500 ms to `localStorage` on every change,
+restored at session creation *before* the demo catalog seeds (a restored
+document keeps its own catalog). Consequence: anything holding ids across
+an open (active level, seeded wall type) must resolve live from the doc —
+the wall tool looks its type up per use.
+
 ## The viewport is an imperative island
 
 `viewport2d-view.tsx` mounts two canvases, subscribes **directly** to

@@ -109,8 +109,14 @@ line (NL face of the same bus), key in localStorage with the
 browser-direct-access header, live per-command log via `onDispatch`, busy
 state, single-undo runs. See [web-editor 04-agent.md](../../web-editor/04-agent.md).
 
-Next candidates, in rough order: save/open (io/ exists, no UI — work
-evaporates on refresh), layers completion (visibility/lock/color/active
-layer through render + pick paths), more drafting primitives (arc, circle,
-polyline entities), copy-floor-to-floor, estimator package (rules + rates
-over the quantities seed).
+**Save/open landed 2026-07-12.** Core: `loadDocumentInto` (in-place),
+`DrawingDocument._reset`/`_emitLoad` (change event kind 'load'),
+`EditorSession.save/open/newDocument` — open replaces content inside the
+same doc instance so every reference stays valid. web-editor: New/Open/Save
+in the top bar, `.acip.json` download/upload, debounced localStorage
+autosave restored before catalog seeding. 76 tests.
+
+Next candidates, in rough order: layers completion (visibility/lock/color/
+active layer through render + pick paths), more drafting primitives (arc,
+circle, polyline entities), copy-floor-to-floor, estimator package (rules +
+rates over the quantities seed).
