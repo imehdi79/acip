@@ -3,7 +3,7 @@ import type { EntityId, LevelId } from '../../common/id.js';
 import type { JsonObject } from '../../common/json.js';
 import { ValidationError } from '../../common/errors.js';
 import type { Point, Vector } from '../../geometry/primitives/point.js';
-import { add, dot, midpoint, normalize, point, scale } from '../../geometry/primitives/point.js';
+import { add, distance, dot, midpoint, normalize, point, scale } from '../../geometry/primitives/point.js';
 import type { Matrix3 } from '../../geometry/primitives/matrix3.js';
 import { applyToPoint, applyToVector } from '../../geometry/primitives/matrix3.js';
 import { distanceToPolyline } from '../../geometry/curves/polyline.js';
@@ -63,6 +63,15 @@ export class RoofEntity extends Entity implements ILevelAware, IMeshable, IGripp
 
   getPlanArea(): number {
     return Math.abs(loopSignedArea(this.footprint));
+  }
+
+  /** plan-footprint perimeter — the reference length for edge (m) materials */
+  getPerimeter(): number {
+    let total = 0;
+    for (let i = 0; i < this.footprint.length; i++) {
+      total += distance(this.footprint[i], this.footprint[(i + 1) % this.footprint.length]);
+    }
+    return total;
   }
 
   /** the sloped surface area — what roofing trades price */

@@ -74,6 +74,43 @@ describe('assembleBoq — facts through policy to money', () => {
     expect(boq.missingRates).toEqual([]);
   });
 
+  test('mixed-unit assembly: m² by area, count by coverage, priced per unit', () => {
+    const session = new EditorSession();
+    const membrane = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Membrane',
+      unit: 'm2',
+      costCode: 'membrane',
+    });
+    const tile = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Tile',
+      unit: 'count',
+      costCode: 'tile',
+      coverage: 0.09,
+    });
+    const typeId = session.dispatch<TypeId>('TYPE.ADD', {
+      targetType: 'wall',
+      name: 'Finish wall',
+      layers: [
+        { materialId: membrane, thickness: 0.002 },
+        { materialId: tile, thickness: 0.01 },
+      ],
+    });
+    session.dispatch('WALL.ADD', { a: point(0, 0), b: point(10, 0), typeId }); // 10×3 face
+
+    const rates: RateTable = {
+      currency: 'EUR',
+      rates: { membrane: { unit: 'm2', unitCost: 12 }, tile: { unit: 'count', unitCost: 3 } },
+    };
+    const boq = assembleBoq(session.doc, { rates });
+    const membraneLine = boq.lines.find((l) => l.costCode === 'membrane')!;
+    const tileLine = boq.lines.find((l) => l.costCode === 'tile')!;
+    expect(membraneLine.unit).toBe('m2');
+    expect(membraneLine.quantity).toBeCloseTo(30, 6); // face area, not volume
+    expect(tileLine.unit).toBe('count');
+    expect(tileLine.quantity).toBeCloseTo(30 / 0.09, 6); // area ÷ tile size
+    expect(boq.total).toBeCloseTo(30 * 12 + (30 / 0.09) * 3, 4);
+  });
+
   test('small-opening rule keeps sub-threshold openings undeducted', () => {
     const { session, wallId } = buildDoc();
     // add a tiny 0.4 m² window that a 0.5 m² threshold ignores

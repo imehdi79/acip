@@ -234,9 +234,25 @@ type's block layer → total rises; clear a wall's type → generic unpriced
 line; re-code a material → the BOQ line moves. 139 core + 9 estimator
 tests.
 
-Next candidates: unit-aware layer pricing (`m²`/`count` materials priced by
-face/plan area instead of volume share — MaterialUnit already types them),
-stairs (cross-level relations; the `{topLevelId}` variant of ILevelAware is
+**Unit-aware layer pricing landed 2026-07-18.** Assembly layers are measured
+in each material's own unit, not always volume: `layerQuantity` (one pure
+helper in `measurements/`, shared by core quantities and the estimator BOQ so
+Materials and Cost panels agree) maps m³→thickness-proportional volume share,
+m²→reference area (face/plan/slope, thickness-independent — a 2 mm membrane
+priced by area), m→length (wall length or slab/roof `getPerimeter()`),
+count→area ÷ `Material.coverage` (the "never model individual tiles" rule
+cashed in: 480 tiles from area and tile size). Openings deduct from face area
+and volume alike under the same `deducts` policy. `Material` grew `coverage`
+(rides save/load); `MaterialUnit` was already typed. `MaterialQuantity.volume`
+became `.quantity` (unit-aware). web-editor: per-material unit selector +
+coverage field (shown for count), Materials panel shows the right unit. The
+estimator test prices a membrane (m²) and tiles (count) per unit.
+145 core + 10 estimator tests.
+
+Next candidates: per-room finishes (finish entities hosted on wall-face
+anchors with an extent — spaces now hands over room-facing faces and net
+floor polygons; the instance-level half of materials-and-types.md), stairs
+(cross-level relations; the `{topLevelId}` variant of ILevelAware is
 waiting), gable roofs (ridge half-plane split over the shipped mono-pitch),
 wall-top trimming to the roof underside, crossing wall joins, the
 auto-dimension agent, cost-optimization agent (ENTITY.SETTYPE gave it its

@@ -3,7 +3,7 @@ import type { EntityId, LevelId } from '../../common/id.js';
 import type { JsonObject } from '../../common/json.js';
 import { ValidationError } from '../../common/errors.js';
 import type { Point } from '../../geometry/primitives/point.js';
-import { midpoint, point } from '../../geometry/primitives/point.js';
+import { distance, midpoint, point } from '../../geometry/primitives/point.js';
 import type { Matrix3 } from '../../geometry/primitives/matrix3.js';
 import { applyToPoint } from '../../geometry/primitives/matrix3.js';
 import { distanceToPolyline } from '../../geometry/curves/polyline.js';
@@ -56,6 +56,15 @@ export class SlabEntity extends Entity implements ILevelAware, IMeshable, IGripp
 
   getArea(): number {
     return Math.abs(loopSignedArea(this.footprint));
+  }
+
+  /** footprint perimeter — the reference length for edge (m) materials */
+  getPerimeter(): number {
+    let total = 0;
+    for (let i = 0; i < this.footprint.length; i++) {
+      total += distance(this.footprint[i], this.footprint[(i + 1) % this.footprint.length]);
+    }
+    return total;
   }
 
   getBaseGeometry(): Geometry {

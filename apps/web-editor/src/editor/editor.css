@@ -397,3 +397,110 @@ body,
 .level-form input:nth-child(2) {
   flex: 1;
 }
+
+/* ── catalog panel (materials + types) ── */
+.catalog-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.catalog-name,
+.catalog-code {
+  min-width: 0;
+  background: #1b1e23;
+  color: #e8ecf1;
+  border: 1px solid #2c313a;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.catalog-name {
+  flex: 2;
+}
+
+.catalog-code {
+  flex: 1;
+}
+
+.catalog-row .layer-flag,
+.type-row .layer-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 4px;
+  background: none;
+  border-color: transparent;
+  color: #7d8794;
+}
+
+.catalog-row .layer-flag:hover,
+.type-row .layer-flag:hover {
+  color: #cfd3da;
+}
+
+.type-row {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #23272e;
+}
+
+.type-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.type-target {
+  flex: 1;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.assembly-layer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 3px 0 0 12px;
+}
+
+.assembly-layer select {
+  flex: 2;
+  min-width: 0;
+  background: #1b1e23;
+  color: #e8ecf1;
+  border: 1px solid #2c313a;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 11px;
+}
+
+.mat-unit {
+  min-width: 0;
+  background: #1b1e23;
+  color: #e8ecf1;
+  border: 1px solid #2c313a;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 11px;
+}
+
+.assembly-layer .catalog-code {
+  flex: 1;
+}
+
+.add-layer {
+  margin: 4px 0 0 12px;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: none;
+  border: 1px dashed #2c313a;
+  border-radius: 4px;
+  color: #7d8794;
+}
+
+.add-layer:hover {
+  color: #cfd3da;
+  border-color: #3a414d;
+}

@@ -314,11 +314,13 @@ export type {
   RoofQuantity,
   MaterialQuantity,
   QuantityReport,
+  LayerRefs,
   SpaceInfo,
   OutlineInfo,
 } from './measurements/index.js';
 export {
   computeQuantities,
+  layerQuantity,
   detectSpaces,
   detectOutlines,
   offsetBoundary,

@@ -72,6 +72,8 @@ export type {
   QuantityReport,
 } from './quantities.js';
 export { computeQuantities } from './quantities.js';
+export type { LayerRefs } from './layer-quantity.js';
+export { layerQuantity } from './layer-quantity.js';
 export type { SpaceInfo, OutlineInfo } from './spaces.js';
 export { detectSpaces, detectOutlines, offsetBoundary } from './spaces.js';
 

@@ -19,6 +19,8 @@ export interface AssemblyLayerFact {
   readonly unit: MaterialUnit;
   readonly costCode: string;
   readonly thickness: number;
+  /** m² per count unit (tile face area); undefined for m/m²/m³ */
+  readonly coverage?: number;
 }
 
 export interface WallTakeoff {
@@ -37,6 +39,8 @@ export interface SlabTakeoff {
   readonly area: number;
   readonly thickness: number;
   readonly volume: number;
+  /** footprint perimeter — reference length for edge (m) materials */
+  readonly perimeter: number;
   /** resolved assembly; empty when the slab has no type */
   readonly layers: readonly AssemblyLayerFact[];
 }
@@ -48,13 +52,14 @@ function resolveLayers(doc: DrawingDocument, typeRef: TypeId | undefined): Assem
   for (const layer of def?.layers ?? []) {
     const material = doc.materials.get(layer.materialId);
     if (!material) continue;
-    layers.push({
+    const fact: AssemblyLayerFact = {
       materialId: layer.materialId,
       name: material.name,
       unit: material.unit,
       costCode: material.costCode ?? material.name,
       thickness: layer.thickness,
-    });
+    };
+    layers.push(material.coverage !== undefined ? { ...fact, coverage: material.coverage } : fact);
   }
   return layers;
 }
@@ -70,6 +75,7 @@ export function computeSlabTakeoff(doc: DrawingDocument): SlabTakeoff[] {
       area,
       thickness,
       volume: area * thickness,
+      perimeter: entity.getPerimeter(),
       layers: resolveLayers(doc, entity.typeRef),
     });
   }
@@ -83,6 +89,8 @@ export interface RoofTakeoff {
   readonly slopeArea: number;
   readonly thickness: number;
   readonly volume: number;
+  /** plan-footprint perimeter — reference length for edge (m) materials */
+  readonly perimeter: number;
   /** resolved assembly; empty when the roof has no type */
   readonly layers: readonly AssemblyLayerFact[];
 }
@@ -99,6 +107,7 @@ export function computeRoofTakeoff(doc: DrawingDocument): RoofTakeoff[] {
       slopeArea: entity.getSlopeArea(),
       thickness,
       volume: planArea * thickness,
+      perimeter: entity.getPerimeter(),
       layers: resolveLayers(doc, entity.typeRef),
     });
   }

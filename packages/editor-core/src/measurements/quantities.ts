@@ -1,6 +1,8 @@
 import type { EntityId, MaterialId, TypeId } from '../common/id.js';
 import type { DrawingDocument } from '../document/document.js';
 import type { MaterialUnit } from '../document/materials/index.js';
+import type { LayerRefs } from './layer-quantity.js';
+import { layerQuantity } from './layer-quantity.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
 import { SlabEntity } from '../entities/architecture/slab-entity.js';
 import { RoofEntity } from '../entities/architecture/roof-entity.js';
@@ -44,7 +46,8 @@ export interface MaterialQuantity {
   readonly materialId: MaterialId;
   readonly name: string;
   readonly unit: MaterialUnit;
-  readonly volume: number;
+  /** in the material's own unit — volume for m³, area for m², count for tiles */
+  readonly quantity: number;
 }
 
 export interface QuantityReport {
@@ -95,21 +98,21 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
   const walls: WallQuantity[] = [];
   const slabs: SlabQuantity[] = [];
   const roofs: RoofQuantity[] = [];
-  const materialVolumes = new Map<MaterialId, number>();
+  const materialQuantities = new Map<MaterialId, number>();
   let windowCount = 0;
   let doorCount = 0;
 
-  // split a net volume across the type's assembly layers, proportional to
-  // layer thickness (for walls: openings cut through every layer alike;
-  // for slabs the layers ARE a vertical stack, so the split is exact)
-  const splitAcrossLayers = (typeRef: TypeId | undefined, netVolume: number): void => {
+  // split an element across its assembly layers, each layer measured in its
+  // material's own unit: m³ takes a thickness-proportional volume share, m²
+  // the reference area, m the length, count the area over the tile coverage
+  const splitAcrossLayers = (typeRef: TypeId | undefined, refs: LayerRefs): void => {
     const typeDef = typeRef ? doc.types.get(typeRef) : null;
     if (!typeDef?.layers || typeDef.layers.length === 0) return;
     const total = typeDef.layers.reduce((s, l) => s + l.thickness, 0);
-    if (total <= 0) return;
     for (const layer of typeDef.layers) {
-      const share = netVolume * (layer.thickness / total);
-      materialVolumes.set(layer.materialId, (materialVolumes.get(layer.materialId) ?? 0) + share);
+      const material = doc.materials.get(layer.materialId);
+      const q = layerQuantity(material?.unit ?? 'm3', layer.thickness, total, refs, material?.coverage);
+      materialQuantities.set(layer.materialId, (materialQuantities.get(layer.materialId) ?? 0) + q);
     }
   };
 
@@ -120,7 +123,7 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
       const area = entity.getArea();
       const q: SlabQuantity = { entityId: entity.id, area, volume: area * entity.getThickness() };
       slabs.push(q);
-      splitAcrossLayers(entity.typeRef, q.volume);
+      splitAcrossLayers(entity.typeRef, { volume: q.volume, area, length: entity.getPerimeter() });
       continue;
     }
     if (entity instanceof RoofEntity) {
@@ -131,27 +134,35 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
         volume: entity.getPlanArea() * entity.getThickness(),
       };
       roofs.push(q);
-      splitAcrossLayers(entity.typeRef, q.volume);
+      splitAcrossLayers(entity.typeRef, {
+        volume: q.volume,
+        area: q.slopeArea,
+        length: entity.getPerimeter(),
+      });
       continue;
     }
     if (!(entity instanceof WallEntity)) continue;
 
     const q = wallQuantity(entity);
     walls.push(q);
-    splitAcrossLayers(entity.typeRef, q.netVolume);
+    splitAcrossLayers(entity.typeRef, {
+      volume: q.netVolume,
+      area: q.netFaceArea,
+      length: q.length,
+    });
   }
 
   const materials: MaterialQuantity[] = [];
-  for (const [materialId, volume] of materialVolumes) {
+  for (const [materialId, quantity] of materialQuantities) {
     const material = doc.materials.get(materialId);
     materials.push({
       materialId,
       name: material?.name ?? materialId,
       unit: material?.unit ?? 'm3',
-      volume,
+      quantity,
     });
   }
-  materials.sort((a, b) => b.volume - a.volume);
+  materials.sort((a, b) => b.quantity - a.quantity);
 
   return {
     walls,

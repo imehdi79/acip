@@ -23,8 +23,38 @@ composition belongs to the **wall type**, not each instance:
 - `document/types/` — the **type catalog**: a `WallType` holds ordered layers, each
   layer = material + thickness. Wall instances reference their type via `Entity.typeRef`.
 - Change the type → every wall of that type updates (same recompute propagation).
-- Yields: total wall thickness, per-layer hatching in plan view, per-material volumes for
+- Yields: total wall thickness, per-layer hatching in plan view, per-material quantities for
   the estimator.
+
+### Layer quantities are unit-aware (2026-07-18)
+
+Splitting every layer by volume is wrong for thin or countable materials. Each
+layer is measured in its **material's unit** (`layerQuantity`, one pure helper
+shared by core quantities and the estimator BOQ so the Materials and Cost
+panels never disagree):
+
+- **m³** — a thickness-proportional share of the element's net volume (each
+  layer's own solid volume). The classic block/insulation/plaster case.
+- **m²** — the element's reference area, *thickness-independent*: a 2 mm
+  membrane or a coat of paint is priced by the area it covers, not its sliver
+  of volume. Reference area = wall net face area, slab plan area, roof slope
+  area.
+- **m** — the linear measure (wall length, slab/roof perimeter): DPC, coping,
+  edge trim.
+- **count** — reference area ÷ `Material.coverage` (m² per unit, e.g. a
+  0.3×0.3 tile = 0.09). This is the *"never model individual tiles"* rule
+  cashed in — 480 tiles from an area and a tile size, no tile entities.
+  Missing coverage falls back to 1 unit/m².
+
+Openings deduct from **both** the volume and the face area, so an m²/count
+finish shrinks around a door exactly as the volume does — and the same
+`deducts` policy (small openings ignored) governs both. Thickness stays a
+required layer field (it drives the m³ split and the total wall thickness)
+even for m²/count layers.
+
+Slab/roof reference lengths come from `getPerimeter()` on the entities; walls
+use their centerline length. `Material.coverage` rides save/load like every
+other material field — core stores it, the estimator prices it.
 
 ## 2. Surface finishes (instance-level)
 

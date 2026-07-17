@@ -17,6 +17,12 @@ export interface Material {
   appearance?: JsonObject;
   /** cost-item key rate tables resolve against — core stores it, never prices it */
   costCode?: string;
+  /**
+   * m² covered by one `count` unit (e.g. a 0.3×0.3 tile = 0.09). Used to
+   * derive item counts from a face/plan area — the "never model individual
+   * tiles" rule cashed in. Ignored for m/m²/m³ units.
+   */
+  coverage?: number;
 }
 
 export class MaterialLibrary extends RecordTable<Material> {

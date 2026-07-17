@@ -57,8 +57,8 @@ describe('quantity takeoff', () => {
     expect(netVolume).toBeCloseTo(9);
     const blockQ = report.materials.find((m) => m.name === 'Block');
     const plasterQ = report.materials.find((m) => m.name === 'Plaster');
-    expect(blockQ?.volume).toBeCloseTo(6); // 2/3 of 9
-    expect(plasterQ?.volume).toBeCloseTo(3); // 1/3 of 9
+    expect(blockQ?.quantity).toBeCloseTo(6); // 2/3 of 9
+    expect(plasterQ?.quantity).toBeCloseTo(3); // 1/3 of 9
   });
 
   test('quantities update live as the model changes', () => {

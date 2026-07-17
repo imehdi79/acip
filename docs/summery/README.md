@@ -184,17 +184,25 @@ shipped with docs-first commits, tests, and a green build.
   types) never refreshed the affected entities' own spatial bounds. In the
   app: an editable Materials/Types catalog section and an Assembly dropdown
   on the selection.
+- **Unit-aware layer pricing**: each assembly layer is measured in its
+  material's unit, not always volume — a 2 mm membrane (m²) is priced by the
+  area it covers, tiles (count) come from area ÷ tile size (the "never model
+  individual tiles" rule cashed in), edge trims (m) by length; m³ keeps the
+  volume split. One `layerQuantity` helper is shared by core quantities and
+  the estimator so the Materials and Cost panels agree, and openings deduct
+  from area and volume alike. `Material` grew one field, `coverage`; the
+  panel gained a per-material unit selector.
 
 ## Where it stands / what's next
 
-154 tests across three packages; all typechecks and builds green. The
+161 tests across three packages; all typechecks and builds green. The
 architecture has survived its three intended stress tests: a semantic model
 (joins/hosting), an acting external package (agent), and an observing external
 package (estimator) — none required core rework.
 
 Next candidates (see [roadmap](../editor-core/06-roadmap/deferred.md)):
-unit-aware layer pricing (m²/count materials priced by area, not volume
-share), stairs (cross-level relations), gable roofs (ridge split over the
-shipped mono-pitch), wall-top trimming, crossing wall joins, the
-auto-dimension agent, a cost-optimization agent (ENTITY.SETTYPE is its
-action primitive), editor-server, IFC import/export.
+per-room finishes (finish entities on wall-face anchors — spaces now hands
+over the room-facing faces), stairs (cross-level relations), gable roofs
+(ridge split over the shipped mono-pitch), wall-top trimming, crossing wall
+joins, the auto-dimension agent, a cost-optimization agent (ENTITY.SETTYPE is
+its action primitive), editor-server, IFC import/export.

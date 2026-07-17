@@ -131,7 +131,7 @@ function QuantitiesSection() {
           <h3>Materials</h3>
           <dl>
             {report.materials.map((m) => (
-              <MaterialRow key={m.materialId} name={m.name} volume={m.volume} />
+              <MaterialRow key={m.materialId} name={m.name} quantity={m.quantity} unit={m.unit} />
             ))}
           </dl>
         </>
@@ -179,11 +179,16 @@ function CostRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MaterialRow({ name, volume }: { name: string; volume: number }) {
+function MaterialRow({ name, quantity, unit }: { name: string; quantity: number; unit: string }) {
+  const label = unit === 'count' ? Math.ceil(quantity).toString() : quantity.toFixed(2);
+  const suffix = unit === 'count' ? '' : ` ${unit === 'm3' ? 'm³' : unit === 'm2' ? 'm²' : unit}`;
   return (
     <>
       <dt>{name}</dt>
-      <dd>{volume.toFixed(2)} m³</dd>
+      <dd>
+        {label}
+        {suffix}
+      </dd>
     </>
   );
 }
@@ -360,6 +365,36 @@ function CatalogSection() {
                 }
               }}
             />
+            <select
+              className="mat-unit"
+              value={m.unit}
+              title="Unit drives estimation: m³ by volume, m² by area, m by length, count ÷ coverage"
+              onChange={(e) => dispatch('MATERIAL.UPDATE', { id: m.id, unit: e.target.value })}
+            >
+              <option value="m3">m³</option>
+              <option value="m2">m²</option>
+              <option value="m">m</option>
+              <option value="count">count</option>
+            </select>
+            {m.unit === 'count' && (
+              <input
+                key={`${m.id}:cov:${m.coverage ?? ''}`}
+                className="catalog-code"
+                type="number"
+                step="0.01"
+                min="0.001"
+                defaultValue={m.coverage ?? ''}
+                placeholder="m²/unit"
+                title="m² covered by one unit (tile face area)"
+                onKeyDown={commitOnEnter}
+                onBlur={(e) => {
+                  const coverage = Number(e.target.value);
+                  if (Number.isFinite(coverage) && coverage > 0 && coverage !== m.coverage) {
+                    dispatch('MATERIAL.UPDATE', { id: m.id, coverage });
+                  }
+                }}
+              />
+            )}
             <button
               type="button"
               className="layer-flag"

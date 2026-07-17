@@ -1,4 +1,6 @@
-import type { DrawingDocument } from '@acip/editor-core';
+import type { DrawingDocument, LayerRefs } from '@acip/editor-core';
+import { layerQuantity } from '@acip/editor-core';
+import type { AssemblyLayerFact } from './takeoff.js';
 import { computeRoofTakeoff, computeSlabTakeoff, computeWallTakeoff } from './takeoff.js';
 import type { MeasurementRule } from './rules.js';
 import type { RateTable } from './rates.js';
@@ -33,8 +35,10 @@ const GENERIC_ROOF_CODE = 'roof-volume';
 
 /**
  * Facts → policy → money, in one pass:
- * 1. net volumes — walls: gross − deductions the rules allow; slabs: as-is,
- * 2. split across assembly layers proportional to thickness,
+ * 1. net measures — walls: gross − deductions the rules allow; slabs/roofs
+ *    as-is,
+ * 2. split across assembly layers, each in its material's own unit (volume
+ *    for m³, area for m², length for m, count for tiles),
  * 3. aggregate by cost code, apply factor rules (waste),
  * 4. price against the rate table.
  */
@@ -49,54 +53,59 @@ export function assembleBoq(doc: DrawingDocument, options: BoqOptions = {}): Boq
     else byCode.set(code, { description, unit, quantity });
   };
 
+  // one element's layers, each measured in its material unit; untyped
+  // elements fall back to a generic volume line
+  const accumulateLayers = (
+    layers: readonly AssemblyLayerFact[],
+    refs: LayerRefs,
+    genericCode: string,
+    genericDesc: string,
+  ) => {
+    const total = layers.reduce((sum, layer) => sum + layer.thickness, 0);
+    if (total > 0) {
+      for (const layer of layers) {
+        const quantity = layerQuantity(layer.unit, layer.thickness, total, refs, layer.coverage);
+        accumulate(layer.costCode, layer.name, layer.unit, quantity);
+      }
+    } else if (refs.volume > 0) {
+      accumulate(genericCode, genericDesc, 'm3', refs.volume);
+    }
+  };
+
   for (const wall of computeWallTakeoff(doc)) {
-    let net = wall.grossVolume;
+    let netVolume = wall.grossVolume;
+    let netFaceArea = wall.length * wall.height;
     for (const deduction of wall.deductions) {
       const applies = rules.every((rule) => rule.deducts?.(deduction) ?? true);
-      if (applies) net -= deduction.volume;
-    }
-    net = Math.max(0, net);
-
-    const totalThickness = wall.layers.reduce((sum, layer) => sum + layer.thickness, 0);
-    if (totalThickness > 0) {
-      for (const layer of wall.layers) {
-        accumulate(layer.costCode, layer.name, layer.unit, net * (layer.thickness / totalThickness));
+      if (applies) {
+        netVolume -= deduction.volume;
+        netFaceArea -= deduction.area;
       }
-    } else if (net > 0) {
-      accumulate(GENERIC_WALL_CODE, 'Wall (no assembly)', 'm3', net);
     }
+    accumulateLayers(
+      wall.layers,
+      { volume: Math.max(0, netVolume), area: Math.max(0, netFaceArea), length: wall.length },
+      GENERIC_WALL_CODE,
+      'Wall (no assembly)',
+    );
   }
 
   for (const slab of computeSlabTakeoff(doc)) {
-    const totalThickness = slab.layers.reduce((sum, layer) => sum + layer.thickness, 0);
-    if (totalThickness > 0) {
-      for (const layer of slab.layers) {
-        accumulate(
-          layer.costCode,
-          layer.name,
-          layer.unit,
-          slab.volume * (layer.thickness / totalThickness),
-        );
-      }
-    } else if (slab.volume > 0) {
-      accumulate(GENERIC_SLAB_CODE, 'Slab (no assembly)', 'm3', slab.volume);
-    }
+    accumulateLayers(
+      slab.layers,
+      { volume: slab.volume, area: slab.area, length: slab.perimeter },
+      GENERIC_SLAB_CODE,
+      'Slab (no assembly)',
+    );
   }
 
   for (const roof of computeRoofTakeoff(doc)) {
-    const totalThickness = roof.layers.reduce((sum, layer) => sum + layer.thickness, 0);
-    if (totalThickness > 0) {
-      for (const layer of roof.layers) {
-        accumulate(
-          layer.costCode,
-          layer.name,
-          layer.unit,
-          roof.volume * (layer.thickness / totalThickness),
-        );
-      }
-    } else if (roof.volume > 0) {
-      accumulate(GENERIC_ROOF_CODE, 'Roof (no assembly)', 'm3', roof.volume);
-    }
+    accumulateLayers(
+      roof.layers,
+      { volume: roof.volume, area: roof.slopeArea, length: roof.perimeter },
+      GENERIC_ROOF_CODE,
+      'Roof (no assembly)',
+    );
   }
 
   const lines: BoqLine[] = [];

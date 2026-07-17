@@ -290,12 +290,13 @@ export interface AddMaterialParams {
   unit?: MaterialUnit;
   hatch?: string;
   costCode?: string;
+  coverage?: number;
 }
 
 export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
   name: 'MATERIAL.ADD',
   description:
-    'Add a material to the library (used by type-catalog assembly layers and quantity takeoff). Returns the new material id.',
+    'Add a material to the library (used by type-catalog assembly layers and quantity takeoff). The unit drives estimation: m3 by volume, m2 by area, m by length, count by area ÷ coverage. Returns the new material id.',
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
@@ -308,6 +309,7 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
       }
       if (raw['hatch'] !== undefined) params.hatch = asName(raw['hatch'], 'hatch');
       if (raw['costCode'] !== undefined) params.costCode = asName(raw['costCode'], 'costCode');
+      if (raw['coverage'] !== undefined) params.coverage = asPositive(raw['coverage'], 'coverage');
       return params;
     },
     () =>
@@ -317,6 +319,7 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
           unit: S.enum(MATERIAL_UNITS, 'measurement unit (default m3)'),
           hatch: S.string('optional 2D hatch pattern name'),
           costCode: S.string('optional cost-item key for estimator rate tables'),
+          coverage: S.number('m² covered by one count unit, e.g. tile face area 0.09'),
         },
         ['name'],
       ),
@@ -329,6 +332,7 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
     };
     if (params.hatch !== undefined) material.hatch = params.hatch;
     if (params.costCode !== undefined) material.costCode = params.costCode;
+    if (params.coverage !== undefined) material.coverage = params.coverage;
     ctx.tx.storeAdd('materials', material);
     return material.id;
   },
@@ -409,13 +413,15 @@ export interface UpdateMaterialParams {
   unit?: MaterialUnit;
   hatch?: string;
   costCode?: string;
+  coverage?: number;
 }
 
 export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
   name: 'MATERIAL.UPDATE',
   description:
-    'Rename a material or change its unit, hatch, or cost code. A cost-code change ' +
-    're-prices every BOQ line that uses the material on the next recompute.',
+    'Rename a material or change its unit, hatch, cost code, or coverage. A unit or ' +
+    'cost-code change re-measures and re-prices every BOQ line that uses the material ' +
+    'on the next recompute.',
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
@@ -429,13 +435,15 @@ export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
       }
       if (raw['hatch'] !== undefined) params.hatch = asName(raw['hatch'], 'hatch');
       if (raw['costCode'] !== undefined) params.costCode = asName(raw['costCode'], 'costCode');
+      if (raw['coverage'] !== undefined) params.coverage = asPositive(raw['coverage'], 'coverage');
       if (
         params.name === undefined &&
         params.unit === undefined &&
         params.hatch === undefined &&
-        params.costCode === undefined
+        params.costCode === undefined &&
+        params.coverage === undefined
       ) {
-        throw new ValidationError('provide name, unit, hatch, and/or costCode');
+        throw new ValidationError('provide name, unit, hatch, costCode, and/or coverage');
       }
       return params;
     },
@@ -447,6 +455,7 @@ export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
           unit: S.enum(MATERIAL_UNITS, 'new measurement unit'),
           hatch: S.string('new 2D hatch pattern name'),
           costCode: S.string('new cost-item key for estimator rate tables'),
+          coverage: S.number('m² covered by one count unit (tile face area)'),
         },
         ['id'],
       ),
@@ -457,6 +466,7 @@ export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
       if (params.unit !== undefined) material.unit = params.unit;
       if (params.hatch !== undefined) material.hatch = params.hatch;
       if (params.costCode !== undefined) material.costCode = params.costCode;
+      if (params.coverage !== undefined) material.coverage = params.coverage;
     });
   },
 };

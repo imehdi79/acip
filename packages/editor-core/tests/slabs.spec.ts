@@ -170,6 +170,6 @@ describe('SLAB.AUTO — floor every detected room', () => {
     expect(report.totals.slabArea).toBeCloseTo(first.totalArea + 4, 6);
     expect(report.totals.slabVolume).toBeCloseTo(first.totalArea * 0.2 + 4 * 0.2, 6);
     const concrete = report.materials.find((m) => m.name === 'Concrete slab')!;
-    expect(concrete.volume).toBeCloseTo(first.totalArea * 0.2 * (0.15 / 0.2), 6);
+    expect(concrete.quantity).toBeCloseTo(first.totalArea * 0.2 * (0.15 / 0.2), 6);
   });
 });
