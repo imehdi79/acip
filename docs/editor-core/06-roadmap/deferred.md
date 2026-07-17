@@ -219,10 +219,25 @@ roof slope area + volume; the estimator its third trade (`roof-structure`/
 tops (wedge unfilled) — see [roofs.md](../04-systems/roofs.md).
 132 core + 8 estimator tests.
 
-Next candidates: stairs (cross-level relations; the `{topLevelId}` variant
-of ILevelAware is waiting), gable roofs (ridge half-plane split over the
-shipped mono-pitch), wall-top trimming to the roof underside, crossing wall
-joins (plan cleanup — the arrangement already detects X crossings), the
-auto-dimension agent (DIM.AUTO gave it a deterministic core; an agent adds
-judgment), cost-optimization agent over the estimator's objective function,
-editor-server (persistence/collab/agent host).
+**Catalog editing landed 2026-07-17.** MATERIAL.UPDATE / MATERIAL.REMOVE,
+TYPE.UPDATE / TYPE.REMOVE (removes blocked while referenced, mirroring
+LEVEL/LAYER guards), and ENTITY.SETTYPE — the value-engineering primitive:
+retype entities to a different assembly (targetType validated; omit typeId
+to clear back to local props). Discovered and fixed: store-invalidated
+entities (level/type changes) never had their own spatial-index bounds
+refreshed — invisible for levels (elevation is 3D-only) but wrong for type
+thickness; `_emitChange` now refreshes them alongside relation-graph
+dependents. web-editor: Materials/Types catalog section in the panel
+(inline editing, commit-on-blur, one transaction per edit) and an Assembly
+dropdown on the selection. The estimator test proves the loop: thicken a
+type's block layer → total rises; clear a wall's type → generic unpriced
+line; re-code a material → the BOQ line moves. 139 core + 9 estimator
+tests.
+
+Next candidates: unit-aware layer pricing (`m²`/`count` materials priced by
+face/plan area instead of volume share — MaterialUnit already types them),
+stairs (cross-level relations; the `{topLevelId}` variant of ILevelAware is
+waiting), gable roofs (ridge half-plane split over the shipped mono-pitch),
+wall-top trimming to the roof underside, crossing wall joins, the
+auto-dimension agent, cost-optimization agent (ENTITY.SETTYPE gave it its
+action primitive), editor-server (persistence/collab/agent host).

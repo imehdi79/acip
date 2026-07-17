@@ -159,25 +159,37 @@ export class DrawingDocument {
     for (const op of record.changes.relations) {
       touched.push(op.relation.hostId, op.relation.hostedId);
     }
-    // a level's elevation change invalidates every entity bound to it
+    // a level's elevation change invalidates every entity bound to it;
+    // a type's assembly change invalidates every entity referencing it
+    // (derived thickness changes geometry and bounds)
     const changedLevels = new Set<string>();
+    const changedTypes = new Set<string>();
     for (const change of record.changes.stores) {
-      if (change.store !== 'levels') continue;
-      changedLevels.add(change.op === 'update' ? change.after.id : change.item.id);
+      if (change.store !== 'levels' && change.store !== 'types') continue;
+      const id = change.op === 'update' ? change.after.id : change.item.id;
+      if (change.store === 'levels') changedLevels.add(id);
+      else changedTypes.add(id);
     }
-    if (changedLevels.size > 0) {
+    // store-invalidated entities need their spatial entries refreshed
+    // themselves (a type's thickness change widens wall bounds) — direct
+    // entity updates are already synced by the transaction
+    const storeInvalidated: EntityId[] = [];
+    if (changedLevels.size > 0 || changedTypes.size > 0) {
       for (const entity of this.entities.values()) {
         if (
           isLevelAware(entity) &&
           entity.baseLevelId &&
           changedLevels.has(entity.baseLevelId as LevelId as string)
         ) {
-          touched.push(entity.id);
+          storeInvalidated.push(entity.id);
+        } else if (entity.typeRef && changedTypes.has(entity.typeRef as string)) {
+          storeInvalidated.push(entity.id);
         }
       }
+      touched.push(...storeInvalidated);
     }
     const dirty = this.relations.collectDirty(touched);
-    for (const id of dirty) {
+    for (const id of new Set([...storeInvalidated, ...dirty])) {
       const e = this.entities.get(id);
       if (e) this.spatial.update(id, e.getBounds());
     }

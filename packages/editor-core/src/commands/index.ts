@@ -43,7 +43,12 @@ export type {
   UpdateLayerParams,
   RemoveLayerParams,
   AddMaterialParams,
+  UpdateMaterialParams,
+  RemoveMaterialParams,
   AddTypeParams,
+  UpdateTypeParams,
+  RemoveTypeParams,
+  SetTypeParams,
 } from './document-stores.js';
 export {
   AddLevelCommand,
@@ -54,7 +59,12 @@ export {
   UpdateLayerCommand,
   RemoveLayerCommand,
   AddMaterialCommand,
+  UpdateMaterialCommand,
+  RemoveMaterialCommand,
   AddTypeCommand,
+  UpdateTypeCommand,
+  RemoveTypeCommand,
+  SetTypeCommand,
   registerDocumentStoreCommands,
 } from './document-stores.js';
 export { asPoint, asIdArray, asId, asNumber, asPositive } from './validate.js';

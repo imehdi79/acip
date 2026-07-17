@@ -182,6 +182,41 @@ describe('roofs — the third trade in the BOQ', () => {
   });
 });
 
+describe('catalog editing — the estimate follows the catalog', () => {
+  test('TYPE.UPDATE, ENTITY.SETTYPE, and MATERIAL.UPDATE all re-price live', () => {
+    const { session, wallId } = buildDoc();
+    const estimator = new Estimator(session.doc, { rates: RATES });
+    const before = estimator.getBoq().total;
+
+    // thicker block layer (plaster kept) → more volume → higher total
+    const typeId = session.doc.types.list('wall')[0].id;
+    const blockId = session.doc.materials.list().find((m) => m.costCode === 'block')!.id;
+    const plasterId = session.doc.materials.list().find((m) => m.costCode === 'plaster')!.id;
+    session.dispatch('TYPE.UPDATE', {
+      id: typeId,
+      layers: [
+        { materialId: blockId, thickness: 0.3 },
+        { materialId: plasterId, thickness: 0.05 },
+      ],
+    });
+    expect(estimator.getBoq().total).toBeGreaterThan(before);
+    session.undo();
+    expect(estimator.getBoq().total).toBeCloseTo(before);
+
+    // clearing the wall's type drops it to the unpriced generic line
+    session.dispatch('ENTITY.SETTYPE', { ids: [wallId] });
+    expect(estimator.getBoq().missingRates).toContain('wall-volume');
+    session.undo();
+
+    // re-coding a material moves its line to the new cost code
+    session.dispatch('MATERIAL.UPDATE', { id: blockId, costCode: 'aac' });
+    const codes = estimator.getBoq().lines.map((l) => l.costCode);
+    expect(codes).toContain('aac');
+    expect(codes).not.toContain('block');
+    estimator.dispose();
+  });
+});
+
 describe('Estimator — live recompute per commit', () => {
   test('price ticks on change and rolls back on undo', () => {
     const { session } = buildDoc();

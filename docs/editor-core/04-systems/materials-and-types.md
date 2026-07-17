@@ -1,6 +1,16 @@
 # Materials, Type Catalog & Finishes
 
-Status: **Decided** · Last updated: 2026-07-11
+Status: **Decided** · Last updated: 2026-07-17
+
+> **Catalog editing shipped 2026-07-17.** The "change the type → every wall
+> updates" promise is now actionable: `MATERIAL.UPDATE` / `MATERIAL.REMOVE`,
+> `TYPE.UPDATE` / `TYPE.REMOVE` (removes blocked while referenced), and
+> `ENTITY.SETTYPE` (retype instances — targetType must match the entity
+> kind; omit `typeId` to fall back to local props). A type change marks
+> every referencing entity dirty, so thickness, spatial bounds, geometry,
+> and cost re-derive live. Types now target walls, slabs, and roofs alike.
+> web-editor: editable Materials/Types panel section (commit on blur, one
+> transaction per edit) and an Assembly dropdown on the selection.
 
 User requirement: *"attach tiles — or better, layers — to a wall."* Two distinct concepts
 hide in that sentence; we want both, and they land in different places.

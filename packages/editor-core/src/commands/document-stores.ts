@@ -1,4 +1,4 @@
-import type { LayerId, LevelId, MaterialId, TypeId } from '../common/id.js';
+import type { EntityId, LayerId, LevelId, MaterialId, TypeId } from '../common/id.js';
 import { newLayerId, newLevelId, newMaterialId, newTypeId } from '../common/id.js';
 import { ValidationError } from '../common/errors.js';
 import { isLevelAware } from '../entities/base/capabilities.js';
@@ -11,7 +11,7 @@ import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
 import type { CommandRegistry } from './command-registry.js';
 import { S } from './schema.js';
-import { asId, asNumber, asPositive } from './validate.js';
+import { asId, asIdArray, asNumber, asPositive } from './validate.js';
 
 const MATERIAL_UNITS: readonly MaterialUnit[] = ['m', 'm2', 'm3', 'count'];
 
@@ -403,6 +403,238 @@ export const AddTypeCommand: Command<AddTypeParams, TypeId> = {
   },
 };
 
+export interface UpdateMaterialParams {
+  id: MaterialId;
+  name?: string;
+  unit?: MaterialUnit;
+  hatch?: string;
+  costCode?: string;
+}
+
+export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
+  name: 'MATERIAL.UPDATE',
+  description:
+    'Rename a material or change its unit, hatch, or cost code. A cost-code change ' +
+    're-prices every BOQ line that uses the material on the next recompute.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: UpdateMaterialParams = { id: asId(raw['id'], 'id') as string as MaterialId };
+      if (raw['name'] !== undefined) params.name = asName(raw['name'], 'name');
+      if (raw['unit'] !== undefined) {
+        if (!MATERIAL_UNITS.includes(raw['unit'] as MaterialUnit)) {
+          throw new ValidationError(`unit must be one of ${MATERIAL_UNITS.join(', ')}`);
+        }
+        params.unit = raw['unit'] as MaterialUnit;
+      }
+      if (raw['hatch'] !== undefined) params.hatch = asName(raw['hatch'], 'hatch');
+      if (raw['costCode'] !== undefined) params.costCode = asName(raw['costCode'], 'costCode');
+      if (
+        params.name === undefined &&
+        params.unit === undefined &&
+        params.hatch === undefined &&
+        params.costCode === undefined
+      ) {
+        throw new ValidationError('provide name, unit, hatch, and/or costCode');
+      }
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          id: S.id('material id'),
+          name: S.string('new name'),
+          unit: S.enum(MATERIAL_UNITS, 'new measurement unit'),
+          hatch: S.string('new 2D hatch pattern name'),
+          costCode: S.string('new cost-item key for estimator rate tables'),
+        },
+        ['id'],
+      ),
+  ),
+  execute(ctx, params) {
+    ctx.tx.storeUpdate<Material>('materials', params.id, (material) => {
+      if (params.name !== undefined) material.name = params.name;
+      if (params.unit !== undefined) material.unit = params.unit;
+      if (params.hatch !== undefined) material.hatch = params.hatch;
+      if (params.costCode !== undefined) material.costCode = params.costCode;
+    });
+  },
+};
+
+export interface RemoveMaterialParams {
+  id: MaterialId;
+}
+
+export const RemoveMaterialCommand: Command<RemoveMaterialParams, void> = {
+  name: 'MATERIAL.REMOVE',
+  description: 'Delete a material. Fails while any type-catalog assembly layer references it.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return { id: asId(raw['id'], 'id') as string as MaterialId };
+    },
+    () => S.object({ id: S.id('material id') }, ['id']),
+  ),
+  execute(ctx, params) {
+    const inUse = ctx.doc.types
+      .list()
+      .some((def) => (def.layers ?? []).some((layer) => layer.materialId === params.id));
+    if (inUse) {
+      throw new ValidationError(`material ${params.id} is in use by type assembly layers`);
+    }
+    ctx.tx.storeRemove('materials', params.id);
+  },
+};
+
+export interface UpdateTypeParams {
+  id: TypeId;
+  name?: string;
+  layers?: AssemblyLayer[];
+}
+
+export const UpdateTypeCommand: Command<UpdateTypeParams, void> = {
+  name: 'TYPE.UPDATE',
+  description:
+    'Rename a catalog type or replace its assembly layers. Every entity referencing the ' +
+    'type re-derives its thickness, geometry, and cost on the next read — change a wall ' +
+    'type from 20 to 25 cm block and every wall of that type thickens and re-prices. ' +
+    'The targetType is immutable.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: UpdateTypeParams = { id: asId(raw['id'], 'id') as string as TypeId };
+      if (raw['name'] !== undefined) params.name = asName(raw['name'], 'name');
+      if (raw['layers'] !== undefined) {
+        if (!Array.isArray(raw['layers'])) {
+          throw new ValidationError('layers must be an array');
+        }
+        params.layers = raw['layers'].map((layer, i) => {
+          const l = layer as Record<string, unknown>;
+          return {
+            materialId: asId(l['materialId'], `layers[${i}].materialId`) as string as MaterialId,
+            thickness: asPositive(l['thickness'], `layers[${i}].thickness`),
+          };
+        });
+      }
+      if (params.name === undefined && params.layers === undefined) {
+        throw new ValidationError('provide name and/or layers');
+      }
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          id: S.id('type id'),
+          name: S.string('new catalog name'),
+          layers: S.array(
+            S.object(
+              {
+                materialId: S.id('material id from the library'),
+                thickness: S.number('layer thickness in meters'),
+              },
+              ['materialId', 'thickness'],
+            ),
+            'replacement assembly layers, outermost first',
+          ),
+        },
+        ['id'],
+      ),
+  ),
+  execute(ctx, params) {
+    if (params.layers) {
+      for (const layer of params.layers) {
+        if (!ctx.doc.materials.has(layer.materialId)) {
+          throw new ValidationError(`material ${layer.materialId} does not exist`);
+        }
+      }
+    }
+    ctx.tx.storeUpdate<EntityTypeDef>('types', params.id, (def) => {
+      if (params.name !== undefined) def.name = params.name;
+      if (params.layers !== undefined) def.layers = params.layers;
+    });
+  },
+};
+
+export interface RemoveTypeParams {
+  id: TypeId;
+}
+
+export const RemoveTypeCommand: Command<RemoveTypeParams, void> = {
+  name: 'TYPE.REMOVE',
+  description: 'Delete a catalog type. Fails while any entity still references it.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return { id: asId(raw['id'], 'id') as string as TypeId };
+    },
+    () => S.object({ id: S.id('type id') }, ['id']),
+  ),
+  execute(ctx, params) {
+    if (ctx.doc.all().some((e) => e.typeRef === params.id)) {
+      throw new ValidationError(`type ${params.id} is in use by entities`);
+    }
+    ctx.tx.storeRemove('types', params.id);
+  },
+};
+
+export interface SetTypeParams {
+  ids: EntityId[];
+  typeId?: TypeId;
+}
+
+/**
+ * The value-engineering primitive: swap which assembly an entity uses.
+ * Geometry and cost re-derive on read, so retyping three walls to a cheaper
+ * build-up is one transaction and one visible BOQ change.
+ */
+export const SetTypeCommand: Command<SetTypeParams, number> = {
+  name: 'ENTITY.SETTYPE',
+  description:
+    'Assign a catalog type to entities (or clear it by omitting typeId, falling back to ' +
+    'their local props). The type targetType must match each entity kind — a wall takes ' +
+    'wall types. Thickness, geometry, and cost re-derive immediately. ' +
+    'Returns how many entities were retyped.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: SetTypeParams = { ids: asIdArray(raw['ids'], 'ids') };
+      if (raw['typeId'] !== undefined) {
+        params.typeId = asId(raw['typeId'], 'typeId') as string as TypeId;
+      }
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          ids: S.array(S.id('entity id'), 'entities to retype'),
+          typeId: S.id('catalog type to assign; omit to clear back to local props'),
+        },
+        ['ids'],
+      ),
+  ),
+  execute(ctx, params) {
+    const def = params.typeId !== undefined ? ctx.doc.types.get(params.typeId) : null;
+    if (params.typeId !== undefined && !def) {
+      throw new ValidationError(`type ${params.typeId} does not exist`);
+    }
+    let count = 0;
+    for (const id of params.ids) {
+      const entity = ctx.doc.get(id);
+      if (!entity) throw new ValidationError(`entity ${id} does not exist`);
+      if (def && def.targetType !== entity.type) {
+        throw new ValidationError(
+          `type ${def.name} targets '${def.targetType}', not '${entity.type}'`,
+        );
+      }
+      ctx.tx.update(entity, (e) => {
+        e.typeRef = params.typeId;
+      });
+      count += 1;
+    }
+    return count;
+  },
+};
+
 export function registerDocumentStoreCommands(registry: CommandRegistry): void {
   registry.register(AddLevelCommand);
   registry.register(UpdateLevelCommand);
@@ -412,5 +644,10 @@ export function registerDocumentStoreCommands(registry: CommandRegistry): void {
   registry.register(UpdateLayerCommand);
   registry.register(RemoveLayerCommand);
   registry.register(AddMaterialCommand);
+  registry.register(UpdateMaterialCommand);
+  registry.register(RemoveMaterialCommand);
   registry.register(AddTypeCommand);
+  registry.register(UpdateTypeCommand);
+  registry.register(RemoveTypeCommand);
+  registry.register(SetTypeCommand);
 }

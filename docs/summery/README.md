@@ -175,17 +175,26 @@ shipped with docs-first commits, tests, and a green build.
   `loftPolygon` (per-vertex heights) joins `geometry/mesh`. Roofing becomes
   the third trade in the live BOQ. In the app: `ROOFAUTO` keyword, seeded
   "Roof 250 (20+5)" + rates. See [roofs.md](../editor-core/04-systems/roofs.md).
+- **Catalog editing**: the assembly-layer promise made actionable —
+  `TYPE.UPDATE` re-thickens and re-prices every instance live (change block
+  20→25 cm and watch walls thicken and the BOQ jump), `ENTITY.SETTYPE`
+  retypes a selection (the value-engineering primitive agents need),
+  `MATERIAL.UPDATE` re-codes rate-table lines; removes are blocked while
+  referenced. Fixed along the way: store-driven invalidation (levels,
+  types) never refreshed the affected entities' own spatial bounds. In the
+  app: an editable Materials/Types catalog section and an Assembly dropdown
+  on the selection.
 
 ## Where it stands / what's next
 
-146 tests across three packages; all typechecks and builds green. The
+154 tests across three packages; all typechecks and builds green. The
 architecture has survived its three intended stress tests: a semantic model
 (joins/hosting), an acting external package (agent), and an observing external
 package (estimator) — none required core rework.
 
 Next candidates (see [roadmap](../editor-core/06-roadmap/deferred.md)):
-stairs (cross-level relations), gable roofs (ridge split over the shipped
-mono-pitch), wall-top trimming to the roof underside, crossing wall joins,
-the auto-dimension agent (judgment on top of DIM.AUTO's deterministic core),
-a cost-optimization agent over the estimator's objective function,
-editor-server (persistence, collaboration, agent host), IFC import/export.
+unit-aware layer pricing (m²/count materials priced by area, not volume
+share), stairs (cross-level relations), gable roofs (ridge split over the
+shipped mono-pitch), wall-top trimming, crossing wall joins, the
+auto-dimension agent, a cost-optimization agent (ENTITY.SETTYPE is its
+action primitive), editor-server, IFC import/export.

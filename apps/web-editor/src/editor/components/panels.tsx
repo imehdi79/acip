@@ -8,7 +8,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { DEFAULT_LAYER_ID, computeQuantities } from '@acip/editor-core';
-import type { Layer } from '@acip/editor-core';
+import type { AssemblyLayer, EntityTypeDef, Layer } from '@acip/editor-core';
 import { assembleBoq, defaultRules } from '@acip/estimator';
 import { DEMO_RATES } from '../rates';
 import { useSession } from '../session-context';
@@ -18,11 +18,22 @@ import { useStoreValue } from '../store';
 
 export function Panels() {
   const session = useSession();
+  const { ui } = useRuntime();
   useDocRevision(session);
   const selection = useSelectionIds(session);
 
   const single = selection.length === 1 ? session.doc.get(selection[0]) : null;
   const singleLength = single ? session.measure.lengthOf(single.id) : null;
+
+  // retype the selection when every selected entity is the same kind and
+  // the catalog has types for it — the value-engineering dropdown
+  const kinds = new Set(
+    selection.map((id) => session.doc.get(id)?.type).filter((t): t is string => !!t),
+  );
+  const kind = kinds.size === 1 ? [...kinds][0] : null;
+  const kindTypes = kind ? session.doc.types.list(kind) : [];
+  const refs = new Set(selection.map((id) => session.doc.get(id)?.typeRef ?? ''));
+  const commonRef = refs.size === 1 ? [...refs][0] : '';
 
   return (
     <aside className="panels">
@@ -44,9 +55,37 @@ export function Panels() {
             )}
           </dl>
         )}
+        {selection.length > 0 && kindTypes.length > 0 && (
+          <dl>
+            <dt>Assembly</dt>
+            <dd>
+              <select
+                value={commonRef}
+                onChange={(e) => {
+                  try {
+                    session.dispatch('ENTITY.SETTYPE', {
+                      ids: selection,
+                      ...(e.target.value ? { typeId: e.target.value } : {}),
+                    });
+                  } catch (err) {
+                    ui.appendLog(err instanceof Error ? err.message : String(err), 'error');
+                  }
+                }}
+              >
+                <option value="">(local props)</option>
+                {kindTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </dd>
+          </dl>
+        )}
       </section>
       <LayersSection />
       <LevelsSection />
+      <CatalogSection />
       <QuantitiesSection />
       <section>
         <h3>Entities</h3>
@@ -246,6 +285,237 @@ function LayersSection() {
           }}
         />
         <button type="button" onClick={addLayer}>
+          +
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Editable material library + type catalog. Text/number inputs commit on
+ * blur or Enter (one transaction per edit, one undo); every change dispatches
+ * the same MATERIAL/TYPE commands agents call, and instances re-derive
+ * thickness and cost live.
+ */
+function CatalogSection() {
+  const session = useSession();
+  const { ui } = useRuntime();
+  useDocRevision(session);
+  const [matName, setMatName] = useState('');
+  const [matCode, setMatCode] = useState('');
+  const [typeName, setTypeName] = useState('');
+  const [typeTarget, setTypeTarget] = useState('wall');
+
+  const dispatch = (command: string, params: unknown): unknown => {
+    try {
+      return session.dispatch(command, params);
+    } catch (err) {
+      ui.appendLog(err instanceof Error ? err.message : String(err), 'error');
+      return null;
+    }
+  };
+
+  const materials = session.doc.materials.list();
+  const types = session.doc.types.list();
+
+  const commitOnEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+    e.stopPropagation();
+  };
+
+  const setLayers = (def: EntityTypeDef, layers: AssemblyLayer[]) => {
+    dispatch('TYPE.UPDATE', {
+      id: def.id,
+      layers: layers.map((l) => ({ materialId: l.materialId, thickness: l.thickness })),
+    });
+  };
+
+  return (
+    <section>
+      <h3>Materials</h3>
+      <ul className="plain-list">
+        {materials.map((m) => (
+          <li key={m.id} className="level-form">
+            <input
+              key={`${m.id}:${m.name}`}
+              defaultValue={m.name}
+              title="Material name"
+              onKeyDown={commitOnEnter}
+              onBlur={(e) => {
+                const name = e.target.value.trim();
+                if (name && name !== m.name) dispatch('MATERIAL.UPDATE', { id: m.id, name });
+              }}
+            />
+            <input
+              key={`${m.id}:${m.costCode ?? ''}`}
+              defaultValue={m.costCode ?? ''}
+              placeholder="cost code"
+              title="Cost code for rate tables"
+              onKeyDown={commitOnEnter}
+              onBlur={(e) => {
+                const costCode = e.target.value.trim();
+                if (costCode && costCode !== (m.costCode ?? '')) {
+                  dispatch('MATERIAL.UPDATE', { id: m.id, costCode });
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="layer-flag"
+              title="Delete material (must be unused)"
+              onClick={() => dispatch('MATERIAL.REMOVE', { id: m.id })}
+            >
+              <IconTrash size={14} stroke={1.75} />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="level-form">
+        <input
+          placeholder="New material"
+          value={matName}
+          onChange={(e) => setMatName(e.target.value)}
+          onKeyDown={(e) => e.stopPropagation()}
+        />
+        <input
+          placeholder="cost code"
+          value={matCode}
+          onChange={(e) => setMatCode(e.target.value)}
+          onKeyDown={(e) => e.stopPropagation()}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            if (!matName.trim()) return;
+            const params: Record<string, unknown> = { name: matName.trim() };
+            if (matCode.trim()) params['costCode'] = matCode.trim();
+            if (dispatch('MATERIAL.ADD', params)) {
+              setMatName('');
+              setMatCode('');
+            }
+          }}
+        >
+          +
+        </button>
+      </div>
+
+      <h3>Types</h3>
+      <ul className="plain-list">
+        {types.map((def) => (
+          <li key={def.id}>
+            <div className="level-form">
+              <input
+                key={`${def.id}:${def.name}`}
+                defaultValue={def.name}
+                title={`${def.targetType} type name`}
+                onKeyDown={commitOnEnter}
+                onBlur={(e) => {
+                  const name = e.target.value.trim();
+                  if (name && name !== def.name) dispatch('TYPE.UPDATE', { id: def.id, name });
+                }}
+              />
+              <span className="muted">{def.targetType}</span>
+              <button
+                type="button"
+                className="layer-flag"
+                title="Delete type (must be unused)"
+                onClick={() => dispatch('TYPE.REMOVE', { id: def.id })}
+              >
+                <IconTrash size={14} stroke={1.75} />
+              </button>
+            </div>
+            {(def.layers ?? []).map((layer, i) => (
+              <div key={`${def.id}:${i}`} className="level-form">
+                <select
+                  value={layer.materialId}
+                  title="Layer material"
+                  onChange={(e) => {
+                    const layers = [...(def.layers ?? [])];
+                    layers[i] = { ...layers[i], materialId: e.target.value as never };
+                    setLayers(def, layers);
+                  }}
+                >
+                  {materials.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  key={`${def.id}:${i}:${layer.thickness}`}
+                  defaultValue={layer.thickness}
+                  title="Layer thickness in meters"
+                  onKeyDown={commitOnEnter}
+                  onBlur={(e) => {
+                    const thickness = Number(e.target.value);
+                    if (!Number.isFinite(thickness) || thickness <= 0) return;
+                    if (thickness === layer.thickness) return;
+                    const layers = [...(def.layers ?? [])];
+                    layers[i] = { ...layers[i], thickness };
+                    setLayers(def, layers);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="layer-flag"
+                  title="Remove layer"
+                  onClick={() => {
+                    const layers = [...(def.layers ?? [])];
+                    layers.splice(i, 1);
+                    setLayers(def, layers);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            {materials.length > 0 && (
+              <div className="level-form">
+                <select
+                  value=""
+                  title="Add an assembly layer"
+                  onChange={(e) => {
+                    if (!e.target.value) return;
+                    setLayers(def, [
+                      ...(def.layers ?? []),
+                      { materialId: e.target.value as never, thickness: 0.05 },
+                    ]);
+                  }}
+                >
+                  <option value="">+ layer…</option>
+                  {materials.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      <div className="level-form">
+        <input
+          placeholder="New type"
+          value={typeName}
+          onChange={(e) => setTypeName(e.target.value)}
+          onKeyDown={(e) => e.stopPropagation()}
+        />
+        <select value={typeTarget} onChange={(e) => setTypeTarget(e.target.value)}>
+          <option value="wall">wall</option>
+          <option value="slab">slab</option>
+          <option value="roof">roof</option>
+        </select>
+        <button
+          type="button"
+          onClick={() => {
+            if (!typeName.trim()) return;
+            if (dispatch('TYPE.ADD', { targetType: typeTarget, name: typeName.trim() })) {
+              setTypeName('');
+            }
+          }}
+        >
           +
         </button>
       </div>
