@@ -1,5 +1,5 @@
 import type { DrawingDocument } from '@acip/editor-core';
-import { computeWallTakeoff } from './takeoff.js';
+import { computeSlabTakeoff, computeWallTakeoff } from './takeoff.js';
 import type { MeasurementRule } from './rules.js';
 import type { RateTable } from './rates.js';
 
@@ -28,10 +28,11 @@ export interface BoqOptions {
 }
 
 const GENERIC_WALL_CODE = 'wall-volume';
+const GENERIC_SLAB_CODE = 'slab-volume';
 
 /**
  * Facts → policy → money, in one pass:
- * 1. net wall volume = gross − deductions the rules allow,
+ * 1. net volumes — walls: gross − deductions the rules allow; slabs: as-is,
  * 2. split across assembly layers proportional to thickness,
  * 3. aggregate by cost code, apply factor rules (waste),
  * 4. price against the rate table.
@@ -62,6 +63,22 @@ export function assembleBoq(doc: DrawingDocument, options: BoqOptions = {}): Boq
       }
     } else if (net > 0) {
       accumulate(GENERIC_WALL_CODE, 'Wall (no assembly)', 'm3', net);
+    }
+  }
+
+  for (const slab of computeSlabTakeoff(doc)) {
+    const totalThickness = slab.layers.reduce((sum, layer) => sum + layer.thickness, 0);
+    if (totalThickness > 0) {
+      for (const layer of slab.layers) {
+        accumulate(
+          layer.costCode,
+          layer.name,
+          layer.unit,
+          slab.volume * (layer.thickness / totalThickness),
+        );
+      }
+    } else if (slab.volume > 0) {
+      accumulate(GENERIC_SLAB_CODE, 'Slab (no assembly)', 'm3', slab.volume);
     }
   }
 

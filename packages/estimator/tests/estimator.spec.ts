@@ -4,6 +4,7 @@ import type { EntityId, MaterialId, TypeId } from '@acip/editor-core';
 import {
   Estimator,
   assembleBoq,
+  computeSlabTakeoff,
   computeWallTakeoff,
   smallOpeningRule,
   wasteFactorRule,
@@ -101,6 +102,47 @@ describe('assembleBoq — facts through policy to money', () => {
     expect(boq.lines).toHaveLength(1);
     expect(boq.lines[0].costCode).toBe('wall-volume');
     expect(boq.lines[0].quantity).toBeCloseTo(4 * 3 * 0.3);
+  });
+});
+
+describe('slabs — the second trade in the BOQ', () => {
+  test('typed slabs split across the assembly; untyped fall back to slab-volume', () => {
+    const session = new EditorSession();
+    const concrete = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Concrete slab',
+      costCode: 'concrete-slab',
+    });
+    const screed = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Screed',
+      costCode: 'screed',
+    });
+    const typeId = session.dispatch<TypeId>('TYPE.ADD', {
+      targetType: 'slab',
+      name: 'S200',
+      layers: [
+        { materialId: concrete, thickness: 0.15 },
+        { materialId: screed, thickness: 0.05 },
+      ],
+    });
+    session.dispatch('SLAB.ADD', {
+      points: [point(0, 0), point(5, 0), point(5, 4), point(0, 4)],
+      typeId,
+    });
+    session.dispatch('SLAB.ADD', {
+      points: [point(10, 0), point(12, 0), point(12, 2), point(10, 2)],
+      thickness: 0.1,
+    });
+
+    const [typed, untyped] = computeSlabTakeoff(session.doc);
+    expect(typed.volume).toBeCloseTo(20 * 0.2); // 5×4 at the 0.2 assembly
+    expect(untyped.volume).toBeCloseTo(4 * 0.1);
+    expect(typed.layers.map((l) => l.costCode)).toEqual(['concrete-slab', 'screed']);
+
+    const boq = assembleBoq(session.doc);
+    const byCode = new Map(boq.lines.map((l) => [l.costCode, l]));
+    expect(byCode.get('concrete-slab')!.quantity).toBeCloseTo(4 * (0.15 / 0.2));
+    expect(byCode.get('screed')!.quantity).toBeCloseTo(4 * (0.05 / 0.2));
+    expect(byCode.get('slab-volume')!.quantity).toBeCloseTo(0.4);
   });
 });
 

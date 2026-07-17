@@ -155,17 +155,27 @@ shipped with docs-first commits, tests, and a green build.
   3-click flow with live entity-geometry ghost), `DIM`/`DIMAUTO` command-line
   keywords, and a live length readout on the rubber band while drawing.
   See [dimensions.md](../editor-core/04-systems/dimensions.md).
+- **Slabs**: first area entity — closed polygon footprint + level + assembly
+  build-up; the top face sits at the level elevation and extrudes down by
+  the assembly thickness. `SLAB.AUTO` floors every detected room from its
+  net boundary in one dispatch (regenerates like DIM.AUTO). Ear-clipping
+  triangulation + `extrudePolygon` fill the promised `geometry/mesh` slot,
+  so concave rooms extrude correctly and slabs appear in 3D untouched.
+  The BOQ goes multi-trade: concrete/screed lines from slab assemblies join
+  the wall trades in the live Cost panel. In the app: Slab palette tool,
+  `SLAB`/`SLABAUTO` keywords, seeded "Slab 200 (15+5)" type + rates.
+  See [slabs.md](../editor-core/04-systems/slabs.md).
 
 ## Where it stands / what's next
 
-127 tests across three packages; all typechecks and builds green. The
+136 tests across three packages; all typechecks and builds green. The
 architecture has survived its three intended stress tests: a semantic model
 (joins/hosting), an acting external package (agent), and an observing external
 package (estimator) — none required core rework.
 
 Next candidates (see [roadmap](../editor-core/06-roadmap/deferred.md)):
-slabs/floor entities (multi-trade BOQ; can now be generated per detected
-space), crossing wall joins, the auto-dimension agent (judgment on top of
-DIM.AUTO's deterministic core), a cost-optimization agent over the
-estimator's objective function, editor-server (persistence, collaboration,
-agent host), IFC import/export.
+roofs (slope-parameter extrusions; the arrangement's outer contour is the
+ROOF.AUTO footprint), stairs (cross-level relations), crossing wall joins,
+the auto-dimension agent (judgment on top of DIM.AUTO's deterministic core),
+a cost-optimization agent over the estimator's objective function,
+editor-server (persistence, collaboration, agent host), IFC import/export.

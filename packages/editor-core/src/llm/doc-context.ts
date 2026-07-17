@@ -58,6 +58,8 @@ export function describeDocument(
       wallLength: quantities.totals.wallLength,
       wallNetFaceArea: quantities.totals.wallNetFaceArea,
       wallNetVolume: quantities.totals.wallNetVolume,
+      slabArea: quantities.totals.slabArea,
+      slabVolume: quantities.totals.slabVolume,
       windowCount: quantities.totals.windowCount,
       doorCount: quantities.totals.doorCount,
     },

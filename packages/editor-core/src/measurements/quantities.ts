@@ -1,7 +1,8 @@
-import type { EntityId, MaterialId } from '../common/id.js';
+import type { EntityId, MaterialId, TypeId } from '../common/id.js';
 import type { DrawingDocument } from '../document/document.js';
 import type { MaterialUnit } from '../document/materials/index.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
+import { SlabEntity } from '../entities/architecture/slab-entity.js';
 import { WindowEntity } from '../entities/architecture/window-entity.js';
 import { DoorEntity } from '../entities/architecture/door-entity.js';
 
@@ -21,6 +22,14 @@ export interface WallQuantity {
   readonly openings: number;
 }
 
+export interface SlabQuantity {
+  readonly entityId: EntityId;
+  /** footprint area */
+  readonly area: number;
+  /** area × assembly thickness */
+  readonly volume: number;
+}
+
 export interface MaterialQuantity {
   readonly materialId: MaterialId;
   readonly name: string;
@@ -30,10 +39,13 @@ export interface MaterialQuantity {
 
 export interface QuantityReport {
   readonly walls: readonly WallQuantity[];
+  readonly slabs: readonly SlabQuantity[];
   readonly totals: {
     readonly wallLength: number;
     readonly wallNetFaceArea: number;
     readonly wallNetVolume: number;
+    readonly slabArea: number;
+    readonly slabVolume: number;
     readonly windowCount: number;
     readonly doorCount: number;
   };
@@ -68,33 +80,40 @@ function wallQuantity(wall: WallEntity): WallQuantity {
 
 export function computeQuantities(doc: DrawingDocument): QuantityReport {
   const walls: WallQuantity[] = [];
+  const slabs: SlabQuantity[] = [];
   const materialVolumes = new Map<MaterialId, number>();
   let windowCount = 0;
   let doorCount = 0;
 
+  // split a net volume across the type's assembly layers, proportional to
+  // layer thickness (for walls: openings cut through every layer alike;
+  // for slabs the layers ARE a vertical stack, so the split is exact)
+  const splitAcrossLayers = (typeRef: TypeId | undefined, netVolume: number): void => {
+    const typeDef = typeRef ? doc.types.get(typeRef) : null;
+    if (!typeDef?.layers || typeDef.layers.length === 0) return;
+    const total = typeDef.layers.reduce((s, l) => s + l.thickness, 0);
+    if (total <= 0) return;
+    for (const layer of typeDef.layers) {
+      const share = netVolume * (layer.thickness / total);
+      materialVolumes.set(layer.materialId, (materialVolumes.get(layer.materialId) ?? 0) + share);
+    }
+  };
+
   for (const entity of doc.all()) {
     if (entity instanceof WindowEntity) windowCount += 1;
     if (entity instanceof DoorEntity) doorCount += 1;
+    if (entity instanceof SlabEntity) {
+      const area = entity.getArea();
+      const q: SlabQuantity = { entityId: entity.id, area, volume: area * entity.getThickness() };
+      slabs.push(q);
+      splitAcrossLayers(entity.typeRef, q.volume);
+      continue;
+    }
     if (!(entity instanceof WallEntity)) continue;
 
     const q = wallQuantity(entity);
     walls.push(q);
-
-    // split the wall's net volume across its assembly layers, proportional
-    // to layer thickness — openings cut through every layer alike
-    const typeDef = entity.typeRef ? doc.types.get(entity.typeRef) : null;
-    if (typeDef?.layers && typeDef.layers.length > 0) {
-      const total = typeDef.layers.reduce((s, l) => s + l.thickness, 0);
-      if (total > 0) {
-        for (const layer of typeDef.layers) {
-          const share = q.netVolume * (layer.thickness / total);
-          materialVolumes.set(
-            layer.materialId,
-            (materialVolumes.get(layer.materialId) ?? 0) + share,
-          );
-        }
-      }
-    }
+    splitAcrossLayers(entity.typeRef, q.netVolume);
   }
 
   const materials: MaterialQuantity[] = [];
@@ -111,10 +130,13 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
 
   return {
     walls,
+    slabs,
     totals: {
       wallLength: walls.reduce((s, w) => s + w.length, 0),
       wallNetFaceArea: walls.reduce((s, w) => s + w.netFaceArea, 0),
       wallNetVolume: walls.reduce((s, w) => s + w.netVolume, 0),
+      slabArea: slabs.reduce((s, q) => s + q.area, 0),
+      slabVolume: slabs.reduce((s, q) => s + q.volume, 0),
       windowCount,
       doorCount,
     },

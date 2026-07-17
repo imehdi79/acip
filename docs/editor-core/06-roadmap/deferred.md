@@ -181,9 +181,27 @@ text screen-space, Y-flip safe. Human faces: Dimension palette tool
 keywords, live length readout on the rubber band while drawing. See
 [dimensions.md](../04-systems/dimensions.md). 115 core tests.
 
-Next candidates: slabs/floor entities (feeds 3D + BOQ richness; can now be
-generated per detected space — SLAB.FROM_SPACES), crossing wall joins (plan
-cleanup — the arrangement already detects X crossings), the auto-dimension
-agent (DIM.AUTO gave it a deterministic core; an agent adds judgment about
-what to dimension), cost-optimization agent over the estimator's objective
-function, editor-server (persistence/collab/agent host).
+**Slabs landed 2026-07-17.** First area entity: closed polygon footprint +
+level + assembly build-up; top face flush with the level elevation, body
+extrudes DOWN by the assembly thickness (a storey's slab underside is the
+storey below's ceiling). `geometry/mesh` gained the promised triangulation:
+`triangulateLoop` (ear clipping, concave-safe) + `extrudePolygon`.
+SLAB.ADD (footprint) and SLAB.AUTO (floors every detected room from its NET
+boundary; regenerates like DIM.AUTO; returns `{removed, created,
+totalArea}`) — named SLAB.AUTO, not SLAB.FROM_SPACES, because command names
+must stay underscore-free for the lossless dot⇄underscore tool-name mapping.
+Quantities gained slab area/volume + the shared assembly split; the
+estimator gained `computeSlabTakeoff` and multi-trade BOQ lines (typed slabs
+split per cost code, untyped fall back to `slab-volume`). web-editor: Slab
+palette tool (vertex clicking), `SLAB`/`SLABAUTO` keywords, seeded
+"Slab 200 (15+5)" type + EUR rates; 3D shows slabs through IMeshable
+untouched. See [slabs.md](../04-systems/slabs.md). 123 core + 7 estimator
+tests.
+
+Next candidates: roofs (start as extrusions with a slope parameter; the
+arrangement's outer contour is the ROOF.AUTO footprint), stairs (cross-level
+relations; `{topLevelId}` variant of ILevelAware is waiting), crossing wall
+joins (plan cleanup — the arrangement already detects X crossings), the
+auto-dimension agent (DIM.AUTO gave it a deterministic core; an agent adds
+judgment), cost-optimization agent over the estimator's objective function,
+editor-server (persistence/collab/agent host).

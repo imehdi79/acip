@@ -1,10 +1,10 @@
-import { WallEntity } from '@acip/editor-core';
-import type { DrawingDocument, EntityId, MaterialUnit } from '@acip/editor-core';
+import { SlabEntity, WallEntity } from '@acip/editor-core';
+import type { DrawingDocument, EntityId, MaterialUnit, TypeId } from '@acip/editor-core';
 
 /**
  * Geometric FACTS extracted through the SDK — no measurement policy here.
  * Rules (policy) decide which deductions count; boq.ts turns the result
- * into priced lines. Walls only for now; slabs/finishes join later.
+ * into priced lines. Walls and slabs; finishes join later.
  */
 export interface OpeningDeduction {
   /** elevation face area of the opening (m²) */
@@ -32,6 +32,50 @@ export interface WallTakeoff {
   readonly layers: readonly AssemblyLayerFact[];
 }
 
+export interface SlabTakeoff {
+  readonly entityId: EntityId;
+  readonly area: number;
+  readonly thickness: number;
+  readonly volume: number;
+  /** resolved assembly; empty when the slab has no type */
+  readonly layers: readonly AssemblyLayerFact[];
+}
+
+function resolveLayers(doc: DrawingDocument, typeRef: TypeId | undefined): AssemblyLayerFact[] {
+  const layers: AssemblyLayerFact[] = [];
+  if (!typeRef) return layers;
+  const def = doc.types.get(typeRef);
+  for (const layer of def?.layers ?? []) {
+    const material = doc.materials.get(layer.materialId);
+    if (!material) continue;
+    layers.push({
+      materialId: layer.materialId,
+      name: material.name,
+      unit: material.unit,
+      costCode: material.costCode ?? material.name,
+      thickness: layer.thickness,
+    });
+  }
+  return layers;
+}
+
+export function computeSlabTakeoff(doc: DrawingDocument): SlabTakeoff[] {
+  const result: SlabTakeoff[] = [];
+  for (const entity of doc.all()) {
+    if (!(entity instanceof SlabEntity)) continue;
+    const area = entity.getArea();
+    const thickness = entity.getThickness();
+    result.push({
+      entityId: entity.id,
+      area,
+      thickness,
+      volume: area * thickness,
+      layers: resolveLayers(doc, entity.typeRef),
+    });
+  }
+  return result;
+}
+
 export function computeWallTakeoff(doc: DrawingDocument): WallTakeoff[] {
   const result: WallTakeoff[] = [];
   for (const entity of doc.all()) {
@@ -49,22 +93,6 @@ export function computeWallTakeoff(doc: DrawingDocument): WallTakeoff[] {
       deductions.push({ area: width * openingHeight, volume: width * thickness * openingHeight });
     }
 
-    const layers: AssemblyLayerFact[] = [];
-    if (entity.typeRef) {
-      const def = doc.types.get(entity.typeRef);
-      for (const layer of def?.layers ?? []) {
-        const material = doc.materials.get(layer.materialId);
-        if (!material) continue;
-        layers.push({
-          materialId: layer.materialId,
-          name: material.name,
-          unit: material.unit,
-          costCode: material.costCode ?? material.name,
-          thickness: layer.thickness,
-        });
-      }
-    }
-
     result.push({
       entityId: entity.id,
       length,
@@ -72,7 +100,7 @@ export function computeWallTakeoff(doc: DrawingDocument): WallTakeoff[] {
       thickness,
       grossVolume: length * height * thickness,
       deductions,
-      layers,
+      layers: resolveLayers(doc, entity.typeRef),
     });
   }
   return result;

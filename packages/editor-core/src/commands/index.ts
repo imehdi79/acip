@@ -24,6 +24,8 @@ export {
   AddDoorCommand,
   registerArchitectureCommands,
 } from './architecture.js';
+export type { AddSlabParams, AutoSlabParams } from './slabs.js';
+export { AddSlabCommand, AutoSlabCommand, registerSlabCommands } from './slabs.js';
 export type { AddDimensionParams, AutoDimensionParams } from './dimensions.js';
 export {
   AddDimensionCommand,

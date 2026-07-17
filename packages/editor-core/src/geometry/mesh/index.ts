@@ -45,3 +45,88 @@ export function mergeMeshes(meshes: readonly Mesh3D[]): Mesh3D {
   }
   return { positions, indices };
 }
+
+function cross2(o: Point, a: Point, b: Point): number {
+  return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+}
+
+function pointInTriangle(p: Point, a: Point, b: Point, c: Point): boolean {
+  const d1 = cross2(a, b, p);
+  const d2 = cross2(b, c, p);
+  const d3 = cross2(c, a, p);
+  const eps = 1e-12;
+  return d1 >= -eps && d2 >= -eps && d3 >= -eps;
+}
+
+/**
+ * Ear-clipping triangulation of a simple polygon (either winding, no holes).
+ * Returns index triples into `points`, wound counter-clockwise in plan.
+ * Handles the concave footprints rooms actually have (L-shapes, notches).
+ */
+export function triangulateLoop(points: readonly Point[]): number[] {
+  const n = points.length;
+  if (n < 3) return [];
+  let area = 0;
+  for (let i = 0; i < n; i++) {
+    const p = points[i];
+    const q = points[(i + 1) % n];
+    area += p.x * q.y - q.x * p.y;
+  }
+  const idx = [...Array(n).keys()];
+  if (area < 0) idx.reverse();
+
+  const triangles: number[] = [];
+  while (idx.length > 3) {
+    let clipped = false;
+    for (let i = 0; i < idx.length; i++) {
+      const ia = idx[(i - 1 + idx.length) % idx.length];
+      const ib = idx[i];
+      const ic = idx[(i + 1) % idx.length];
+      const a = points[ia];
+      const b = points[ib];
+      const c = points[ic];
+      if (cross2(a, b, c) <= 1e-12) continue; // reflex or collinear — not an ear
+      let blocked = false;
+      for (const j of idx) {
+        if (j === ia || j === ib || j === ic) continue;
+        if (pointInTriangle(points[j], a, b, c)) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) continue;
+      triangles.push(ia, ib, ic);
+      idx.splice(i, 1);
+      clipped = true;
+      break;
+    }
+    if (!clipped) break; // degenerate input — return what we have
+  }
+  if (idx.length === 3) triangles.push(idx[0], idx[1], idx[2]);
+  return triangles;
+}
+
+/**
+ * Extrude a simple polygon footprint from z0 to z1: triangulated caps plus
+ * one side quad per edge. The `extrudeQuad` generalization footprint
+ * entities (slabs) use — walls keep the cheaper quad path.
+ */
+export function extrudePolygon(points: readonly Point[], z0: number, z1: number): Mesh3D {
+  const caps = triangulateLoop(points);
+  if (caps.length === 0) return EMPTY_MESH;
+  const n = points.length;
+  const positions: number[] = [];
+  for (const p of points) positions.push(p.x, p.y, z0);
+  for (const p of points) positions.push(p.x, p.y, z1);
+  const indices: number[] = [];
+  // bottom cap faces down (reversed), top cap faces up
+  for (let i = 0; i < caps.length; i += 3) {
+    indices.push(caps[i], caps[i + 2], caps[i + 1]);
+    indices.push(caps[i] + n, caps[i + 1] + n, caps[i + 2] + n);
+  }
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    indices.push(i, j, j + n, i, j + n, i + n);
+  }
+  return { positions, indices };
+}

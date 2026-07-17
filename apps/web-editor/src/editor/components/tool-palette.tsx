@@ -3,6 +3,7 @@ import {
   IconDoor,
   IconLine,
   IconPointer,
+  IconRectangle,
   IconRuler2,
   IconTimeline,
   IconVectorSpline,
@@ -22,6 +23,7 @@ const TOOLS: { id: string; icon: Icon; title: string }[] = [
   { id: 'wall', icon: IconWall, title: 'Wall (WALL)' },
   { id: 'window', icon: IconWindow, title: 'Window (WINDOW)' },
   { id: 'door', icon: IconDoor, title: 'Door (DOOR)' },
+  { id: 'slab', icon: IconRectangle, title: 'Slab (SLAB)' },
   { id: 'dimension', icon: IconRuler2, title: 'Dimension (DIM)' },
 ];
 

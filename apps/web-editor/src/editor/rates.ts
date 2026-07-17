@@ -8,5 +8,8 @@ export const DEMO_RATES: RateTable = {
     insulation: { unit: 'm3', unitCost: 85 },
     plaster: { unit: 'm3', unitCost: 310 },
     'wall-volume': { unit: 'm3', unitCost: 150 },
+    'concrete-slab': { unit: 'm3', unitCost: 95 },
+    screed: { unit: 'm3', unitCost: 180 },
+    'slab-volume': { unit: 'm3', unitCost: 110 },
   },
 };

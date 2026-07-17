@@ -9,6 +9,7 @@ import { registerPrimitiveCommands } from '../commands/primitives.js';
 import { registerArchitectureCommands } from '../commands/architecture.js';
 import { registerDocumentStoreCommands } from '../commands/document-stores.js';
 import { registerDimensionCommands } from '../commands/dimensions.js';
+import { registerSlabCommands } from '../commands/slabs.js';
 import { LineEntity, createLineEntity } from '../entities/primitives/line-entity.js';
 import { CircleEntity, createCircleEntity } from '../entities/primitives/circle-entity.js';
 import { ArcEntity, createArcEntity } from '../entities/primitives/arc-entity.js';
@@ -16,6 +17,7 @@ import { PolylineEntity, createPolylineEntity } from '../entities/primitives/pol
 import { WallEntity, createWallEntity } from '../entities/architecture/wall-entity.js';
 import { WindowEntity, createWindowEntity } from '../entities/architecture/window-entity.js';
 import { DoorEntity, createDoorEntity } from '../entities/architecture/door-entity.js';
+import { SlabEntity, createSlabEntity } from '../entities/architecture/slab-entity.js';
 import {
   DimensionEntity,
   createDimensionEntity,
@@ -63,11 +65,13 @@ export class EditorSession {
       this.entityTypes.register({ type: WallEntity.TYPE, create: createWallEntity });
       this.entityTypes.register({ type: WindowEntity.TYPE, create: createWindowEntity });
       this.entityTypes.register({ type: DoorEntity.TYPE, create: createDoorEntity });
+      this.entityTypes.register({ type: SlabEntity.TYPE, create: createSlabEntity });
       this.entityTypes.register({ type: DimensionEntity.TYPE, create: createDimensionEntity });
       registerBuiltinCommands(this.commands);
       registerPrimitiveCommands(this.commands);
       registerArchitectureCommands(this.commands);
       registerDocumentStoreCommands(this.commands);
+      registerSlabCommands(this.commands);
       registerDimensionCommands(this.commands);
     }
   }

@@ -97,6 +97,8 @@ export {
   distanceToPolyline,
   EMPTY_MESH,
   extrudeQuad,
+  extrudePolygon,
+  triangulateLoop,
   mergeMeshes,
 } from './geometry/index.js';
 export type {
@@ -164,6 +166,8 @@ export {
   createWindowEntity,
   DoorEntity,
   createDoorEntity,
+  SlabEntity,
+  createSlabEntity,
   DimensionEntity,
   createDimensionEntity,
 } from './entities/index.js';
@@ -229,6 +233,8 @@ export type {
   RemoveLayerParams,
   AddMaterialParams,
   AddTypeParams,
+  AddSlabParams,
+  AutoSlabParams,
   AddDimensionParams,
   AutoDimensionParams,
 } from './commands/index.js';
@@ -259,6 +265,9 @@ export {
   AddMaterialCommand,
   AddTypeCommand,
   registerDocumentStoreCommands,
+  AddSlabCommand,
+  AutoSlabCommand,
+  registerSlabCommands,
   AddDimensionCommand,
   AutoDimensionCommand,
   registerDimensionCommands,
@@ -279,7 +288,13 @@ export type { SelectionEvents } from './selection/index.js';
 export { SelectionSet } from './selection/index.js';
 export { SnapEngine } from './snapping/index.js';
 export { MeasurementService, geometryLength, geometryArea } from './measurements/index.js';
-export type { WallQuantity, MaterialQuantity, QuantityReport, SpaceInfo } from './measurements/index.js';
+export type {
+  WallQuantity,
+  SlabQuantity,
+  MaterialQuantity,
+  QuantityReport,
+  SpaceInfo,
+} from './measurements/index.js';
 export { computeQuantities, detectSpaces } from './measurements/index.js';
 export type { ViewDefinition } from './views/index.js';
 export { entitiesInView, isEntityVisible, isEntityInteractive } from './views/index.js';

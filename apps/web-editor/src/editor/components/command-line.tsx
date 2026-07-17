@@ -52,6 +52,26 @@ export function CommandLine() {
         case 'D':
           tools.useById('door');
           break;
+        case 'SLAB':
+          tools.useById('slab');
+          break;
+        case 'SLABAUTO': {
+          const levelId = ui.activeLevelId.get();
+          const slabTypes = session.doc.types.list('slab');
+          const result = session.dispatch<{
+            removed: number;
+            created: number;
+            totalArea: number;
+          }>('SLAB.AUTO', {
+            ...(levelId ? { levelId } : {}),
+            ...(slabTypes.length > 0 ? { typeId: slabTypes[0].id } : {}),
+          });
+          ui.appendLog(
+            `Slabs: ${result.created} placed, ${result.totalArea.toFixed(1)} m²` +
+              (result.removed > 0 ? ` (${result.removed} replaced).` : '.'),
+          );
+          break;
+        }
         case 'DIM':
           tools.useById('dimension');
           break;
