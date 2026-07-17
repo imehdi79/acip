@@ -17,5 +17,6 @@ export const DEMO_RATES: RateTable = {
     'wall-tile': { unit: 'count', unitCost: 2.4 },
     'floor-tile': { unit: 'm2', unitCost: 32 },
     'finish-area': { unit: 'm2', unitCost: 25 },
+    stair: { unit: 'count', unitCost: 1500 },
   },
 };

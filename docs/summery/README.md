@@ -209,17 +209,27 @@ shipped with docs-first commits, tests, and a green build.
   `SLABAUTO` first for a slab per room); each AUTO regenerates only its own
   host kind, so wall and floor macros don't collide. In the app: `FLOORAUTO`
   keyword, seeded "Floor tile" (m²) + rate.
+- **Stairs**: the first entity spanning two levels — a straight flight that
+  stores only intent (origin, direction, width, base + top level) and derives
+  its rise, riser count, and run length on read, so raising the top level
+  re-treads it. The cross-level recompute and `LEVEL.REMOVE` guard were
+  generalized from "base level" to "base OR top" — the first real use of the
+  `{topLevelId}` variant of `ILevelAware` that was typed on day one. Plan is
+  the CAD stair symbol, 3D a stepped solid climbing between the levels. In the
+  app: a Stair tool (click origin, click direction), `STAIR` keyword, a
+  billed flight in the BOQ. **This completes all five originally-requested
+  features** — space detection, assembly layers, floors, roofs, stairs.
+  See [stairs.md](../editor-core/04-systems/stairs.md).
 
 ## Where it stands / what's next
 
-172 tests across three packages; all typechecks and builds green. The
+179 tests across three packages; all typechecks and builds green. The
 architecture has survived its three intended stress tests: a semantic model
 (joins/hosting), an acting external package (agent), and an observing external
 package (estimator) — none required core rework.
 
 Next candidates (see [roadmap](../editor-core/06-roadmap/deferred.md)):
-finishes on bare room polygons (no slab required), stairs (cross-level
-relations), gable roofs (ridge split over the shipped mono-pitch), wall-top
-trimming, crossing wall joins, the auto-dimension agent, a cost-optimization
-agent (ENTITY.SETTYPE is its action primitive), editor-server, IFC
-import/export.
+multi-flight stairs (landings/winders), finishes on bare room polygons,
+gable roofs (ridge split over the shipped mono-pitch), wall-top trimming,
+crossing wall joins, the auto-dimension agent, a cost-optimization agent
+(ENTITY.SETTYPE is its action primitive), editor-server, IFC import/export.

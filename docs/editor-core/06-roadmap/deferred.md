@@ -12,7 +12,7 @@ Last updated: 2026-07-17
 | **3D editing** | Deferred (v1: 3D is read-only) | See [2.5D strategy](../04-systems/2-5d-strategy.md). |
 | **Sections / elevations** | Deferred | Land as `ViewDefinition` with a cut plane. |
 | **Roofs / freeform surfaces** | V1 mono-pitch shipped 2026-07-17 (see [roofs.md](../04-systems/roofs.md)); gable/hip/freeform still deferred | Gable = footprint split by a ridge half-plane; hips = straight skeleton; OpenCascade-via-WASM as an island if freeform is ever truly needed. |
-| **Stairs** | Deferred by user decision (2026-07-17) — "we want to do it later" | The design slot is ready: stairs are cross-level relations ([levels-and-views.md](../04-systems/levels-and-views.md)); the `{topLevelId}` variant of `ILevelAware` is typed but unused; a parametric run (position, direction, width, base/top level → derived risers/treads) rides existing machinery. |
+| **Stairs** | V1 straight flight shipped 2026-07-18 ([stairs.md](../04-systems/stairs.md)); multi-flight/landings/winders deferred | Straight single flight, parametric from origin/direction/width + base/top level; first user of `{topLevelId}`. Landings and switchbacks need an intermediate datum. |
 | **Wall-top trimming under sloped roofs** | Deferred with stairs (2026-07-17) | Walls under a mono-pitch roof keep flat tops; the wedge to the roof underside is unfilled ([roofs.md](../04-systems/roofs.md)). Wants roof-aware wall tops / `topLevelId` — same vertical machinery as stairs, do them together. |
 | **Parametric constraint solver** | Maybe never | Host relations (one-directional DAG) deliberately are NOT this. See [relations](../04-systems/relations.md). |
 | **`editor-sdk` package** | Still deferred — first external package (agent-drafter, 2026-07-12) consumes `editor-core/src/index.ts` directly | Split into a real package when a second consumer or versioning pain appears. |
@@ -275,9 +275,28 @@ each AUTO regenerates only its own host kind so wall and floor macros never
 collide). web-editor: `FLOORAUTO` keyword, seeded "Floor tile" (m²) + rate.
 154 core + 12 estimator tests.
 
-Next candidates: finishes on bare room polygons (no slab required), stairs
-(cross-level relations; the `{topLevelId}` variant of ILevelAware is waiting),
-gable roofs (ridge half-plane split over the shipped mono-pitch), wall-top
-trimming to the roof underside, crossing wall joins, the auto-dimension agent,
-cost-optimization agent (ENTITY.SETTYPE gave it its action primitive),
-editor-server (persistence/collab/agent host).
+**Stairs V1 landed 2026-07-18.** Straight-flight `StairEntity` — the first
+entity spanning two levels and the first user of the `{topLevelId}` variant of
+`ILevelAware`. Stores only intent (origin, direction, width, base + top);
+rise, riser count (`ceil(rise / 0.19 m)`) and run length derive on read, so
+raising the top level re-treads it. Plan is the CAD stair symbol (outline +
+tread lines + up-arrow); 3D is a stepped solid (`extrudeQuad` per going).
+Cross-level dirty propagation and `LEVEL.REMOVE` were generalized from "base"
+to "base OR top" (a level can't be pulled out from under a stair) — and the
+change-event `dirty` array now includes store-invalidated entities (levels/
+types), closing a gap where a re-treaded stair or re-thickened wall carried no
+record entry. `STAIR.ADD` (no AUTO — stairs are placed, not derived);
+quantities/digest gained `stairCount`; the estimator bills one `stair` count
+line per flight. web-editor: Stair palette tool (2-click, next level up as
+top), `STAIR` keyword, demo rate. See [stairs.md](../04-systems/stairs.md).
+160 core + 13 estimator tests.
+
+**All five originally-requested features are now shipped**: space detection,
+assembly layers (+ unit-aware pricing + finishes), floors (slabs), roofs, and
+stairs.
+
+Next candidates: multi-flight stairs (landings/winders), finishes on bare room
+polygons (no slab required), gable roofs (ridge half-plane split over the
+shipped mono-pitch), wall-top trimming to the roof underside, crossing wall
+joins, the auto-dimension agent, cost-optimization agent (ENTITY.SETTYPE gave
+it its action primitive), editor-server (persistence/collab/agent host).

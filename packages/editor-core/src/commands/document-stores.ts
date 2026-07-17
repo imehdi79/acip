@@ -109,7 +109,13 @@ export const RemoveLevelCommand: Command<RemoveLevelParams, void> = {
     () => S.object({ id: S.id('level id') }, ['id']),
   ),
   execute(ctx, params) {
-    const inUse = ctx.doc.all().some((e) => isLevelAware(e) && e.baseLevelId === params.id);
+    // blocked while any entity references the level as its base OR its top
+    // (a stair spans two levels)
+    const inUse = ctx.doc.all().some((e) => {
+      if (!isLevelAware(e)) return false;
+      if (e.baseLevelId === params.id) return true;
+      return 'topLevelId' in e.vertical && e.vertical.topLevelId === params.id;
+    });
     if (inUse) {
       throw new ValidationError(`level ${params.id} is in use by entities`);
     }

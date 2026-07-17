@@ -8,6 +8,7 @@ import { HostedPlaceTool } from './tools/hosted-place-tool';
 import { ArcTool, CircleTool, PolylineTool } from './tools/circle-tool';
 import { DimensionTool } from './tools/dim-tool';
 import { SlabTool } from './tools/slab-tool';
+import { StairTool } from './tools/stair-tool';
 
 export interface EditorRuntime {
   readonly ui: EditorUi;
@@ -153,6 +154,20 @@ export function createRuntime(session: EditorSession): EditorRuntime {
         ...activeLayer(),
         ...(levelId ? { levelId } : {}),
         ...(slabTypes.length > 0 ? { typeId: slabTypes[0].id } : {}),
+      };
+    }),
+  );
+  tools.register(
+    new StairTool(ui, finish, () => {
+      // base = active level; top = the next level up by elevation, else a 3 m flight
+      const baseId = ui.activeLevelId.get();
+      const levels = session.doc.levels.list();
+      const baseElev = baseId ? (levels.find((l) => l.id === baseId)?.elevation ?? 0) : 0;
+      const top = levels.find((l) => l.elevation > baseElev + 1e-6);
+      return {
+        ...activeLayer(),
+        ...(baseId ? { baseLevelId: baseId } : {}),
+        ...(top ? { topLevelId: top.id } : {}),
       };
     }),
   );

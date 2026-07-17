@@ -55,6 +55,9 @@ export function CommandLine() {
         case 'SLAB':
           tools.useById('slab');
           break;
+        case 'STAIR':
+          tools.useById('stair');
+          break;
         case 'SLABAUTO': {
           const levelId = ui.activeLevelId.get();
           const slabTypes = session.doc.types.list('slab');

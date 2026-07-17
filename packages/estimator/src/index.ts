@@ -5,12 +5,14 @@ export type {
   SlabTakeoff,
   RoofTakeoff,
   FinishTakeoff,
+  StairTakeoff,
 } from './takeoff.js';
 export {
   computeWallTakeoff,
   computeSlabTakeoff,
   computeRoofTakeoff,
   computeFinishTakeoff,
+  computeStairTakeoff,
 } from './takeoff.js';
 export type { MeasurementRule } from './rules.js';
 export { smallOpeningRule, wasteFactorRule, defaultRules } from './rules.js';

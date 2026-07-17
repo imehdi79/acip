@@ -231,6 +231,20 @@ describe('finishes — priced by the material unit', () => {
   });
 });
 
+describe('stairs — one billed unit per flight', () => {
+  test('each stair adds a count line', () => {
+    const session = new EditorSession();
+    session.dispatch('STAIR.ADD', { origin: point(0, 0), height: 3 });
+    session.dispatch('STAIR.ADD', { origin: point(5, 0), height: 3 });
+    const rates: RateTable = { currency: 'EUR', rates: { stair: { unit: 'count', unitCost: 1500 } } };
+    const boq = assembleBoq(session.doc, { rates });
+    const line = boq.lines.find((l) => l.costCode === 'stair')!;
+    expect(line.unit).toBe('count');
+    expect(line.quantity).toBe(2);
+    expect(boq.total).toBeCloseTo(2 * 1500, 4);
+  });
+});
+
 describe('roofs — the third trade in the BOQ', () => {
   test('typed roofs split across the assembly; untyped fall back to roof-volume', () => {
     const session = new EditorSession();

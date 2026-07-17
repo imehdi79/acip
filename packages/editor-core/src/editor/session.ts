@@ -12,6 +12,7 @@ import { registerDimensionCommands } from '../commands/dimensions.js';
 import { registerSlabCommands } from '../commands/slabs.js';
 import { registerRoofCommands } from '../commands/roofs.js';
 import { registerFinishCommands } from '../commands/finishes.js';
+import { registerStairCommands } from '../commands/stairs.js';
 import { LineEntity, createLineEntity } from '../entities/primitives/line-entity.js';
 import { CircleEntity, createCircleEntity } from '../entities/primitives/circle-entity.js';
 import { ArcEntity, createArcEntity } from '../entities/primitives/arc-entity.js';
@@ -22,6 +23,7 @@ import { DoorEntity, createDoorEntity } from '../entities/architecture/door-enti
 import { SlabEntity, createSlabEntity } from '../entities/architecture/slab-entity.js';
 import { RoofEntity, createRoofEntity } from '../entities/architecture/roof-entity.js';
 import { FinishEntity, createFinishEntity } from '../entities/architecture/finish-entity.js';
+import { StairEntity, createStairEntity } from '../entities/architecture/stair-entity.js';
 import {
   DimensionEntity,
   createDimensionEntity,
@@ -72,6 +74,7 @@ export class EditorSession {
       this.entityTypes.register({ type: SlabEntity.TYPE, create: createSlabEntity });
       this.entityTypes.register({ type: RoofEntity.TYPE, create: createRoofEntity });
       this.entityTypes.register({ type: FinishEntity.TYPE, create: createFinishEntity });
+      this.entityTypes.register({ type: StairEntity.TYPE, create: createStairEntity });
       this.entityTypes.register({ type: DimensionEntity.TYPE, create: createDimensionEntity });
       registerBuiltinCommands(this.commands);
       registerPrimitiveCommands(this.commands);
@@ -80,6 +83,7 @@ export class EditorSession {
       registerSlabCommands(this.commands);
       registerRoofCommands(this.commands);
       registerFinishCommands(this.commands);
+      registerStairCommands(this.commands);
       registerDimensionCommands(this.commands);
     }
   }

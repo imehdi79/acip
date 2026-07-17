@@ -21,7 +21,7 @@ that arrive later as independent packages.
 | [01-vision](01-vision/vision.md) | Product identity, what it is and is NOT |
 | [02-architecture](02-architecture/monorepo.md) | Monorepo layout, [core layering](02-architecture/layers.md), [plugin seam](02-architecture/plugin-seam.md) |
 | [03-contracts](03-contracts/entity-contract.md) | The two keystones: [Entity contract](03-contracts/entity-contract.md), [Command/Transaction](03-contracts/command-transaction.md) |
-| [04-systems](04-systems/relations.md) | [Relations](04-systems/relations.md), [Levels & views](04-systems/levels-and-views.md), [2.5D strategy](04-systems/2-5d-strategy.md), [Materials & types](04-systems/materials-and-types.md), [Wall joins](04-systems/wall-joins.md), [Spaces](04-systems/spaces.md), [Dimensions](04-systems/dimensions.md), [Slabs](04-systems/slabs.md), [Roofs](04-systems/roofs.md), [Finishes](04-systems/finishes.md) |
+| [04-systems](04-systems/relations.md) | [Relations](04-systems/relations.md), [Levels & views](04-systems/levels-and-views.md), [2.5D strategy](04-systems/2-5d-strategy.md), [Materials & types](04-systems/materials-and-types.md), [Wall joins](04-systems/wall-joins.md), [Spaces](04-systems/spaces.md), [Dimensions](04-systems/dimensions.md), [Slabs](04-systems/slabs.md), [Roofs](04-systems/roofs.md), [Finishes](04-systems/finishes.md), [Stairs](04-systems/stairs.md) |
 | [05-packages](05-packages/estimator.md) | [Estimator](05-packages/estimator.md), [AI agents](05-packages/ai-agents.md) |
 | [06-roadmap](06-roadmap/deferred.md) | Deferred decisions and open questions |
 

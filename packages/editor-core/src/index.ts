@@ -175,6 +175,8 @@ export {
   createRoofEntity,
   FinishEntity,
   createFinishEntity,
+  StairEntity,
+  createStairEntity,
   DimensionEntity,
   createDimensionEntity,
 } from './entities/index.js';
@@ -253,6 +255,7 @@ export type {
   AutoFinishParams,
   AddFloorFinishParams,
   AutoFloorFinishParams,
+  AddStairParams,
   AddDimensionParams,
   AutoDimensionParams,
 } from './commands/index.js';
@@ -299,6 +302,8 @@ export {
   AddFloorFinishCommand,
   AutoFloorFinishCommand,
   registerFinishCommands,
+  AddStairCommand,
+  registerStairCommands,
   AddDimensionCommand,
   AutoDimensionCommand,
   registerDimensionCommands,
@@ -324,6 +329,7 @@ export type {
   SlabQuantity,
   RoofQuantity,
   FinishQuantity,
+  StairQuantity,
   MaterialQuantity,
   QuantityReport,
   LayerRefs,

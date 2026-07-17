@@ -175,12 +175,18 @@ export class DrawingDocument {
     // entity updates are already synced by the transaction
     const storeInvalidated: EntityId[] = [];
     if (changedLevels.size > 0 || changedTypes.size > 0) {
+      // a level-aware entity is bound to a changed level as its base OR its
+      // top (a stair spans two levels — the cross-level relation)
+      const boundToChangedLevel = (entity: Entity): boolean => {
+        if (!isLevelAware(entity)) return false;
+        if (entity.baseLevelId && changedLevels.has(entity.baseLevelId as LevelId as string)) {
+          return true;
+        }
+        const v = entity.vertical;
+        return 'topLevelId' in v && changedLevels.has(v.topLevelId as LevelId as string);
+      };
       for (const entity of this.entities.values()) {
-        if (
-          isLevelAware(entity) &&
-          entity.baseLevelId &&
-          changedLevels.has(entity.baseLevelId as LevelId as string)
-        ) {
+        if (boundToChangedLevel(entity)) {
           storeInvalidated.push(entity.id);
         } else if (entity.typeRef && changedTypes.has(entity.typeRef as string)) {
           storeInvalidated.push(entity.id);
@@ -188,8 +194,11 @@ export class DrawingDocument {
       }
       touched.push(...storeInvalidated);
     }
-    const dirty = this.relations.collectDirty(touched);
-    for (const id of new Set([...storeInvalidated, ...dirty])) {
+    // store-invalidated entities (level/type changes) are themselves dirty —
+    // their derived geometry changed but they carry no record entry, so a
+    // consumer reading record + dirty would otherwise miss them
+    const dirty = [...new Set([...storeInvalidated, ...this.relations.collectDirty(touched)])];
+    for (const id of dirty) {
       const e = this.entities.get(id);
       if (e) this.spatial.update(id, e.getBounds());
     }

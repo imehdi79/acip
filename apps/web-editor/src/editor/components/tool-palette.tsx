@@ -5,6 +5,7 @@ import {
   IconPointer,
   IconRectangle,
   IconRuler2,
+  IconStairs,
   IconTimeline,
   IconVectorSpline,
   IconWall,
@@ -24,6 +25,7 @@ const TOOLS: { id: string; icon: Icon; title: string }[] = [
   { id: 'window', icon: IconWindow, title: 'Window (WINDOW)' },
   { id: 'door', icon: IconDoor, title: 'Door (DOOR)' },
   { id: 'slab', icon: IconRectangle, title: 'Slab (SLAB)' },
+  { id: 'stair', icon: IconStairs, title: 'Stair (STAIR)' },
   { id: 'dimension', icon: IconRuler2, title: 'Dimension (DIM)' },
 ];
 

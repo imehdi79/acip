@@ -6,3 +6,4 @@ export { DoorEntity, createDoorEntity } from './door-entity.js';
 export { SlabEntity, createSlabEntity } from './slab-entity.js';
 export { RoofEntity, createRoofEntity } from './roof-entity.js';
 export { FinishEntity, createFinishEntity } from './finish-entity.js';
+export { StairEntity, createStairEntity } from './stair-entity.js';

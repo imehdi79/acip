@@ -41,6 +41,8 @@ export {
   AutoFloorFinishCommand,
   registerFinishCommands,
 } from './finishes.js';
+export type { AddStairParams } from './stairs.js';
+export { AddStairCommand, registerStairCommands } from './stairs.js';
 export type { AddDimensionParams, AutoDimensionParams } from './dimensions.js';
 export {
   AddDimensionCommand,

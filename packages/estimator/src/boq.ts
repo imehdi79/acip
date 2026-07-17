@@ -5,6 +5,7 @@ import {
   computeFinishTakeoff,
   computeRoofTakeoff,
   computeSlabTakeoff,
+  computeStairTakeoff,
   computeWallTakeoff,
 } from './takeoff.js';
 import type { MeasurementRule } from './rules.js';
@@ -112,6 +113,12 @@ export function assembleBoq(doc: DrawingDocument, options: BoqOptions = {}): Boq
       GENERIC_ROOF_CODE,
       'Roof (no assembly)',
     );
+  }
+
+  // a stair is a fabricated item — one unit per flight (per-riser / by-material
+  // stair costing is deferred)
+  for (const stair of computeStairTakeoff(doc)) {
+    if (stair.riserCount > 0) accumulate('stair', 'Stair (flight)', 'count', 1);
   }
 
   for (const finish of computeFinishTakeoff(doc)) {

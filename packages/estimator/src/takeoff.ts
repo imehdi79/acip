@@ -1,4 +1,4 @@
-import { FinishEntity, RoofEntity, SlabEntity, WallEntity } from '@acip/editor-core';
+import { FinishEntity, RoofEntity, SlabEntity, StairEntity, WallEntity } from '@acip/editor-core';
 import type { DrawingDocument, EntityId, MaterialUnit, TypeId } from '@acip/editor-core';
 
 /**
@@ -150,6 +150,21 @@ export function computeFinishTakeoff(doc: DrawingDocument): FinishTakeoff[] {
       thickness: entity.getThickness(),
       layer,
     });
+  }
+  return result;
+}
+
+export interface StairTakeoff {
+  readonly entityId: EntityId;
+  readonly rise: number;
+  readonly riserCount: number;
+}
+
+export function computeStairTakeoff(doc: DrawingDocument): StairTakeoff[] {
+  const result: StairTakeoff[] = [];
+  for (const entity of doc.all()) {
+    if (!(entity instanceof StairEntity)) continue;
+    result.push({ entityId: entity.id, rise: entity.getRise(), riserCount: entity.getRiserCount() });
   }
   return result;
 }

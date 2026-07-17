@@ -7,6 +7,7 @@ import { WallEntity } from '../entities/architecture/wall-entity.js';
 import { SlabEntity } from '../entities/architecture/slab-entity.js';
 import { RoofEntity } from '../entities/architecture/roof-entity.js';
 import { FinishEntity } from '../entities/architecture/finish-entity.js';
+import { StairEntity } from '../entities/architecture/stair-entity.js';
 import { WindowEntity } from '../entities/architecture/window-entity.js';
 import { DoorEntity } from '../entities/architecture/door-entity.js';
 
@@ -50,6 +51,12 @@ export interface FinishQuantity {
   readonly netArea: number;
 }
 
+export interface StairQuantity {
+  readonly entityId: EntityId;
+  readonly rise: number;
+  readonly riserCount: number;
+}
+
 export interface MaterialQuantity {
   readonly materialId: MaterialId;
   readonly name: string;
@@ -63,6 +70,7 @@ export interface QuantityReport {
   readonly slabs: readonly SlabQuantity[];
   readonly roofs: readonly RoofQuantity[];
   readonly finishes: readonly FinishQuantity[];
+  readonly stairs: readonly StairQuantity[];
   readonly totals: {
     readonly wallLength: number;
     readonly wallNetFaceArea: number;
@@ -72,6 +80,7 @@ export interface QuantityReport {
     readonly roofSlopeArea: number;
     readonly roofVolume: number;
     readonly finishArea: number;
+    readonly stairCount: number;
     readonly windowCount: number;
     readonly doorCount: number;
   };
@@ -109,6 +118,7 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
   const slabs: SlabQuantity[] = [];
   const roofs: RoofQuantity[] = [];
   const finishes: FinishQuantity[] = [];
+  const stairs: StairQuantity[] = [];
   const materialQuantities = new Map<MaterialId, number>();
   let windowCount = 0;
   let doorCount = 0;
@@ -134,6 +144,10 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
   for (const entity of doc.all()) {
     if (entity instanceof WindowEntity) windowCount += 1;
     if (entity instanceof DoorEntity) doorCount += 1;
+    if (entity instanceof StairEntity) {
+      stairs.push({ entityId: entity.id, rise: entity.getRise(), riserCount: entity.getRiserCount() });
+      continue;
+    }
     if (entity instanceof FinishEntity) {
       const netArea = entity.getNetArea();
       finishes.push({ entityId: entity.id, materialId: entity.materialId, netArea });
@@ -201,6 +215,7 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
     slabs,
     roofs,
     finishes,
+    stairs,
     totals: {
       wallLength: walls.reduce((s, w) => s + w.length, 0),
       wallNetFaceArea: walls.reduce((s, w) => s + w.netFaceArea, 0),
@@ -210,6 +225,7 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
       roofSlopeArea: roofs.reduce((s, q) => s + q.slopeArea, 0),
       roofVolume: roofs.reduce((s, q) => s + q.volume, 0),
       finishArea: finishes.reduce((s, q) => s + q.netArea, 0),
+      stairCount: stairs.length,
       windowCount,
       doorCount,
     },
