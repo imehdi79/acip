@@ -11,6 +11,7 @@ import { registerDocumentStoreCommands } from '../commands/document-stores.js';
 import { registerDimensionCommands } from '../commands/dimensions.js';
 import { registerSlabCommands } from '../commands/slabs.js';
 import { registerRoofCommands } from '../commands/roofs.js';
+import { registerFinishCommands } from '../commands/finishes.js';
 import { LineEntity, createLineEntity } from '../entities/primitives/line-entity.js';
 import { CircleEntity, createCircleEntity } from '../entities/primitives/circle-entity.js';
 import { ArcEntity, createArcEntity } from '../entities/primitives/arc-entity.js';
@@ -20,6 +21,7 @@ import { WindowEntity, createWindowEntity } from '../entities/architecture/windo
 import { DoorEntity, createDoorEntity } from '../entities/architecture/door-entity.js';
 import { SlabEntity, createSlabEntity } from '../entities/architecture/slab-entity.js';
 import { RoofEntity, createRoofEntity } from '../entities/architecture/roof-entity.js';
+import { FinishEntity, createFinishEntity } from '../entities/architecture/finish-entity.js';
 import {
   DimensionEntity,
   createDimensionEntity,
@@ -69,6 +71,7 @@ export class EditorSession {
       this.entityTypes.register({ type: DoorEntity.TYPE, create: createDoorEntity });
       this.entityTypes.register({ type: SlabEntity.TYPE, create: createSlabEntity });
       this.entityTypes.register({ type: RoofEntity.TYPE, create: createRoofEntity });
+      this.entityTypes.register({ type: FinishEntity.TYPE, create: createFinishEntity });
       this.entityTypes.register({ type: DimensionEntity.TYPE, create: createDimensionEntity });
       registerBuiltinCommands(this.commands);
       registerPrimitiveCommands(this.commands);
@@ -76,6 +79,7 @@ export class EditorSession {
       registerDocumentStoreCommands(this.commands);
       registerSlabCommands(this.commands);
       registerRoofCommands(this.commands);
+      registerFinishCommands(this.commands);
       registerDimensionCommands(this.commands);
     }
   }

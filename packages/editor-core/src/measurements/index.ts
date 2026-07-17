@@ -68,6 +68,7 @@ export type {
   WallQuantity,
   SlabQuantity,
   RoofQuantity,
+  FinishQuantity,
   MaterialQuantity,
   QuantityReport,
 } from './quantities.js';

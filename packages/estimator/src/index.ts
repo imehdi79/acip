@@ -4,8 +4,14 @@ export type {
   WallTakeoff,
   SlabTakeoff,
   RoofTakeoff,
+  FinishTakeoff,
 } from './takeoff.js';
-export { computeWallTakeoff, computeSlabTakeoff, computeRoofTakeoff } from './takeoff.js';
+export {
+  computeWallTakeoff,
+  computeSlabTakeoff,
+  computeRoofTakeoff,
+  computeFinishTakeoff,
+} from './takeoff.js';
 export type { MeasurementRule } from './rules.js';
 export { smallOpeningRule, wasteFactorRule, defaultRules } from './rules.js';
 export type { Rate, RateTable } from './rates.js';

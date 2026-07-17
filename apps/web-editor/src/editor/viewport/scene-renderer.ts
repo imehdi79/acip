@@ -27,6 +27,7 @@ const COLORS = {
   spaceFill: 'rgba(102, 187, 170, 0.08)',
   spaceLabel: '#6fa898',
   measure: '#d9c069',
+  finish: '#c78f4a',
   ghost: '#8fd0ff',
   boxWindow: 'rgba(77, 163, 255, 0.12)',
   boxWindowBorder: '#4da3ff',
@@ -181,13 +182,22 @@ export function drawScene(
       for (const region of regions) pathGeometry(ctx, region);
       ctx.fill('evenodd');
     }
-    const color = isSelected ? COLORS.selected : (item.style.stroke ?? '#e0e0e0');
+    // finishes render as a dashed band hugging the wall face, so they read
+    // apart from wall linework
+    const isFinish = doc.get(item.entityId as EntityId)?.type === 'finish';
+    const color = isSelected
+      ? COLORS.selected
+      : isFinish
+        ? COLORS.finish
+        : (item.style.stroke ?? '#e0e0e0');
     ctx.strokeStyle = color;
     // divide by scale so line weights stay zoom-independent
-    ctx.lineWidth = ((item.style.width ?? 1) * (isSelected ? 2.5 : 1.5)) / viewport.scale;
+    ctx.lineWidth = ((item.style.width ?? 1) * (isSelected ? 2.5 : isFinish ? 2 : 1.5)) / viewport.scale;
+    if (isFinish) ctx.setLineDash([0.15, 0.1]);
     ctx.beginPath();
     pathGeometry(ctx, item.geometry);
     ctx.stroke();
+    if (isFinish) ctx.setLineDash([]);
     const found: TextShape[] = [];
     collectTexts(item.geometry, found);
     for (const shape of found) texts.push({ shape, color });

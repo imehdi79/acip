@@ -64,7 +64,15 @@ on a wall **face** (an anchor from `IHost.getAnchors()`), placement params = ext
 height, participating in recompute:
 
 - stretch the wall → tiled area updates
-- add a window → the opening subtracts from the tiled region (topology boundary-with-holes)
+- add a window → the opening subtracts from the tiled region
+
+**Shipped 2026-07-18** — see [finishes.md](finishes.md). `FinishEntity` hosts on the
+wall's `face+`/`face-` anchor; `getNetArea()` is the band `[t0,t1]×[sill,top]` minus
+overlapping openings; it references a single material and prices through the same
+unit-aware `layerQuantity` (tiles by count, paint by area). `FINISH.AUTO` tiles every
+room from `SpaceInfo.boundaryFaces` (the room-facing side of each boundary wall). V1
+is rectangular wall-face bands; boundary-with-holes regions and floor finishes are
+deferred there.
 
 ## Materials are first-class
 

@@ -184,6 +184,34 @@ describe('slabs — the second trade in the BOQ', () => {
   });
 });
 
+describe('finishes — priced by the material unit', () => {
+  test('a count tile finish on a wall face bills tiles ÷ coverage', () => {
+    const session = new EditorSession();
+    const wallId = session.dispatch<EntityId>('WALL.ADD', {
+      a: point(0, 0),
+      b: point(10, 0),
+      height: 3,
+    });
+    const tile = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Wall tile',
+      unit: 'count',
+      costCode: 'wall-tile',
+      coverage: 0.09,
+    });
+    session.dispatch('FINISH.ADD', { wallId, side: 'face+', materialId: tile, topHeight: 1.2 });
+
+    const rates: RateTable = {
+      currency: 'EUR',
+      rates: { 'wall-tile': { unit: 'count', unitCost: 2 } },
+    };
+    const boq = assembleBoq(session.doc, { rates });
+    const line = boq.lines.find((l) => l.costCode === 'wall-tile')!;
+    expect(line.unit).toBe('count');
+    expect(line.quantity).toBeCloseTo(12 / 0.09, 6); // 10×1.2 band ÷ tile size
+    expect(boq.total).toBeCloseTo((12 / 0.09) * 2, 4);
+  });
+});
+
 describe('roofs — the third trade in the BOQ', () => {
   test('typed roofs split across the assembly; untyped fall back to roof-volume', () => {
     const session = new EditorSession();

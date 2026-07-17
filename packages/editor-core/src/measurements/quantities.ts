@@ -6,6 +6,7 @@ import { layerQuantity } from './layer-quantity.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
 import { SlabEntity } from '../entities/architecture/slab-entity.js';
 import { RoofEntity } from '../entities/architecture/roof-entity.js';
+import { FinishEntity } from '../entities/architecture/finish-entity.js';
 import { WindowEntity } from '../entities/architecture/window-entity.js';
 import { DoorEntity } from '../entities/architecture/door-entity.js';
 
@@ -42,6 +43,13 @@ export interface RoofQuantity {
   readonly volume: number;
 }
 
+export interface FinishQuantity {
+  readonly entityId: EntityId;
+  readonly materialId: MaterialId | null;
+  /** finished band area minus overlapping openings */
+  readonly netArea: number;
+}
+
 export interface MaterialQuantity {
   readonly materialId: MaterialId;
   readonly name: string;
@@ -54,6 +62,7 @@ export interface QuantityReport {
   readonly walls: readonly WallQuantity[];
   readonly slabs: readonly SlabQuantity[];
   readonly roofs: readonly RoofQuantity[];
+  readonly finishes: readonly FinishQuantity[];
   readonly totals: {
     readonly wallLength: number;
     readonly wallNetFaceArea: number;
@@ -62,6 +71,7 @@ export interface QuantityReport {
     readonly slabVolume: number;
     readonly roofSlopeArea: number;
     readonly roofVolume: number;
+    readonly finishArea: number;
     readonly windowCount: number;
     readonly doorCount: number;
   };
@@ -98,9 +108,14 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
   const walls: WallQuantity[] = [];
   const slabs: SlabQuantity[] = [];
   const roofs: RoofQuantity[] = [];
+  const finishes: FinishQuantity[] = [];
   const materialQuantities = new Map<MaterialId, number>();
   let windowCount = 0;
   let doorCount = 0;
+
+  const addMaterial = (materialId: MaterialId, quantity: number): void => {
+    materialQuantities.set(materialId, (materialQuantities.get(materialId) ?? 0) + quantity);
+  };
 
   // split an element across its assembly layers, each layer measured in its
   // material's own unit: m³ takes a thickness-proportional volume share, m²
@@ -112,13 +127,30 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
     for (const layer of typeDef.layers) {
       const material = doc.materials.get(layer.materialId);
       const q = layerQuantity(material?.unit ?? 'm3', layer.thickness, total, refs, material?.coverage);
-      materialQuantities.set(layer.materialId, (materialQuantities.get(layer.materialId) ?? 0) + q);
+      addMaterial(layer.materialId, q);
     }
   };
 
   for (const entity of doc.all()) {
     if (entity instanceof WindowEntity) windowCount += 1;
     if (entity instanceof DoorEntity) doorCount += 1;
+    if (entity instanceof FinishEntity) {
+      const netArea = entity.getNetArea();
+      finishes.push({ entityId: entity.id, materialId: entity.materialId, netArea });
+      if (entity.materialId) {
+        const material = doc.materials.get(entity.materialId);
+        // a finish is a one-layer assembly on a face
+        const q = layerQuantity(
+          material?.unit ?? 'm2',
+          entity.getThickness(),
+          entity.getThickness(),
+          { volume: netArea * entity.getThickness(), area: netArea, length: entity.getCoveredLength() },
+          material?.coverage,
+        );
+        addMaterial(entity.materialId, q);
+      }
+      continue;
+    }
     if (entity instanceof SlabEntity) {
       const area = entity.getArea();
       const q: SlabQuantity = { entityId: entity.id, area, volume: area * entity.getThickness() };
@@ -168,6 +200,7 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
     walls,
     slabs,
     roofs,
+    finishes,
     totals: {
       wallLength: walls.reduce((s, w) => s + w.length, 0),
       wallNetFaceArea: walls.reduce((s, w) => s + w.netFaceArea, 0),
@@ -176,6 +209,7 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
       slabVolume: slabs.reduce((s, q) => s + q.volume, 0),
       roofSlopeArea: roofs.reduce((s, q) => s + q.slopeArea, 0),
       roofVolume: roofs.reduce((s, q) => s + q.volume, 0),
+      finishArea: finishes.reduce((s, q) => s + q.netArea, 0),
       windowCount,
       doorCount,
     },

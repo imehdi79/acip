@@ -249,11 +249,26 @@ coverage field (shown for count), Materials panel shows the right unit. The
 estimator test prices a membrane (m²) and tiles (count) per unit.
 145 core + 10 estimator tests.
 
-Next candidates: per-room finishes (finish entities hosted on wall-face
-anchors with an extent — spaces now hands over room-facing faces and net
-floor polygons; the instance-level half of materials-and-types.md), stairs
-(cross-level relations; the `{topLevelId}` variant of ILevelAware is
-waiting), gable roofs (ridge half-plane split over the shipped mono-pitch),
-wall-top trimming to the roof underside, crossing wall joins, the
-auto-dimension agent, cost-optimization agent (ENTITY.SETTYPE gave it its
-action primitive), editor-server (persistence/collab/agent host).
+**Surface finishes landed 2026-07-18.** The instance-level half of
+materials-and-types.md: `FinishEntity` (IHosted) applies a material to a wall
+face, hosted on the `face+`/`face-` anchor the way a window hosts on the axis
+— it follows the wall and cascades with it. `getNetArea()` is the band
+`[t0,t1]×[sill,top]` minus overlapping openings (pure interval intersection);
+it prices through the same unit-aware `layerQuantity` (tiles by count, paint
+by area). `detectSpaces` now exposes `boundaryFaces {wallId, side}` (the
+room-facing face, from edge-vs-baseline direction), and `FINISH.AUTO` tiles
+every room's walls in one dispatch (shared walls finished both sides,
+regenerates). `MATERIAL.REMOVE` guards finishes too; quantities/digest gained
+`finishArea`; the estimator its fourth trade (`computeFinishTakeoff`, generic
+`finish-area` fallback). web-editor: dashed finish bands along the wall face,
+`FINISHAUTO` keyword, seeded "Wall tile" (count) + rate. V1 is rectangular
+wall-face bands only. See [finishes.md](../04-systems/finishes.md).
+151 core + 11 estimator tests.
+
+Next candidates: floor/ceiling finishes (finishes on slabs or room polygons —
+the net floor polygon is already computed), stairs (cross-level relations; the
+`{topLevelId}` variant of ILevelAware is waiting), gable roofs (ridge
+half-plane split over the shipped mono-pitch), wall-top trimming to the roof
+underside, crossing wall joins, the auto-dimension agent, cost-optimization
+agent (ENTITY.SETTYPE gave it its action primitive), editor-server
+(persistence/collab/agent host).

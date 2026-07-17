@@ -89,6 +89,28 @@ export function CommandLine() {
           );
           break;
         }
+        case 'FINISHAUTO': {
+          const levelId = ui.activeLevelId.get();
+          const tile = session.doc.materials.list().find((m) => m.costCode === 'wall-tile');
+          if (!tile) {
+            ui.appendLog('No tile material in the catalog.', 'error');
+            break;
+          }
+          const result = session.dispatch<{
+            removed: number;
+            created: number;
+            totalArea: number;
+          }>('FINISH.AUTO', {
+            materialId: tile.id,
+            topHeight: 1.2,
+            ...(levelId ? { levelId } : {}),
+          });
+          ui.appendLog(
+            `Finishes: ${result.created} faces, ${result.totalArea.toFixed(1)} m²` +
+              (result.removed > 0 ? ` (${result.removed} replaced).` : '.'),
+          );
+          break;
+        }
         case 'DIM':
           tools.useById('dimension');
           break;

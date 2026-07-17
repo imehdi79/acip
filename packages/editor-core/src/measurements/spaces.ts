@@ -24,6 +24,8 @@ export interface SpaceInfo {
   readonly netArea: number;
   readonly grossArea: number;
   readonly boundaryWallIds: readonly EntityId[];
+  /** which wall face looks INTO the room — what FINISH.AUTO tiles */
+  readonly boundaryFaces: readonly { readonly wallId: EntityId; readonly side: 'face+' | 'face-' }[];
   /** contours of detached wall islands inside the room (gross, centerline) */
   readonly holes: readonly (readonly Point[])[];
   /** a point inside the net boundary — where a label belongs */
@@ -163,9 +165,20 @@ export function detectSpaces(doc: DrawingDocument, levelId: LevelId | null): Spa
     const holeArea = face.holes.reduce((sum, hole) => sum + Math.abs(loopSignedArea(hole)), 0);
     const netArea = Math.max(0, Math.abs(loopSignedArea(net)) - holeArea);
     const wallIds: EntityId[] = [];
+    const boundaryFaces: { wallId: EntityId; side: 'face+' | 'face-' }[] = [];
     for (const edge of face.edges) {
       const id = edge.segmentId as EntityId;
-      if (!wallIds.includes(id)) wallIds.push(id);
+      if (wallIds.includes(id)) continue;
+      wallIds.push(id);
+      // edges run interior-on-the-left; the room-facing wall face is the one
+      // whose +normal (baseline direction) agrees with the edge direction
+      const wall = walls.get(id as string);
+      if (!wall) continue;
+      const bl = wall.getBaseline();
+      const wallDir = normalize(sub(bl.b, bl.a));
+      const edgeDir = normalize(sub(edge.b, edge.a));
+      const dot = wallDir.x * edgeDir.x + wallDir.y * edgeDir.y;
+      boundaryFaces.push({ wallId: id, side: dot >= 0 ? 'face+' : 'face-' });
     }
     const centroid = loopCentroid(face.loop);
     spaces.push({
@@ -176,6 +189,7 @@ export function detectSpaces(doc: DrawingDocument, levelId: LevelId | null): Spa
       netArea,
       grossArea: face.area,
       boundaryWallIds: wallIds,
+      boundaryFaces,
       holes: face.holes,
       labelPoint: interiorPoint(net, face.holes),
     });

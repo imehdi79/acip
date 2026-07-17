@@ -68,6 +68,14 @@ export function seedCatalog(session: EditorSession): TypeId | null {
         ],
       });
     }
+    if (!session.doc.materials.list().some((m) => m.costCode === 'wall-tile')) {
+      session.dispatch<MaterialId>('MATERIAL.ADD', {
+        name: 'Wall tile',
+        unit: 'count',
+        costCode: 'wall-tile',
+        coverage: 0.09, // 0.3 × 0.3 m tile
+      });
+    }
     if (session.doc.types.list('roof').length === 0) {
       const structure = session.dispatch<MaterialId>('MATERIAL.ADD', {
         name: 'Roof structure',

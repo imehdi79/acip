@@ -1,4 +1,4 @@
-import { RoofEntity, SlabEntity, WallEntity } from '@acip/editor-core';
+import { FinishEntity, RoofEntity, SlabEntity, WallEntity } from '@acip/editor-core';
 import type { DrawingDocument, EntityId, MaterialUnit, TypeId } from '@acip/editor-core';
 
 /**
@@ -109,6 +109,46 @@ export function computeRoofTakeoff(doc: DrawingDocument): RoofTakeoff[] {
       volume: planArea * thickness,
       perimeter: entity.getPerimeter(),
       layers: resolveLayers(doc, entity.typeRef),
+    });
+  }
+  return result;
+}
+
+export interface FinishTakeoff {
+  readonly entityId: EntityId;
+  /** finished band area minus overlapping openings */
+  readonly area: number;
+  /** covered length along the wall — reference for m materials */
+  readonly length: number;
+  readonly thickness: number;
+  /** the single applied material, resolved as a layer fact; null if unset/missing */
+  readonly layer: AssemblyLayerFact | null;
+}
+
+export function computeFinishTakeoff(doc: DrawingDocument): FinishTakeoff[] {
+  const result: FinishTakeoff[] = [];
+  for (const entity of doc.all()) {
+    if (!(entity instanceof FinishEntity)) continue;
+    let layer: AssemblyLayerFact | null = null;
+    if (entity.materialId) {
+      const material = doc.materials.get(entity.materialId);
+      if (material) {
+        const fact: AssemblyLayerFact = {
+          materialId: entity.materialId,
+          name: material.name,
+          unit: material.unit,
+          costCode: material.costCode ?? material.name,
+          thickness: entity.getThickness(),
+        };
+        layer = material.coverage !== undefined ? { ...fact, coverage: material.coverage } : fact;
+      }
+    }
+    result.push({
+      entityId: entity.id,
+      area: entity.getNetArea(),
+      length: entity.getCoveredLength(),
+      thickness: entity.getThickness(),
+      layer,
     });
   }
   return result;

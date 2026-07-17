@@ -1,7 +1,12 @@
 import type { DrawingDocument, LayerRefs } from '@acip/editor-core';
 import { layerQuantity } from '@acip/editor-core';
 import type { AssemblyLayerFact } from './takeoff.js';
-import { computeRoofTakeoff, computeSlabTakeoff, computeWallTakeoff } from './takeoff.js';
+import {
+  computeFinishTakeoff,
+  computeRoofTakeoff,
+  computeSlabTakeoff,
+  computeWallTakeoff,
+} from './takeoff.js';
 import type { MeasurementRule } from './rules.js';
 import type { RateTable } from './rates.js';
 
@@ -32,6 +37,7 @@ export interface BoqOptions {
 const GENERIC_WALL_CODE = 'wall-volume';
 const GENERIC_SLAB_CODE = 'slab-volume';
 const GENERIC_ROOF_CODE = 'roof-volume';
+const GENERIC_FINISH_CODE = 'finish-area';
 
 /**
  * Facts → policy → money, in one pass:
@@ -106,6 +112,26 @@ export function assembleBoq(doc: DrawingDocument, options: BoqOptions = {}): Boq
       GENERIC_ROOF_CODE,
       'Roof (no assembly)',
     );
+  }
+
+  for (const finish of computeFinishTakeoff(doc)) {
+    const refs: LayerRefs = {
+      volume: finish.area * finish.thickness,
+      area: finish.area,
+      length: finish.length,
+    };
+    if (finish.layer) {
+      const quantity = layerQuantity(
+        finish.layer.unit,
+        finish.thickness,
+        finish.thickness,
+        refs,
+        finish.layer.coverage,
+      );
+      accumulate(finish.layer.costCode, finish.layer.name, finish.layer.unit, quantity);
+    } else if (finish.area > 0) {
+      accumulate(GENERIC_FINISH_CODE, 'Finish (no material)', 'm2', finish.area);
+    }
   }
 
   const lines: BoqLine[] = [];

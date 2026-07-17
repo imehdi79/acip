@@ -62,6 +62,7 @@ export function describeDocument(
       slabVolume: quantities.totals.slabVolume,
       roofSlopeArea: quantities.totals.roofSlopeArea,
       roofVolume: quantities.totals.roofVolume,
+      finishArea: quantities.totals.finishArea,
       windowCount: quantities.totals.windowCount,
       doorCount: quantities.totals.doorCount,
     },

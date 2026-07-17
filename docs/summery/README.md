@@ -192,17 +192,27 @@ shipped with docs-first commits, tests, and a green build.
   the estimator so the Materials and Cost panels agree, and openings deduct
   from area and volume alike. `Material` grew one field, `coverage`; the
   panel gained a per-material unit selector.
+- **Surface finishes**: the instance-level half of materials-and-types — a
+  `FinishEntity` applies a material to a wall face, hosted on the face anchor
+  the way a window hosts on the axis, so it follows the wall and cascades with
+  it. The finished area is a band (`[t0,t1]` along, `[sill,top]` high) minus
+  the openings that overlap it, priced through the unit-aware machinery (tiles
+  by count, paint by area). Space detection now exposes each room's
+  boundary faces, so `FINISH.AUTO` tiles every room's walls in one dispatch
+  (shared walls finished both sides). In the app: dashed finish bands,
+  `FINISHAUTO` keyword, seeded "Wall tile" material + rate — the BOQ's fourth
+  trade. See [finishes.md](../editor-core/04-systems/finishes.md).
 
 ## Where it stands / what's next
 
-161 tests across three packages; all typechecks and builds green. The
+168 tests across three packages; all typechecks and builds green. The
 architecture has survived its three intended stress tests: a semantic model
 (joins/hosting), an acting external package (agent), and an observing external
 package (estimator) — none required core rework.
 
 Next candidates (see [roadmap](../editor-core/06-roadmap/deferred.md)):
-per-room finishes (finish entities on wall-face anchors — spaces now hands
-over the room-facing faces), stairs (cross-level relations), gable roofs
-(ridge split over the shipped mono-pitch), wall-top trimming, crossing wall
-joins, the auto-dimension agent, a cost-optimization agent (ENTITY.SETTYPE is
-its action primitive), editor-server, IFC import/export.
+floor/ceiling finishes (on slabs or room polygons — the net floor polygon is
+already computed), stairs (cross-level relations), gable roofs (ridge split
+over the shipped mono-pitch), wall-top trimming, crossing wall joins, the
+auto-dimension agent, a cost-optimization agent (ENTITY.SETTYPE is its action
+primitive), editor-server, IFC import/export.

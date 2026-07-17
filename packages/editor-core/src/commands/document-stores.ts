@@ -2,6 +2,7 @@ import type { EntityId, LayerId, LevelId, MaterialId, TypeId } from '../common/i
 import { newLayerId, newLevelId, newMaterialId, newTypeId } from '../common/id.js';
 import { ValidationError } from '../common/errors.js';
 import { isLevelAware } from '../entities/base/capabilities.js';
+import { FinishEntity } from '../entities/architecture/finish-entity.js';
 import type { Level } from '../document/levels/index.js';
 import type { Layer } from '../document/layer.js';
 import { DEFAULT_LAYER_ID } from '../document/layer.js';
@@ -486,11 +487,17 @@ export const RemoveMaterialCommand: Command<RemoveMaterialParams, void> = {
     () => S.object({ id: S.id('material id') }, ['id']),
   ),
   execute(ctx, params) {
-    const inUse = ctx.doc.types
+    const inTypes = ctx.doc.types
       .list()
       .some((def) => (def.layers ?? []).some((layer) => layer.materialId === params.id));
-    if (inUse) {
+    if (inTypes) {
       throw new ValidationError(`material ${params.id} is in use by type assembly layers`);
+    }
+    const inFinishes = ctx.doc
+      .all()
+      .some((e) => e instanceof FinishEntity && e.materialId === params.id);
+    if (inFinishes) {
+      throw new ValidationError(`material ${params.id} is in use by finishes`);
     }
     ctx.tx.storeRemove('materials', params.id);
   },
