@@ -107,6 +107,91 @@ describe('FinishEntity — a material on a wall face', () => {
   });
 });
 
+describe('FinishEntity — floor/ceiling finish on a slab', () => {
+  test('a floor finish covers the slab footprint; count material yields tiles', () => {
+    const session = new EditorSession();
+    const slabId = session.dispatch<EntityId>('SLAB.ADD', {
+      points: [point(0, 0), point(5, 0), point(5, 4), point(0, 4)],
+    });
+    const tile = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Floor tile',
+      unit: 'count',
+      costCode: 'floor-tile',
+      coverage: 0.09,
+    });
+    const id = session.dispatch<EntityId>('FLOORFINISH.ADD', { slabId, materialId: tile });
+    const finish = session.doc.get(id) as FinishEntity;
+    expect(finish.getSide()).toBe('top');
+    expect(finish.getNetArea()).toBeCloseTo(20, 9); // 5 × 4 footprint
+    const material = computeQuantities(session.doc).materials.find((m) => m.name === 'Floor tile')!;
+    expect(material.quantity).toBeCloseTo(20 / 0.09, 6);
+  });
+
+  test('ceiling variant + slab cascade; validates its target', () => {
+    const session = new EditorSession();
+    const slabId = session.dispatch<EntityId>('SLAB.ADD', {
+      points: [point(0, 0), point(4, 0), point(4, 4), point(0, 4)],
+    });
+    const paint = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Ceiling paint',
+      unit: 'm2',
+      costCode: 'ceiling-paint',
+    });
+    const id = session.dispatch<EntityId>('FLOORFINISH.ADD', {
+      slabId,
+      materialId: paint,
+      surface: 'bottom',
+    });
+    expect((session.doc.get(id) as FinishEntity).getSide()).toBe('bottom');
+    // a wall is not a valid floor-finish target
+    const wallId = addWall(session, 0, 0, 6, 0);
+    expect(() =>
+      session.dispatch('FLOORFINISH.ADD', { slabId: wallId, materialId: paint }),
+    ).toThrow();
+    // erasing the slab cascades its finish
+    session.dispatch('ENTITY.ERASE', { ids: [slabId] });
+    expect(session.doc.has(id)).toBe(false);
+  });
+});
+
+describe('FLOORFINISH.AUTO — floor every slab', () => {
+  test('one finish per slab; regenerates independently of wall finishes', () => {
+    const session = new EditorSession();
+    drawRoom(session);
+    addWall(session, 3, 0, 3, 4);
+    session.dispatch('SLAB.AUTO', {}); // one slab per room → 2 slabs
+    const floorTile = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Floor tile',
+      unit: 'count',
+      costCode: 'floor-tile',
+      coverage: 0.09,
+    });
+    const wallTile = tileMaterial(session);
+    session.dispatch('FINISH.AUTO', { materialId: wallTile, topHeight: 1.2 }); // 8 wall faces
+
+    const floors = session.dispatch<{ removed: number; created: number; totalArea: number }>(
+      'FLOORFINISH.AUTO',
+      { materialId: floorTile },
+    );
+    expect(floors.created).toBe(2); // one per slab
+    expect(floors.removed).toBe(0);
+    expect(floors.totalArea).toBeGreaterThan(0);
+
+    // re-running FLOORFINISH.AUTO replaces only floor finishes, not wall ones
+    const wallFinishesBefore = session.doc
+      .all()
+      .filter((e): e is FinishEntity => e instanceof FinishEntity && e.getSide() === 'face+').length;
+    const second = session.dispatch<{ removed: number; created: number }>('FLOORFINISH.AUTO', {
+      materialId: floorTile,
+    });
+    expect(second.removed).toBe(2);
+    const wallFinishesAfter = session.doc
+      .all()
+      .filter((e): e is FinishEntity => e instanceof FinishEntity && e.getSide() === 'face+').length;
+    expect(wallFinishesAfter).toBe(wallFinishesBefore);
+  });
+});
+
 describe('detectSpaces — room-facing boundary faces', () => {
   test('each boundary wall reports the side that looks into the room', () => {
     const session = new EditorSession();

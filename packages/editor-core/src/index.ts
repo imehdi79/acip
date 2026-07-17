@@ -251,6 +251,8 @@ export type {
   AutoRoofParams,
   AddFinishParams,
   AutoFinishParams,
+  AddFloorFinishParams,
+  AutoFloorFinishParams,
   AddDimensionParams,
   AutoDimensionParams,
 } from './commands/index.js';
@@ -294,6 +296,8 @@ export {
   registerRoofCommands,
   AddFinishCommand,
   AutoFinishCommand,
+  AddFloorFinishCommand,
+  AutoFloorFinishCommand,
   registerFinishCommands,
   AddDimensionCommand,
   AutoDimensionCommand,

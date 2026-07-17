@@ -111,6 +111,29 @@ export function CommandLine() {
           );
           break;
         }
+        case 'FLOORAUTO': {
+          const levelId = ui.activeLevelId.get();
+          const floorTile = session.doc.materials.list().find((m) => m.costCode === 'floor-tile');
+          if (!floorTile) {
+            ui.appendLog('No floor material in the catalog.', 'error');
+            break;
+          }
+          const result = session.dispatch<{
+            removed: number;
+            created: number;
+            totalArea: number;
+          }>('FLOORFINISH.AUTO', {
+            materialId: floorTile.id,
+            ...(levelId ? { levelId } : {}),
+          });
+          ui.appendLog(
+            result.created === 0
+              ? 'No slabs to finish — run SLABAUTO first.'
+              : `Floor finishes: ${result.created} slabs, ${result.totalArea.toFixed(1)} m²` +
+                  (result.removed > 0 ? ` (${result.removed} replaced).` : '.'),
+          );
+          break;
+        }
         case 'DIM':
           tools.useById('dimension');
           break;

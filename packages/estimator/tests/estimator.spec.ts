@@ -210,6 +210,25 @@ describe('finishes — priced by the material unit', () => {
     expect(line.quantity).toBeCloseTo(12 / 0.09, 6); // 10×1.2 band ÷ tile size
     expect(boq.total).toBeCloseTo((12 / 0.09) * 2, 4);
   });
+
+  test('a floor finish on a slab bills its footprint area (m²)', () => {
+    const session = new EditorSession();
+    const slabId = session.dispatch<EntityId>('SLAB.ADD', {
+      points: [point(0, 0), point(5, 0), point(5, 4), point(0, 4)],
+    });
+    const flooring = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Vinyl',
+      unit: 'm2',
+      costCode: 'vinyl',
+    });
+    session.dispatch('FLOORFINISH.ADD', { slabId, materialId: flooring });
+    const rates: RateTable = { currency: 'EUR', rates: { vinyl: { unit: 'm2', unitCost: 40 } } };
+    const boq = assembleBoq(session.doc, { rates });
+    const line = boq.lines.find((l) => l.costCode === 'vinyl')!;
+    expect(line.unit).toBe('m2');
+    expect(line.quantity).toBeCloseTo(20, 6); // 5 × 4 footprint
+    expect(boq.total).toBeCloseTo(20 * 40, 4);
+  });
 });
 
 describe('roofs — the third trade in the BOQ', () => {

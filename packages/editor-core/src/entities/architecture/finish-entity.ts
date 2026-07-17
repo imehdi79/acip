@@ -5,23 +5,29 @@ import { ValidationError } from '../../common/errors.js';
 import type { Point } from '../../geometry/primitives/point.js';
 import { lerp } from '../../geometry/primitives/point.js';
 import { distanceToSegment } from '../../geometry/curves/segment.js';
+import { distanceToPolyline } from '../../geometry/curves/polyline.js';
+import { pointInLoop } from '../../topology/arrangement.js';
 import type { Matrix3 } from '../../geometry/primitives/matrix3.js';
 import type { SegmentShape, Geometry } from '../../geometry/shapes.js';
 import type { Anchor, IHosted, Placement, PlacementParams } from '../base/capabilities.js';
 import { isHost } from '../base/capabilities.js';
 import { WallEntity } from './wall-entity.js';
+import { SlabEntity } from './slab-entity.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
 import type { Transaction } from '../../document/history/transaction.js';
 
 const DEFAULT_THICKNESS = 0.01;
 
 /**
- * A surface finish: a material applied to a region of one wall's face. Hosted
- * on the wall's face+ / face- anchor (the anchor index carries the side), it
- * follows the wall and cascades with it. The finished area is a band
- * [t0·L, t1·L] × [sill, top] minus the openings that overlap it — quantities
- * read getNetArea(), never the plan line. Priced through the same unit-aware
- * layerQuantity as an assembly layer. See docs/editor-core/04-systems/finishes.md.
+ * A surface finish: a material applied to a surface of one host. Two hosts:
+ *
+ * - a WALL FACE (`face+`/`face-` anchor) — a band `[t0·L, t1·L] × [sill, top]`
+ *   whose area subtracts overlapping openings.
+ * - a SLAB (`top` = floor finish, `bottom` = ceiling) — the whole footprint.
+ *
+ * Either way it follows its host and cascades with it, and prices through the
+ * same unit-aware layerQuantity as an assembly layer. Quantities read
+ * getNetArea(), never the plan line. See docs/editor-core/04-systems/finishes.md.
  */
 export class FinishEntity extends Entity implements IHosted {
   static readonly TYPE = 'finish';
@@ -29,64 +35,69 @@ export class FinishEntity extends Entity implements IHosted {
   readonly type: string = FinishEntity.TYPE;
 
   materialId: MaterialId | null = null;
-  /** bottom of the finished band above the wall base */
+  /** bottom of a wall-face band above the wall base (ignored for slabs) */
   sillHeight = 0;
-  /** top of the band; null = up to the wall height (resolved on read) */
+  /** top of a wall-face band; null = full wall height (ignored for slabs) */
   topHeight: number | null = null;
-  /** along-wall extent as baseline parameters (0..1) */
+  /** along-wall extent as baseline parameters (ignored for slabs) */
   t0 = 0;
   t1 = 1;
   /** nominal build-up thickness — only the m³ unit uses it */
   thickness = DEFAULT_THICKNESS;
-  /** created by FINISH.AUTO — replaced on the next regeneration */
+  /** created by an AUTO macro — replaced on the next regeneration */
   auto = false;
 
   get hostRef(): RelationId | null {
     return this.doc?.relations.relationOfHosted(this.id)?.id ?? null;
   }
 
-  private host(): WallEntity | null {
+  private host(): Entity | null {
     if (!this.doc) return null;
     const relation = this.doc.relations.relationOfHosted(this.id);
-    if (!relation) return null;
-    const host = this.doc.get(relation.hostId);
-    return host instanceof WallEntity ? host : null;
+    return relation ? this.doc.get(relation.hostId) : null;
+  }
+
+  private anchorIndex(): number {
+    return this.doc?.relations.relationOfHosted(this.id)?.anchorIndex ?? 0;
   }
 
   /** the wall face segment this finish sits on, from the relation's anchor */
   private faceAnchor(): SegmentShape | null {
-    if (!this.doc) return null;
-    const relation = this.doc.relations.relationOfHosted(this.id);
     const host = this.host();
-    if (!relation || !host || !isHost(host)) return null;
-    const anchor = host.getAnchors()[relation.anchorIndex];
+    if (!(host instanceof WallEntity) || !isHost(host)) return null;
+    const anchor = host.getAnchors()[this.anchorIndex()];
     return anchor && anchor.geometry.kind === 'segment' ? anchor.geometry : null;
   }
 
-  /** 'face+' | 'face-' | null — derived from the relation's anchor name */
+  /** 'face+' | 'face-' (wall) or 'top' | 'bottom' (slab); null if unresolved */
   getSide(): string | null {
-    if (!this.doc) return null;
-    const relation = this.doc.relations.relationOfHosted(this.id);
     const host = this.host();
-    if (!relation || !host || !isHost(host)) return null;
-    return host.getAnchors()[relation.anchorIndex]?.name ?? null;
+    if (host instanceof WallEntity && isHost(host)) {
+      return host.getAnchors()[this.anchorIndex()]?.name ?? null;
+    }
+    if (host instanceof SlabEntity) {
+      return this.anchorIndex() === 1 ? 'bottom' : 'top';
+    }
+    return null;
   }
 
   getThickness(): number {
     return this.thickness;
   }
 
-  /** covered length along the wall — the reference length for m materials */
+  /** reference length for m materials: wall band length, or slab perimeter */
   getCoveredLength(): number {
     const host = this.host();
-    if (!host) return 0;
-    return Math.max(0, (this.t1 - this.t0) * host.getLength());
+    if (host instanceof WallEntity) return Math.max(0, (this.t1 - this.t0) * host.getLength());
+    if (host instanceof SlabEntity) return host.getPerimeter();
+    return 0;
   }
 
-  /** finished band area minus overlapping openings (m²) */
+  /** finished area (m²): wall band minus openings, or the slab footprint */
   getNetArea(): number {
     const host = this.host();
-    if (!host) return 0;
+    if (host instanceof SlabEntity) return host.getArea();
+    if (!(host instanceof WallEntity)) return 0;
     const length = host.getLength();
     const along0 = this.t0 * length;
     const along1 = this.t1 * length;
@@ -105,8 +116,12 @@ export class FinishEntity extends Entity implements IHosted {
     return Math.max(0, area);
   }
 
-  /** plan symbol: the covered sub-segment of the wall face */
+  /** plan symbol: the covered face sub-segment (wall) or footprint outline (slab) */
   getBaseGeometry(): Geometry {
+    const host = this.host();
+    if (host instanceof SlabEntity) {
+      return { kind: 'polyline', points: [...host.getFootprint()], closed: true };
+    }
     const face = this.faceAnchor();
     if (!face) return { kind: 'group', children: [] };
     return {
@@ -117,12 +132,19 @@ export class FinishEntity extends Entity implements IHosted {
   }
 
   evalPlacement(anchor: Anchor, _params: PlacementParams): Placement {
-    const seg = anchor.geometry as SegmentShape;
-    return { position: lerp(seg.a, seg.b, (this.t0 + this.t1) / 2), rotation: 0 };
+    if (anchor.geometry.kind === 'segment') {
+      const seg = anchor.geometry;
+      return { position: lerp(seg.a, seg.b, (this.t0 + this.t1) / 2), rotation: 0 };
+    }
+    return { position: { x: 0, y: 0 }, rotation: 0 };
   }
 
   getSnapPoints(filter?: readonly SnapKind[]): SnapPoint[] {
     if (filter && !filter.includes('endpoint')) return [];
+    const host = this.host();
+    if (host instanceof SlabEntity) {
+      return host.getFootprint().map((point) => ({ kind: 'endpoint', point, entityId: this.id }));
+    }
     const face = this.faceAnchor();
     if (!face) return [];
     return [
@@ -132,6 +154,11 @@ export class FinishEntity extends Entity implements IHosted {
   }
 
   hitTest(pt: Point, tolerance: number): boolean {
+    const host = this.host();
+    if (host instanceof SlabEntity) {
+      const footprint = host.getFootprint();
+      return pointInLoop(pt, footprint) || distanceToPolyline(pt, footprint, true) <= tolerance;
+    }
     const face = this.faceAnchor();
     if (!face) return false;
     return (
@@ -140,7 +167,7 @@ export class FinishEntity extends Entity implements IHosted {
     );
   }
 
-  /** a finish is bound to its wall face — a move is a no-op */
+  /** a finish is bound to its host — a move is a no-op */
   transform(_m: Matrix3, _tx: Transaction): void {}
 
   clone(): FinishEntity {

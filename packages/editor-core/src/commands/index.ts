@@ -28,8 +28,19 @@ export type { AddSlabParams, AutoSlabParams } from './slabs.js';
 export { AddSlabCommand, AutoSlabCommand, registerSlabCommands } from './slabs.js';
 export type { AddRoofParams, AutoRoofParams } from './roofs.js';
 export { AddRoofCommand, AutoRoofCommand, registerRoofCommands } from './roofs.js';
-export type { AddFinishParams, AutoFinishParams } from './finishes.js';
-export { AddFinishCommand, AutoFinishCommand, registerFinishCommands } from './finishes.js';
+export type {
+  AddFinishParams,
+  AutoFinishParams,
+  AddFloorFinishParams,
+  AutoFloorFinishParams,
+} from './finishes.js';
+export {
+  AddFinishCommand,
+  AutoFinishCommand,
+  AddFloorFinishCommand,
+  AutoFloorFinishCommand,
+  registerFinishCommands,
+} from './finishes.js';
 export type { AddDimensionParams, AutoDimensionParams } from './dimensions.js';
 export {
   AddDimensionCommand,

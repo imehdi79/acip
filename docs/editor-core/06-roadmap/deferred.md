@@ -261,14 +261,23 @@ every room's walls in one dispatch (shared walls finished both sides,
 regenerates). `MATERIAL.REMOVE` guards finishes too; quantities/digest gained
 `finishArea`; the estimator its fourth trade (`computeFinishTakeoff`, generic
 `finish-area` fallback). web-editor: dashed finish bands along the wall face,
-`FINISHAUTO` keyword, seeded "Wall tile" (count) + rate. V1 is rectangular
-wall-face bands only. See [finishes.md](../04-systems/finishes.md).
-151 core + 11 estimator tests.
+`FINISHAUTO` keyword, seeded "Wall tile" (count) + rate. See
+[finishes.md](../04-systems/finishes.md).
 
-Next candidates: floor/ceiling finishes (finishes on slabs or room polygons —
-the net floor polygon is already computed), stairs (cross-level relations; the
-`{topLevelId}` variant of ILevelAware is waiting), gable roofs (ridge
-half-plane split over the shipped mono-pitch), wall-top trimming to the roof
-underside, crossing wall joins, the auto-dimension agent, cost-optimization
-agent (ENTITY.SETTYPE gave it its action primitive), editor-server
-(persistence/collab/agent host).
+**Floor/ceiling finishes landed 2026-07-18.** `FinishEntity` generalized to
+host on a slab (footprint) as well as a wall (band) — one entity, branches on
+host type, so the estimator/quantities pricing paths needed zero changes. Slab
+finish covers the whole footprint (`top` = floor, `bottom` = ceiling); the
+slab need not be an `IHost` (the finish reads it directly, the relation graph
+is host-agnostic) and it cascades on slab erase. `FLOORFINISH.ADD {slabId,
+materialId, surface?}` + `FLOORFINISH.AUTO` (one finish per slab on the level;
+each AUTO regenerates only its own host kind so wall and floor macros never
+collide). web-editor: `FLOORAUTO` keyword, seeded "Floor tile" (m²) + rate.
+154 core + 12 estimator tests.
+
+Next candidates: finishes on bare room polygons (no slab required), stairs
+(cross-level relations; the `{topLevelId}` variant of ILevelAware is waiting),
+gable roofs (ridge half-plane split over the shipped mono-pitch), wall-top
+trimming to the roof underside, crossing wall joins, the auto-dimension agent,
+cost-optimization agent (ENTITY.SETTYPE gave it its action primitive),
+editor-server (persistence/collab/agent host).

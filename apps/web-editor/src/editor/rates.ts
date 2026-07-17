@@ -15,6 +15,7 @@ export const DEMO_RATES: RateTable = {
     roofing: { unit: 'm3', unitCost: 260 },
     'roof-volume': { unit: 'm3', unitCost: 160 },
     'wall-tile': { unit: 'count', unitCost: 2.4 },
+    'floor-tile': { unit: 'm2', unitCost: 32 },
     'finish-area': { unit: 'm2', unitCost: 25 },
   },
 };

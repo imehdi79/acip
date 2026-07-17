@@ -1,6 +1,7 @@
 import type { EntityId, LevelId, MaterialId } from '../common/id.js';
 import { ValidationError } from '../common/errors.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
+import { SlabEntity } from '../entities/architecture/slab-entity.js';
 import { FinishEntity } from '../entities/architecture/finish-entity.js';
 import { detectSpaces } from '../measurements/spaces.js';
 import type { Command } from './command.js';
@@ -178,7 +179,153 @@ export const AutoFinishCommand: Command<
   },
 };
 
+type SlabSurface = 'top' | 'bottom';
+
+/** top (floor finish) → anchor 0, bottom (ceiling) → anchor 1 */
+function anchorIndexForSurface(surface: SlabSurface): number {
+  return surface === 'bottom' ? 1 : 0;
+}
+
+function asSurface(value: unknown): SlabSurface {
+  if (value === undefined || value === 'top') return 'top';
+  if (value === 'bottom') return 'bottom';
+  throw new ValidationError("surface must be 'top' or 'bottom'");
+}
+
+export interface AddFloorFinishParams {
+  slabId: EntityId;
+  materialId: MaterialId;
+  surface?: SlabSurface;
+  thickness?: number;
+}
+
+export const AddFloorFinishCommand: Command<AddFloorFinishParams, EntityId> = {
+  name: 'FLOORFINISH.ADD',
+  description:
+    'Apply a floor (top) or ceiling (bottom) finish to a slab, covering its whole ' +
+    'footprint. The finish follows the slab and is priced by the material unit. ' +
+    'Returns the new entity id.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: AddFloorFinishParams = {
+        slabId: asId(raw['slabId'], 'slabId'),
+        materialId: asId(raw['materialId'], 'materialId') as string as MaterialId,
+        surface: asSurface(raw['surface']),
+      };
+      if (raw['thickness'] !== undefined) params.thickness = asNumber(raw['thickness'], 'thickness');
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          slabId: S.id('id of the host slab'),
+          materialId: S.id('material to apply (its unit drives pricing)'),
+          surface: S.enum(['top', 'bottom'], 'top = floor finish, bottom = ceiling (default top)'),
+          thickness: S.number('finish build-up thickness in meters (default 0.01; only m³ uses it)'),
+        },
+        ['slabId', 'materialId'],
+      ),
+  ),
+  execute(ctx, params) {
+    const slab = ctx.doc.get(params.slabId);
+    if (!(slab instanceof SlabEntity)) {
+      throw new ValidationError(`slabId ${params.slabId} does not reference a slab`);
+    }
+    if (!ctx.doc.materials.has(params.materialId)) {
+      throw new ValidationError(`material ${params.materialId} does not exist`);
+    }
+    const finish = new FinishEntity();
+    finish.materialId = params.materialId;
+    if (params.thickness !== undefined) finish.thickness = params.thickness;
+    ctx.tx.create(finish);
+    ctx.tx.attach(slab.id, finish.id, anchorIndexForSurface(params.surface ?? 'top'), {});
+    return finish.id;
+  },
+};
+
+export interface AutoFloorFinishParams {
+  materialId: MaterialId;
+  levelId?: LevelId;
+  surface?: SlabSurface;
+}
+
+/**
+ * Floor-finish every slab on a level with one dispatch (run SLAB.AUTO first
+ * to get a slab per room). Regenerates like the other AUTO macros: auto slab
+ * finishes on the level are replaced; hand-placed and wall finishes untouched.
+ */
+export const AutoFloorFinishCommand: Command<
+  AutoFloorFinishParams,
+  { removed: number; created: number; totalArea: number }
+> = {
+  name: 'FLOORFINISH.AUTO',
+  description:
+    'Apply a floor (or ceiling) finish to every slab on a level, covering each footprint. ' +
+    'Re-running replaces previously auto-created floor finishes. Returns {removed, created, totalArea}.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: AutoFloorFinishParams = {
+        materialId: asId(raw['materialId'], 'materialId') as string as MaterialId,
+        surface: asSurface(raw['surface']),
+      };
+      if (raw['levelId'] !== undefined) {
+        params.levelId = asId(raw['levelId'], 'levelId') as string as LevelId;
+      }
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          materialId: S.id('material to apply to every slab'),
+          levelId: S.id('level to finish (omit for level-unassigned geometry)'),
+          surface: S.enum(['top', 'bottom'], 'top = floor, bottom = ceiling (default top)'),
+        },
+        ['materialId'],
+      ),
+  ),
+  execute(ctx, params) {
+    if (!ctx.doc.materials.has(params.materialId)) {
+      throw new ValidationError(`material ${params.materialId} does not exist`);
+    }
+    const levelId = params.levelId ?? null;
+    const anchorIdx = anchorIndexForSurface(params.surface ?? 'top');
+    const onLevel = (slab: SlabEntity): boolean =>
+      levelId === null || slab.baseLevelId === null || slab.baseLevelId === levelId;
+
+    // remove prior auto finishes whose host slab is on this level (and matches
+    // the surface), leaving wall finishes and the other surface untouched
+    let removed = 0;
+    for (const entity of ctx.doc.all()) {
+      if (!(entity instanceof FinishEntity) || !entity.auto) continue;
+      const relation = ctx.doc.relations.relationOfHosted(entity.id);
+      const host = relation ? ctx.doc.get(relation.hostId) : null;
+      if (host instanceof SlabEntity && onLevel(host) && relation!.anchorIndex === anchorIdx) {
+        ctx.tx.remove(entity);
+        removed += 1;
+      }
+    }
+
+    let created = 0;
+    let totalArea = 0;
+    for (const slab of ctx.doc.all()) {
+      if (!(slab instanceof SlabEntity) || !onLevel(slab)) continue;
+      const finish = new FinishEntity();
+      finish.materialId = params.materialId;
+      finish.auto = true;
+      ctx.tx.create(finish);
+      ctx.tx.attach(slab.id, finish.id, anchorIdx, {});
+      created += 1;
+      totalArea += finish.getNetArea();
+    }
+    return { removed, created, totalArea };
+  },
+};
+
 export function registerFinishCommands(registry: CommandRegistry): void {
   registry.register(AddFinishCommand);
   registry.register(AutoFinishCommand);
+  registry.register(AddFloorFinishCommand);
+  registry.register(AutoFloorFinishCommand);
 }

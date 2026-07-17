@@ -202,17 +202,24 @@ shipped with docs-first commits, tests, and a green build.
   (shared walls finished both sides). In the app: dashed finish bands,
   `FINISHAUTO` keyword, seeded "Wall tile" material + rate — the BOQ's fourth
   trade. See [finishes.md](../editor-core/04-systems/finishes.md).
+- **Floor/ceiling finishes**: the same `FinishEntity` generalized to host on a
+  slab (its footprint: `top` = floor, `bottom` = ceiling) as well as a wall —
+  one entity, so the pricing paths were untouched. It follows and cascades
+  with the slab. `FLOORFINISH.AUTO` floors every slab on the level (run
+  `SLABAUTO` first for a slab per room); each AUTO regenerates only its own
+  host kind, so wall and floor macros don't collide. In the app: `FLOORAUTO`
+  keyword, seeded "Floor tile" (m²) + rate.
 
 ## Where it stands / what's next
 
-168 tests across three packages; all typechecks and builds green. The
+172 tests across three packages; all typechecks and builds green. The
 architecture has survived its three intended stress tests: a semantic model
 (joins/hosting), an acting external package (agent), and an observing external
 package (estimator) — none required core rework.
 
 Next candidates (see [roadmap](../editor-core/06-roadmap/deferred.md)):
-floor/ceiling finishes (on slabs or room polygons — the net floor polygon is
-already computed), stairs (cross-level relations), gable roofs (ridge split
-over the shipped mono-pitch), wall-top trimming, crossing wall joins, the
-auto-dimension agent, a cost-optimization agent (ENTITY.SETTYPE is its action
-primitive), editor-server, IFC import/export.
+finishes on bare room polygons (no slab required), stairs (cross-level
+relations), gable roofs (ridge split over the shipped mono-pitch), wall-top
+trimming, crossing wall joins, the auto-dimension agent, a cost-optimization
+agent (ENTITY.SETTYPE is its action primitive), editor-server, IFC
+import/export.
