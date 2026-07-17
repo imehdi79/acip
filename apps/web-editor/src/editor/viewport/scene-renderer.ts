@@ -4,6 +4,7 @@ import type {
   Geometry,
   RegionShape,
   SpaceInfo,
+  TextShape,
   ViewDefinition,
 } from '@acip/editor-core';
 import { buildDisplayList, detectSpaces, hasGrips } from '@acip/editor-core';
@@ -39,6 +40,11 @@ function collectRegions(g: Geometry, out: RegionShape[]): void {
   else if (g.kind === 'group') for (const child of g.children) collectRegions(child, out);
 }
 
+function collectTexts(g: Geometry, out: TextShape[]): void {
+  if (g.kind === 'text') out.push(g);
+  else if (g.kind === 'group') for (const child of g.children) collectTexts(child, out);
+}
+
 function pathGeometry(ctx: CanvasRenderingContext2D, g: Geometry): void {
   switch (g.kind) {
     case 'segment':
@@ -66,6 +72,8 @@ function pathGeometry(ctx: CanvasRenderingContext2D, g: Geometry): void {
       }
       break;
     }
+    case 'text':
+      break; // not a path — drawn screen-space after the display list
     case 'group':
       for (const child of g.children) pathGeometry(ctx, child);
       break;
@@ -160,6 +168,7 @@ export function drawScene(
     ctx.fill('evenodd');
   }
 
+  const texts: { shape: TextShape; color: string }[] = [];
   for (const item of buildDisplayList(doc, view)) {
     const isSelected = selection.has(item.entityId);
     // solid regions (wall spans) get a light fill under the stroke
@@ -171,16 +180,37 @@ export function drawScene(
       for (const region of regions) pathGeometry(ctx, region);
       ctx.fill('evenodd');
     }
-    ctx.strokeStyle = isSelected ? COLORS.selected : (item.style.stroke ?? '#e0e0e0');
+    const color = isSelected ? COLORS.selected : (item.style.stroke ?? '#e0e0e0');
+    ctx.strokeStyle = color;
     // divide by scale so line weights stay zoom-independent
     ctx.lineWidth = ((item.style.width ?? 1) * (isSelected ? 2.5 : 1.5)) / viewport.scale;
     ctx.beginPath();
     pathGeometry(ctx, item.geometry);
     ctx.stroke();
+    const found: TextShape[] = [];
+    collectTexts(item.geometry, found);
+    for (const shape of found) texts.push({ shape, color });
+  }
+
+  // text shapes (dimension values) — screen space so glyphs are never
+  // Y-mirrored; world-fixed height, hidden when unreadably small
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  for (const { shape, color } of texts) {
+    const px = shape.height * viewport.scale;
+    if (px < 4) continue;
+    const at = viewport.toScreen(shape.anchor);
+    ctx.save();
+    ctx.translate(at.x, at.y);
+    ctx.rotate(-shape.rotation); // screen y points down
+    ctx.fillStyle = color;
+    ctx.font = `${px}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(shape.text, 0, 0);
+    ctx.restore();
   }
 
   // grips for selected entities — fixed pixel size, drawn in screen space
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   for (const id of selection) {
     const entity = doc.get(id as EntityId);
     if (!entity || !hasGrips(entity)) continue;

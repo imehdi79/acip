@@ -143,17 +143,26 @@ shipped with docs-first commits, tests, and a green build.
   Plan views fill rooms and label net areas live; `describeDocument()` gains
   a `spaces` section so agents address rooms ("the 14 m² room on L1") for a
   few tokens each. See [spaces.md](../editor-core/04-systems/spaces.md).
+- **Dimensions**: first annotation entity, with the two-sided wall rule —
+  bind to `axis`/`face+`/`face-`, so one side of a wall measures inner clear
+  widths and the other outer overall extents. References are stored, values
+  always derived: move a wall or change its assembly thickness and the
+  dimension re-measures. `DIM.AUTO` regenerates a level's dimensions from
+  detected spaces (inner) and wall bounds (outer) in one undoable
+  transaction, returning `{removed, created}` — one intent-level agent call.
+  `TextShape` joins the Geometry union (text is geometry; drawing it is the
+  renderer's job). See [dimensions.md](../editor-core/04-systems/dimensions.md).
 
 ## Where it stands / what's next
 
-119 tests across three packages; all typechecks and builds green. The
+127 tests across three packages; all typechecks and builds green. The
 architecture has survived its three intended stress tests: a semantic model
 (joins/hosting), an acting external package (agent), and an observing external
 package (estimator) — none required core rework.
 
 Next candidates (see [roadmap](../editor-core/06-roadmap/deferred.md)):
 slabs/floor entities (multi-trade BOQ; can now be generated per detected
-space), dimensions/annotations (unlocks the auto-dimension agent; binds to
-wall `face+`/`face-`), crossing wall joins, a cost-optimization agent over the
+space), crossing wall joins, the auto-dimension agent (judgment on top of
+DIM.AUTO's deterministic core), a cost-optimization agent over the
 estimator's objective function, editor-server (persistence, collaboration,
 agent host), IFC import/export.

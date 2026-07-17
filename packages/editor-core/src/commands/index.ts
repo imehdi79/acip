@@ -24,6 +24,12 @@ export {
   AddDoorCommand,
   registerArchitectureCommands,
 } from './architecture.js';
+export type { AddDimensionParams, AutoDimensionParams } from './dimensions.js';
+export {
+  AddDimensionCommand,
+  AutoDimensionCommand,
+  registerDimensionCommands,
+} from './dimensions.js';
 export type {
   AddLevelParams,
   UpdateLevelParams,

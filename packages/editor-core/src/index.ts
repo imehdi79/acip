@@ -50,6 +50,7 @@ export type {
   ArcShape,
   RegionShape,
   GroupShape,
+  TextShape,
   IntersectFn,
   Mesh3D,
   MeshDetail,
@@ -135,6 +136,10 @@ export type {
   OpeningSpec,
   GripPoint,
   IGrippable,
+  DimDef,
+  DimPointsDef,
+  DimWallsDef,
+  DimWallSide,
 } from './entities/index.js';
 export {
   Entity,
@@ -159,6 +164,8 @@ export {
   createWindowEntity,
   DoorEntity,
   createDoorEntity,
+  DimensionEntity,
+  createDimensionEntity,
 } from './entities/index.js';
 
 // ── document (Layer 2) ──
@@ -222,6 +229,8 @@ export type {
   RemoveLayerParams,
   AddMaterialParams,
   AddTypeParams,
+  AddDimensionParams,
+  AutoDimensionParams,
 } from './commands/index.js';
 export {
   paramsSchema,
@@ -250,6 +259,9 @@ export {
   AddMaterialCommand,
   AddTypeCommand,
   registerDocumentStoreCommands,
+  AddDimensionCommand,
+  AutoDimensionCommand,
+  registerDimensionCommands,
   asPoint,
   asIdArray,
   asId,

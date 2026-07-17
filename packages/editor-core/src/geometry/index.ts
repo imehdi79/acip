@@ -8,6 +8,7 @@ export type {
   ArcShape,
   RegionShape,
   GroupShape,
+  TextShape,
 } from './shapes.js';
 export { geometryBBox } from './shapes.js';
 export type { IntersectFn } from './intersect/index.js';

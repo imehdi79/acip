@@ -166,10 +166,22 @@ boundary + areas, boundary wall ids, and an interior label point.
 web-editor plan views fill rooms and label net areas live per commit.
 See [spaces.md](../04-systems/spaces.md). 107 core tests.
 
+**Dimensions landed 2026-07-17.** First annotation entity, with the
+two-sided wall rule: a dimension binds to `axis`/`face+`/`face-` of walls
+(spaces.md side convention), so inner chains measure clear widths and outer
+chains measure overall extents. The entity stores references, never the
+value — a face-bound dimension re-measures when a wall moves or its assembly
+thickness changes; erased walls leave it stale (empty render), not broken.
+DIM.ADD (points or walls mode) + DIM.AUTO (regenerates: inner clear widths
+per detected space from net boundaries, outer extents from wall bounds;
+returns `{removed, created}`). The `Geometry` union gained `TextShape`
+(anchor/text/height/rotation — core never measures fonts); web-editor draws
+text screen-space, Y-flip safe. See
+[dimensions.md](../04-systems/dimensions.md). 115 core tests.
+
 Next candidates: slabs/floor entities (feeds 3D + BOQ richness; can now be
-generated per detected space — SLAB.FROM_SPACES), dimensions/annotations
-(unlocks the auto-dimension agent; binds to `face+`/`face-` per
-[spaces.md](../04-systems/spaces.md)), crossing wall joins (plan cleanup —
-the arrangement already detects X crossings), cost-optimization agent over
-the estimator's objective function, editor-server (persistence/collab/agent
-host).
+generated per detected space — SLAB.FROM_SPACES), crossing wall joins (plan
+cleanup — the arrangement already detects X crossings), the auto-dimension
+agent (DIM.AUTO gave it a deterministic core; an agent adds judgment about
+what to dimension), cost-optimization agent over the estimator's objective
+function, editor-server (persistence/collab/agent host).
