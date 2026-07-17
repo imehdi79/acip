@@ -107,17 +107,22 @@ export function triangulateLoop(points: readonly Point[]): number[] {
 }
 
 /**
- * Extrude a simple polygon footprint from z0 to z1: triangulated caps plus
- * one side quad per edge. The `extrudeQuad` generalization footprint
- * entities (slabs) use — walls keep the cheaper quad path.
+ * Loft a simple polygon between two rings of per-vertex heights:
+ * triangulated caps plus one side quad per edge. Sloped bodies (roofs,
+ * later ramps) use varying rings; `extrudePolygon` is the constant case.
  */
-export function extrudePolygon(points: readonly Point[], z0: number, z1: number): Mesh3D {
+export function loftPolygon(
+  points: readonly Point[],
+  zBottom: readonly number[],
+  zTop: readonly number[],
+): Mesh3D {
+  const n = points.length;
+  if (zBottom.length !== n || zTop.length !== n) return EMPTY_MESH;
   const caps = triangulateLoop(points);
   if (caps.length === 0) return EMPTY_MESH;
-  const n = points.length;
   const positions: number[] = [];
-  for (const p of points) positions.push(p.x, p.y, z0);
-  for (const p of points) positions.push(p.x, p.y, z1);
+  for (let i = 0; i < n; i++) positions.push(points[i].x, points[i].y, zBottom[i]);
+  for (let i = 0; i < n; i++) positions.push(points[i].x, points[i].y, zTop[i]);
   const indices: number[] = [];
   // bottom cap faces down (reversed), top cap faces up
   for (let i = 0; i < caps.length; i += 3) {
@@ -129,4 +134,17 @@ export function extrudePolygon(points: readonly Point[], z0: number, z1: number)
     indices.push(i, j, j + n, i, j + n, i + n);
   }
   return { positions, indices };
+}
+
+/**
+ * Extrude a simple polygon footprint from z0 to z1. The `extrudeQuad`
+ * generalization footprint entities (slabs) use — walls keep the cheaper
+ * quad path.
+ */
+export function extrudePolygon(points: readonly Point[], z0: number, z1: number): Mesh3D {
+  return loftPolygon(
+    points,
+    points.map(() => z0),
+    points.map(() => z1),
+  );
 }

@@ -98,6 +98,7 @@ export {
   EMPTY_MESH,
   extrudeQuad,
   extrudePolygon,
+  loftPolygon,
   triangulateLoop,
   mergeMeshes,
 } from './geometry/index.js';
@@ -110,6 +111,7 @@ export type {
   ArrangementSegment,
   FaceEdge,
   ArrangementFace,
+  ArrangementResult,
 } from './topology/index.js';
 export {
   mergeIntervals,
@@ -117,6 +119,7 @@ export {
   resolveJunction,
   resolveTeeCap,
   arrangeSegments,
+  arrangePlan,
   loopSignedArea,
   pointInLoop,
   JOIN_TOLERANCE,
@@ -168,6 +171,8 @@ export {
   createDoorEntity,
   SlabEntity,
   createSlabEntity,
+  RoofEntity,
+  createRoofEntity,
   DimensionEntity,
   createDimensionEntity,
 } from './entities/index.js';
@@ -235,6 +240,8 @@ export type {
   AddTypeParams,
   AddSlabParams,
   AutoSlabParams,
+  AddRoofParams,
+  AutoRoofParams,
   AddDimensionParams,
   AutoDimensionParams,
 } from './commands/index.js';
@@ -268,6 +275,9 @@ export {
   AddSlabCommand,
   AutoSlabCommand,
   registerSlabCommands,
+  AddRoofCommand,
+  AutoRoofCommand,
+  registerRoofCommands,
   AddDimensionCommand,
   AutoDimensionCommand,
   registerDimensionCommands,
@@ -291,11 +301,18 @@ export { MeasurementService, geometryLength, geometryArea } from './measurements
 export type {
   WallQuantity,
   SlabQuantity,
+  RoofQuantity,
   MaterialQuantity,
   QuantityReport,
   SpaceInfo,
+  OutlineInfo,
 } from './measurements/index.js';
-export { computeQuantities, detectSpaces } from './measurements/index.js';
+export {
+  computeQuantities,
+  detectSpaces,
+  detectOutlines,
+  offsetBoundary,
+} from './measurements/index.js';
 export type { ViewDefinition } from './views/index.js';
 export { entitiesInView, isEntityVisible, isEntityInteractive } from './views/index.js';
 export type { DisplayStyle, RenderItem, Renderer } from './rendering/index.js';

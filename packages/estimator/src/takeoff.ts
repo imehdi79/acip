@@ -1,4 +1,4 @@
-import { SlabEntity, WallEntity } from '@acip/editor-core';
+import { RoofEntity, SlabEntity, WallEntity } from '@acip/editor-core';
 import type { DrawingDocument, EntityId, MaterialUnit, TypeId } from '@acip/editor-core';
 
 /**
@@ -70,6 +70,35 @@ export function computeSlabTakeoff(doc: DrawingDocument): SlabTakeoff[] {
       area,
       thickness,
       volume: area * thickness,
+      layers: resolveLayers(doc, entity.typeRef),
+    });
+  }
+  return result;
+}
+
+export interface RoofTakeoff {
+  readonly entityId: EntityId;
+  readonly planArea: number;
+  /** sloped surface area — what roofing trades price */
+  readonly slopeArea: number;
+  readonly thickness: number;
+  readonly volume: number;
+  /** resolved assembly; empty when the roof has no type */
+  readonly layers: readonly AssemblyLayerFact[];
+}
+
+export function computeRoofTakeoff(doc: DrawingDocument): RoofTakeoff[] {
+  const result: RoofTakeoff[] = [];
+  for (const entity of doc.all()) {
+    if (!(entity instanceof RoofEntity)) continue;
+    const planArea = entity.getPlanArea();
+    const thickness = entity.getThickness();
+    result.push({
+      entityId: entity.id,
+      planArea,
+      slopeArea: entity.getSlopeArea(),
+      thickness,
+      volume: planArea * thickness,
       layers: resolveLayers(doc, entity.typeRef),
     });
   }

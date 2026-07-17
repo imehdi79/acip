@@ -26,6 +26,8 @@ export {
 } from './architecture.js';
 export type { AddSlabParams, AutoSlabParams } from './slabs.js';
 export { AddSlabCommand, AutoSlabCommand, registerSlabCommands } from './slabs.js';
+export type { AddRoofParams, AutoRoofParams } from './roofs.js';
+export { AddRoofCommand, AutoRoofCommand, registerRoofCommands } from './roofs.js';
 export type { AddDimensionParams, AutoDimensionParams } from './dimensions.js';
 export {
   AddDimensionCommand,

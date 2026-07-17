@@ -3,6 +3,7 @@ import type { DrawingDocument } from '../document/document.js';
 import type { MaterialUnit } from '../document/materials/index.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
 import { SlabEntity } from '../entities/architecture/slab-entity.js';
+import { RoofEntity } from '../entities/architecture/roof-entity.js';
 import { WindowEntity } from '../entities/architecture/window-entity.js';
 import { DoorEntity } from '../entities/architecture/door-entity.js';
 
@@ -30,6 +31,15 @@ export interface SlabQuantity {
   readonly volume: number;
 }
 
+export interface RoofQuantity {
+  readonly entityId: EntityId;
+  readonly planArea: number;
+  /** sloped surface area — what roofing trades price */
+  readonly slopeArea: number;
+  /** plan area × vertical thickness */
+  readonly volume: number;
+}
+
 export interface MaterialQuantity {
   readonly materialId: MaterialId;
   readonly name: string;
@@ -40,12 +50,15 @@ export interface MaterialQuantity {
 export interface QuantityReport {
   readonly walls: readonly WallQuantity[];
   readonly slabs: readonly SlabQuantity[];
+  readonly roofs: readonly RoofQuantity[];
   readonly totals: {
     readonly wallLength: number;
     readonly wallNetFaceArea: number;
     readonly wallNetVolume: number;
     readonly slabArea: number;
     readonly slabVolume: number;
+    readonly roofSlopeArea: number;
+    readonly roofVolume: number;
     readonly windowCount: number;
     readonly doorCount: number;
   };
@@ -81,6 +94,7 @@ function wallQuantity(wall: WallEntity): WallQuantity {
 export function computeQuantities(doc: DrawingDocument): QuantityReport {
   const walls: WallQuantity[] = [];
   const slabs: SlabQuantity[] = [];
+  const roofs: RoofQuantity[] = [];
   const materialVolumes = new Map<MaterialId, number>();
   let windowCount = 0;
   let doorCount = 0;
@@ -109,6 +123,17 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
       splitAcrossLayers(entity.typeRef, q.volume);
       continue;
     }
+    if (entity instanceof RoofEntity) {
+      const q: RoofQuantity = {
+        entityId: entity.id,
+        planArea: entity.getPlanArea(),
+        slopeArea: entity.getSlopeArea(),
+        volume: entity.getPlanArea() * entity.getThickness(),
+      };
+      roofs.push(q);
+      splitAcrossLayers(entity.typeRef, q.volume);
+      continue;
+    }
     if (!(entity instanceof WallEntity)) continue;
 
     const q = wallQuantity(entity);
@@ -131,12 +156,15 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
   return {
     walls,
     slabs,
+    roofs,
     totals: {
       wallLength: walls.reduce((s, w) => s + w.length, 0),
       wallNetFaceArea: walls.reduce((s, w) => s + w.netFaceArea, 0),
       wallNetVolume: walls.reduce((s, w) => s + w.netVolume, 0),
       slabArea: slabs.reduce((s, q) => s + q.area, 0),
       slabVolume: slabs.reduce((s, q) => s + q.volume, 0),
+      roofSlopeArea: roofs.reduce((s, q) => s + q.slopeArea, 0),
+      roofVolume: roofs.reduce((s, q) => s + q.volume, 0),
       windowCount,
       doorCount,
     },

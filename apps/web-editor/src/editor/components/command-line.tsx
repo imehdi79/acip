@@ -72,6 +72,23 @@ export function CommandLine() {
           );
           break;
         }
+        case 'ROOFAUTO': {
+          const levelId = ui.activeLevelId.get();
+          const roofTypes = session.doc.types.list('roof');
+          const result = session.dispatch<{
+            removed: number;
+            created: number;
+            planArea: number;
+          }>('ROOF.AUTO', {
+            ...(levelId ? { levelId } : {}),
+            ...(roofTypes.length > 0 ? { typeId: roofTypes[0].id } : {}),
+          });
+          ui.appendLog(
+            `Roofs: ${result.created} placed, ${result.planArea.toFixed(1)} m² plan` +
+              (result.removed > 0 ? ` (${result.removed} replaced).` : '.'),
+          );
+          break;
+        }
         case 'DIM':
           tools.useById('dimension');
           break;

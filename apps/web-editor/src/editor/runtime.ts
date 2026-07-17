@@ -68,6 +68,26 @@ export function seedCatalog(session: EditorSession): TypeId | null {
         ],
       });
     }
+    if (session.doc.types.list('roof').length === 0) {
+      const structure = session.dispatch<MaterialId>('MATERIAL.ADD', {
+        name: 'Roof structure',
+        unit: 'm3',
+        costCode: 'roof-structure',
+      });
+      const roofing = session.dispatch<MaterialId>('MATERIAL.ADD', {
+        name: 'Roofing',
+        unit: 'm3',
+        costCode: 'roofing',
+      });
+      session.dispatch<TypeId>('TYPE.ADD', {
+        targetType: 'roof',
+        name: 'Roof 250 (20+5)',
+        layers: [
+          { materialId: structure, thickness: 0.2 },
+          { materialId: roofing, thickness: 0.05 },
+        ],
+      });
+    }
     session.history.clear();
     return session.doc.types.list('wall')[0]?.id ?? null;
   } catch {

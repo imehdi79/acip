@@ -40,6 +40,17 @@ export interface ArrangementFace {
   readonly holes: readonly (readonly Point[])[];
 }
 
+export interface ArrangementResult {
+  /** bounded faces — the rooms */
+  readonly faces: readonly ArrangementFace[];
+  /**
+   * Outer contours (one per connected component that is not an island of
+   * another) — the building outlines. Re-oriented counter-clockwise so the
+   * building interior is on the LEFT of each edge, like face boundaries.
+   */
+  readonly outlines: readonly (readonly FaceEdge[])[];
+}
+
 /** shoelace signed area — positive for counter-clockwise loops */
 export function loopSignedArea(points: readonly Point[]): number {
   let sum = 0;
@@ -81,16 +92,24 @@ interface HalfEdge {
   readonly angle: number;
 }
 
-/**
- * Build the arrangement and extract its bounded faces. The unbounded face is
- * dropped; detached-island contours become holes of the face containing them.
- * Discovery reads baselines only (the wall-joins invariant): nothing here
- * depends on derived face geometry.
- */
+/** the faces of {@link arrangePlan} — kept for callers that only want rooms */
 export function arrangeSegments(
   segments: readonly ArrangementSegment[],
   tolerance: number,
 ): ArrangementFace[] {
+  return [...arrangePlan(segments, tolerance).faces];
+}
+
+/**
+ * Build the arrangement and extract its bounded faces (rooms) and outer
+ * contours (building outlines). Detached-island contours become holes of
+ * the face containing them. Discovery reads baselines only (the wall-joins
+ * invariant): nothing here depends on derived face geometry.
+ */
+export function arrangePlan(
+  segments: readonly ArrangementSegment[],
+  tolerance: number,
+): ArrangementResult {
   const working: Working[] = [];
   for (const s of segments) {
     if (distance(s.a, s.b) <= tolerance) continue;
@@ -257,7 +276,7 @@ export function arrangeSegments(
     holes: Point[][];
   }
   const faces: MutableFace[] = [];
-  const outers: { loop: Point[]; area: number; component: number }[] = [];
+  const outers: { loop: Point[]; edges: FaceEdge[]; area: number; component: number }[] = [];
   const visited = new Array<boolean>(halves.length).fill(false);
   for (let hi = 0; hi < halves.length; hi++) {
     if (visited[hi]) continue;
@@ -269,44 +288,61 @@ export function arrangeSegments(
       cur = nextOf(cur);
     }
     const loop = cycle.map((h) => nodes[halves[h].from]);
+    const cycleEdges = cycle.map((h) => ({
+      segmentId: halves[h].segmentId,
+      a: nodes[halves[h].from],
+      b: nodes[halves[h].to],
+    }));
     const area = loopSignedArea(loop);
     if (area > areaEps) {
       faces.push({
         loop,
-        edges: cycle.map((h) => ({
-          segmentId: halves[h].segmentId,
-          a: nodes[halves[h].from],
-          b: nodes[halves[h].to],
-        })),
+        edges: cycleEdges,
         area,
         loopArea: area,
         component: comp[halves[hi].from],
         holes: [],
       });
     } else if (area < -areaEps) {
-      outers.push({ loop, area: -area, component: comp[halves[hi].from] });
+      outers.push({ loop, edges: cycleEdges, area: -area, component: comp[halves[hi].from] });
     }
     // |area| ≤ eps: a lone stub's out-and-back cycle — not a face
   }
 
   // a detached component's outer contour is a hole of whichever foreign
-  // face contains it; smallest containing face wins (deepest nesting)
+  // face contains it; smallest containing face wins (deepest nesting).
+  // Unassigned outers are the true building outlines.
   const byLoopArea = [...faces].sort((x, y) => x.loopArea - y.loopArea);
+  const outlines: FaceEdge[][] = [];
   for (const outer of outers) {
     const rep = outer.loop[0];
+    let assigned = false;
     for (const face of byLoopArea) {
       if (face.component === outer.component) continue;
       if (!pointInLoop(rep, face.loop)) continue;
       face.holes.push(outer.loop);
       face.area -= outer.area;
+      assigned = true;
       break;
+    }
+    if (!assigned) {
+      // outer cycles run clockwise (unbounded region on the left); reverse
+      // so the building interior is on the left, like face boundaries
+      outlines.push(
+        [...outer.edges]
+          .reverse()
+          .map((e) => ({ segmentId: e.segmentId, a: e.b, b: e.a })),
+      );
     }
   }
 
-  return faces.map((f) => ({
-    loop: f.loop,
-    edges: f.edges,
-    area: f.area,
-    holes: f.holes,
-  }));
+  return {
+    faces: faces.map((f) => ({
+      loop: f.loop,
+      edges: f.edges,
+      area: f.area,
+      holes: f.holes,
+    })),
+    outlines,
+  };
 }

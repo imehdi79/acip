@@ -64,10 +64,16 @@ export function geometryArea(g: Geometry): number | null {
   }
 }
 
-export type { WallQuantity, SlabQuantity, MaterialQuantity, QuantityReport } from './quantities.js';
+export type {
+  WallQuantity,
+  SlabQuantity,
+  RoofQuantity,
+  MaterialQuantity,
+  QuantityReport,
+} from './quantities.js';
 export { computeQuantities } from './quantities.js';
-export type { SpaceInfo } from './spaces.js';
-export { detectSpaces } from './spaces.js';
+export type { SpaceInfo, OutlineInfo } from './spaces.js';
+export { detectSpaces, detectOutlines, offsetBoundary } from './spaces.js';
 
 /**
  * Read-only queries over EFFECTIVE geometry (openings already subtracted) —

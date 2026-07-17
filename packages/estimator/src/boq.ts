@@ -1,5 +1,5 @@
 import type { DrawingDocument } from '@acip/editor-core';
-import { computeSlabTakeoff, computeWallTakeoff } from './takeoff.js';
+import { computeRoofTakeoff, computeSlabTakeoff, computeWallTakeoff } from './takeoff.js';
 import type { MeasurementRule } from './rules.js';
 import type { RateTable } from './rates.js';
 
@@ -29,6 +29,7 @@ export interface BoqOptions {
 
 const GENERIC_WALL_CODE = 'wall-volume';
 const GENERIC_SLAB_CODE = 'slab-volume';
+const GENERIC_ROOF_CODE = 'roof-volume';
 
 /**
  * Facts → policy → money, in one pass:
@@ -79,6 +80,22 @@ export function assembleBoq(doc: DrawingDocument, options: BoqOptions = {}): Boq
       }
     } else if (slab.volume > 0) {
       accumulate(GENERIC_SLAB_CODE, 'Slab (no assembly)', 'm3', slab.volume);
+    }
+  }
+
+  for (const roof of computeRoofTakeoff(doc)) {
+    const totalThickness = roof.layers.reduce((sum, layer) => sum + layer.thickness, 0);
+    if (totalThickness > 0) {
+      for (const layer of roof.layers) {
+        accumulate(
+          layer.costCode,
+          layer.name,
+          layer.unit,
+          roof.volume * (layer.thickness / totalThickness),
+        );
+      }
+    } else if (roof.volume > 0) {
+      accumulate(GENERIC_ROOF_CODE, 'Roof (no assembly)', 'm3', roof.volume);
     }
   }
 

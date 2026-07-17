@@ -165,17 +165,27 @@ shipped with docs-first commits, tests, and a green build.
   the wall trades in the live Cost panel. In the app: Slab palette tool,
   `SLAB`/`SLABAUTO` keywords, seeded "Slab 200 (15+5)" type + rates.
   See [slabs.md](../editor-core/04-systems/slabs.md).
+- **Roofs (mono-pitch V1)**: footprint + slope (degrees) + fall direction,
+  eaves at `level + eavesHeight`; the surface is a single plane so the
+  triangulation is exact — gable/hip deferred rather than shipped
+  approximate. `ROOF.AUTO` roofs the whole building in one dispatch: the
+  arrangement's outer contour (now exposed as `detectOutlines`) pushed out
+  to the wall faces plus an overhang, eaves on the tallest wall, fall across
+  the narrow axis; detached buildings each get their own roof.
+  `loftPolygon` (per-vertex heights) joins `geometry/mesh`. Roofing becomes
+  the third trade in the live BOQ. In the app: `ROOFAUTO` keyword, seeded
+  "Roof 250 (20+5)" + rates. See [roofs.md](../editor-core/04-systems/roofs.md).
 
 ## Where it stands / what's next
 
-136 tests across three packages; all typechecks and builds green. The
+146 tests across three packages; all typechecks and builds green. The
 architecture has survived its three intended stress tests: a semantic model
 (joins/hosting), an acting external package (agent), and an observing external
 package (estimator) — none required core rework.
 
 Next candidates (see [roadmap](../editor-core/06-roadmap/deferred.md)):
-roofs (slope-parameter extrusions; the arrangement's outer contour is the
-ROOF.AUTO footprint), stairs (cross-level relations), crossing wall joins,
+stairs (cross-level relations), gable roofs (ridge split over the shipped
+mono-pitch), wall-top trimming to the roof underside, crossing wall joins,
 the auto-dimension agent (judgment on top of DIM.AUTO's deterministic core),
 a cost-optimization agent over the estimator's objective function,
 editor-server (persistence, collaboration, agent host), IFC import/export.

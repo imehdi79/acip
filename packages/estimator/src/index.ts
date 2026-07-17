@@ -1,5 +1,11 @@
-export type { OpeningDeduction, AssemblyLayerFact, WallTakeoff, SlabTakeoff } from './takeoff.js';
-export { computeWallTakeoff, computeSlabTakeoff } from './takeoff.js';
+export type {
+  OpeningDeduction,
+  AssemblyLayerFact,
+  WallTakeoff,
+  SlabTakeoff,
+  RoofTakeoff,
+} from './takeoff.js';
+export { computeWallTakeoff, computeSlabTakeoff, computeRoofTakeoff } from './takeoff.js';
 export type { MeasurementRule } from './rules.js';
 export { smallOpeningRule, wasteFactorRule, defaultRules } from './rules.js';
 export type { Rate, RateTable } from './rates.js';

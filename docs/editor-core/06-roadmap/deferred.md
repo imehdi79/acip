@@ -11,7 +11,9 @@ Last updated: 2026-07-17
 | **Xrefs / underlays** (AutoCAD-style external attachments) | Deferred, not rejected | Touches io + rendering + document at once; design when those exist. |
 | **3D editing** | Deferred (v1: 3D is read-only) | See [2.5D strategy](../04-systems/2-5d-strategy.md). |
 | **Sections / elevations** | Deferred | Land as `ViewDefinition` with a cut plane. |
-| **Roofs / freeform surfaces** | Deferred | Start as extrusions with slope parameter; OpenCascade-via-WASM as an island if ever truly needed. |
+| **Roofs / freeform surfaces** | V1 mono-pitch shipped 2026-07-17 (see [roofs.md](../04-systems/roofs.md)); gable/hip/freeform still deferred | Gable = footprint split by a ridge half-plane; hips = straight skeleton; OpenCascade-via-WASM as an island if freeform is ever truly needed. |
+| **Stairs** | Deferred by user decision (2026-07-17) — "we want to do it later" | The design slot is ready: stairs are cross-level relations ([levels-and-views.md](../04-systems/levels-and-views.md)); the `{topLevelId}` variant of `ILevelAware` is typed but unused; a parametric run (position, direction, width, base/top level → derived risers/treads) rides existing machinery. |
+| **Wall-top trimming under sloped roofs** | Deferred with stairs (2026-07-17) | Walls under a mono-pitch roof keep flat tops; the wedge to the roof underside is unfilled ([roofs.md](../04-systems/roofs.md)). Wants roof-aware wall tops / `topLevelId` — same vertical machinery as stairs, do them together. |
 | **Parametric constraint solver** | Maybe never | Host relations (one-directional DAG) deliberately are NOT this. See [relations](../04-systems/relations.md). |
 | **`editor-sdk` package** | Still deferred — first external package (agent-drafter, 2026-07-12) consumes `editor-core/src/index.ts` directly | Split into a real package when a second consumer or versioning pain appears. |
 
@@ -198,9 +200,28 @@ palette tool (vertex clicking), `SLAB`/`SLABAUTO` keywords, seeded
 untouched. See [slabs.md](../04-systems/slabs.md). 123 core + 7 estimator
 tests.
 
-Next candidates: roofs (start as extrusions with a slope parameter; the
-arrangement's outer contour is the ROOF.AUTO footprint), stairs (cross-level
-relations; `{topLevelId}` variant of ILevelAware is waiting), crossing wall
+**Roofs V1 landed 2026-07-17.** Mono-pitch (skillion) roofs — deliberately:
+the surface is a single plane so ear-clipped triangulation is exact for any
+simple footprint; gable/hip need ridge splitting and stay deferred rather
+than ship approximate geometry. RoofEntity: footprint + slope (degrees) +
+fall direction + `eavesHeight` above its level; thickness (vertical) from
+the RoofType assembly. `geometry/mesh` gained `loftPolygon` (per-vertex
+heights; `extrudePolygon` is now its constant case). `arrangePlan` exposes
+the building **outlines** (the outer contours space detection previously
+discarded), `detectOutlines` derives them per level, and the shared
+`offsetBoundary` helper (extracted from net-room construction) pushes them
+out to eaves lines. ROOF.ADD + ROOF.AUTO (footprint = outer faces +
+overhang, eaves on the tallest wall, fall across the narrow axis,
+regenerates; detached buildings each get a roof). Quantities/digest gained
+roof slope area + volume; the estimator its third trade (`roof-structure`/
+`roofing`, generic `roof-volume`). web-editor: `ROOFAUTO` keyword, seeded
+"Roof 250 (20+5)" + rates. Known gap: walls under a sloped roof keep flat
+tops (wedge unfilled) — see [roofs.md](../04-systems/roofs.md).
+132 core + 8 estimator tests.
+
+Next candidates: stairs (cross-level relations; the `{topLevelId}` variant
+of ILevelAware is waiting), gable roofs (ridge half-plane split over the
+shipped mono-pitch), wall-top trimming to the roof underside, crossing wall
 joins (plan cleanup — the arrangement already detects X crossings), the
 auto-dimension agent (DIM.AUTO gave it a deterministic core; an agent adds
 judgment), cost-optimization agent over the estimator's objective function,

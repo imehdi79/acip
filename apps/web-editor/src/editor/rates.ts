@@ -11,5 +11,8 @@ export const DEMO_RATES: RateTable = {
     'concrete-slab': { unit: 'm3', unitCost: 95 },
     screed: { unit: 'm3', unitCost: 180 },
     'slab-volume': { unit: 'm3', unitCost: 110 },
+    'roof-structure': { unit: 'm3', unitCost: 140 },
+    roofing: { unit: 'm3', unitCost: 260 },
+    'roof-volume': { unit: 'm3', unitCost: 160 },
   },
 };

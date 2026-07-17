@@ -3,8 +3,8 @@ import type { Point } from '../geometry/primitives/point.js';
 import { add, distance, normalize, perpendicular, scale, sub } from '../geometry/primitives/point.js';
 import type { DrawingDocument } from '../document/document.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
-import type { ArrangementFace, ArrangementSegment } from '../topology/arrangement.js';
-import { arrangeSegments, loopSignedArea, pointInLoop } from '../topology/arrangement.js';
+import type { ArrangementSegment, FaceEdge } from '../topology/arrangement.js';
+import { arrangePlan, arrangeSegments, loopSignedArea, pointInLoop } from '../topology/arrangement.js';
 import { JOIN_TOLERANCE, intersectLines } from '../topology/junctions.js';
 
 /**
@@ -37,26 +37,34 @@ const MIN_SPACE_AREA = 0.01;
 const MITER_LIMIT = 8;
 
 /**
- * Room-side face loop: each boundary edge offset inward by its wall's half
- * thickness (interior is on the left), consecutive face lines intersected at
- * corners. Parallel or miter-limit-breaking neighbors connect with a jog
- * across the shared node; a dangling stub gets a squared notch this way.
+ * Offset a boundary loop edge by edge: positive offsets move toward the
+ * LEFT of each edge (the interior side), negative outward. Consecutive
+ * offset lines intersect at corners; parallel or miter-limit-breaking
+ * neighbors connect with a jog across the shared node (a dangling stub
+ * gets a squared notch this way). Serves rooms pulled in to inner faces
+ * AND outlines pushed out to eaves.
  */
-function netBoundary(face: ArrangementFace, halfWidthOf: (id: string) => number): Point[] {
-  const n = face.edges.length;
+export function offsetBoundary(
+  edges: readonly FaceEdge[],
+  offsetOf: (segmentId: string) => number,
+): Point[] {
+  const n = edges.length;
   const points: Point[] = [];
   for (let k = 0; k < n; k++) {
-    const e = face.edges[k];
-    const f = face.edges[(k + 1) % n];
+    const e = edges[k];
+    const f = edges[(k + 1) % n];
     const de = normalize(sub(e.b, e.a));
     const df = normalize(sub(f.b, f.a));
-    const halfE = halfWidthOf(e.segmentId);
-    const halfF = halfWidthOf(f.segmentId);
-    const offE = scale(perpendicular(de), halfE);
-    const offF = scale(perpendicular(df), halfF);
+    const distE = offsetOf(e.segmentId);
+    const distF = offsetOf(f.segmentId);
+    const offE = scale(perpendicular(de), distE);
+    const offF = scale(perpendicular(df), distF);
     const node = e.b;
     const corner = intersectLines(add(e.a, offE), de, add(f.a, offF), df);
-    if (corner && distance(corner, node) <= MITER_LIMIT * Math.max(halfE, halfF)) {
+    if (
+      corner &&
+      distance(corner, node) <= MITER_LIMIT * Math.max(Math.abs(distE), Math.abs(distF))
+    ) {
       points.push(corner);
       continue;
     }
@@ -124,7 +132,10 @@ function interiorPoint(loop: readonly Point[], holes: readonly (readonly Point[]
  * model fact, like quantities. Free function by design: derived on read,
  * no cache on the document.
  */
-export function detectSpaces(doc: DrawingDocument, levelId: LevelId | null): SpaceInfo[] {
+function collectWallSegments(
+  doc: DrawingDocument,
+  levelId: LevelId | null,
+): { walls: Map<string, WallEntity>; segments: ArrangementSegment[] } {
   const walls = new Map<string, WallEntity>();
   const segments: ArrangementSegment[] = [];
   for (const entity of doc.all()) {
@@ -134,6 +145,11 @@ export function detectSpaces(doc: DrawingDocument, levelId: LevelId | null): Spa
     walls.set(entity.id as string, entity);
     segments.push({ id: entity.id as string, a, b, halfWidth: entity.getThickness() / 2 });
   }
+  return { walls, segments };
+}
+
+export function detectSpaces(doc: DrawingDocument, levelId: LevelId | null): SpaceInfo[] {
+  const { walls, segments } = collectWallSegments(doc, levelId);
 
   const halfWidthOf = (id: string): number => {
     const wall = walls.get(id);
@@ -143,7 +159,7 @@ export function detectSpaces(doc: DrawingDocument, levelId: LevelId | null): Spa
   const spaces: SpaceInfo[] = [];
   for (const face of arrangeSegments(segments, JOIN_TOLERANCE)) {
     if (face.area < MIN_SPACE_AREA) continue;
-    const net = netBoundary(face, halfWidthOf);
+    const net = offsetBoundary(face.edges, halfWidthOf);
     const holeArea = face.holes.reduce((sum, hole) => sum + Math.abs(loopSignedArea(hole)), 0);
     const netArea = Math.max(0, Math.abs(loopSignedArea(net)) - holeArea);
     const wallIds: EntityId[] = [];
@@ -166,4 +182,44 @@ export function detectSpaces(doc: DrawingDocument, levelId: LevelId | null): Spa
   }
   spaces.sort((a, b) => b.netArea - a.netArea || (a.key < b.key ? -1 : 1));
   return spaces;
+}
+
+/** the outer contour of a connected run of walls — what a roof covers */
+export interface OutlineInfo {
+  /** outer contour along wall centerlines, counter-clockwise */
+  readonly grossBoundary: readonly Point[];
+  /** contour pushed out to the outer wall faces */
+  readonly boundary: readonly Point[];
+  readonly boundaryWallIds: readonly EntityId[];
+  /** oriented edges (building on the left) for custom offsets — eaves lines */
+  readonly edges: readonly FaceEdge[];
+}
+
+/**
+ * Building outlines per connected component of walls on a level — the
+ * arrangement's outer contours, derived on read like everything else here.
+ * ROOF.AUTO and outer dimension chains consume these.
+ */
+export function detectOutlines(doc: DrawingDocument, levelId: LevelId | null): OutlineInfo[] {
+  const { walls, segments } = collectWallSegments(doc, levelId);
+  const halfWidthOf = (id: string): number => {
+    const wall = walls.get(id);
+    return wall ? wall.getThickness() / 2 : 0;
+  };
+  const outlines: OutlineInfo[] = [];
+  for (const edges of arrangePlan(segments, JOIN_TOLERANCE).outlines) {
+    const wallIds: EntityId[] = [];
+    for (const edge of edges) {
+      const id = edge.segmentId as EntityId;
+      if (!wallIds.includes(id)) wallIds.push(id);
+    }
+    outlines.push({
+      grossBoundary: edges.map((e) => e.a),
+      // building is on the LEFT of outline edges — negative offsets go out
+      boundary: offsetBoundary(edges, (id) => -halfWidthOf(id)),
+      boundaryWallIds: wallIds,
+      edges,
+    });
+  }
+  return outlines;
 }

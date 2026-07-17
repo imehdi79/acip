@@ -4,6 +4,7 @@ import type { EntityId, MaterialId, TypeId } from '@acip/editor-core';
 import {
   Estimator,
   assembleBoq,
+  computeRoofTakeoff,
   computeSlabTakeoff,
   computeWallTakeoff,
   smallOpeningRule,
@@ -143,6 +144,41 @@ describe('slabs — the second trade in the BOQ', () => {
     expect(byCode.get('concrete-slab')!.quantity).toBeCloseTo(4 * (0.15 / 0.2));
     expect(byCode.get('screed')!.quantity).toBeCloseTo(4 * (0.05 / 0.2));
     expect(byCode.get('slab-volume')!.quantity).toBeCloseTo(0.4);
+  });
+});
+
+describe('roofs — the third trade in the BOQ', () => {
+  test('typed roofs split across the assembly; untyped fall back to roof-volume', () => {
+    const session = new EditorSession();
+    const structure = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Roof structure',
+      costCode: 'roof-structure',
+    });
+    const typeId = session.dispatch<TypeId>('TYPE.ADD', {
+      targetType: 'roof',
+      name: 'R250',
+      layers: [{ materialId: structure, thickness: 0.25 }],
+    });
+    session.dispatch('ROOF.ADD', {
+      points: [point(0, 0), point(5, 0), point(5, 4), point(0, 4)],
+      slope: 30,
+      typeId,
+    });
+    session.dispatch('ROOF.ADD', {
+      points: [point(10, 0), point(12, 0), point(12, 2), point(10, 2)],
+      thickness: 0.2,
+    });
+
+    const [typed, untyped] = computeRoofTakeoff(session.doc);
+    expect(typed.planArea).toBeCloseTo(20);
+    expect(typed.slopeArea).toBeCloseTo(20 / Math.cos(Math.PI / 6));
+    expect(typed.volume).toBeCloseTo(20 * 0.25);
+    expect(untyped.volume).toBeCloseTo(4 * 0.2);
+
+    const boq = assembleBoq(session.doc);
+    const byCode = new Map(boq.lines.map((l) => [l.costCode, l]));
+    expect(byCode.get('roof-structure')!.quantity).toBeCloseTo(5);
+    expect(byCode.get('roof-volume')!.quantity).toBeCloseTo(0.8);
   });
 });
 
