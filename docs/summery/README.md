@@ -129,15 +129,31 @@ shipped with docs-first commits, tests, and a green build.
   live BOQ with total and missing-rate flags; Cost panel with demo EUR rates.
   Core grew exactly one field for all of this: `Material.costCode`.
 
+### 2026-07-17 — Spaces (room detection)
+
+- **Spaces / room detection**: rooms are detected automatically from walls —
+  derived, never stored (the wall-joins pattern at room scale). A planar
+  arrangement of baselines (`topology/arrangement.ts`) splits walls at every
+  touch point: corners, tees at *any* parameter along the host (face-flush
+  walls connect via a `halfWidth` allowance), and X crossings; faces of the
+  graph are the rooms, detached islands become holes. `detectSpaces(doc,
+  levelId)` reports **gross** (centerline) and **net** (inner-face — each
+  wall's assembly thickness deducted) boundaries and areas. Draw four walls
+  and a partition — two rooms appear; erase the partition — they merge.
+  Plan views fill rooms and label net areas live; `describeDocument()` gains
+  a `spaces` section so agents address rooms ("the 14 m² room on L1") for a
+  few tokens each. See [spaces.md](../editor-core/04-systems/spaces.md).
+
 ## Where it stands / what's next
 
-104 tests across three packages; all typechecks and builds green. The
+119 tests across three packages; all typechecks and builds green. The
 architecture has survived its three intended stress tests: a semantic model
 (joins/hosting), an acting external package (agent), and an observing external
 package (estimator) — none required core rework.
 
 Next candidates (see [roadmap](../editor-core/06-roadmap/deferred.md)):
-slabs/floor entities (multi-trade BOQ), dimensions/annotations (unlocks the
-auto-dimension agent), crossing wall joins, a cost-optimization agent over the
+slabs/floor entities (multi-trade BOQ; can now be generated per detected
+space), dimensions/annotations (unlocks the auto-dimension agent; binds to
+wall `face+`/`face-`), crossing wall joins, a cost-optimization agent over the
 estimator's objective function, editor-server (persistence, collaboration,
 agent host), IFC import/export.

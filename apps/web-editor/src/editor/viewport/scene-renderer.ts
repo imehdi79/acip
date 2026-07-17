@@ -3,9 +3,10 @@ import type {
   EntityId,
   Geometry,
   RegionShape,
+  SpaceInfo,
   ViewDefinition,
 } from '@acip/editor-core';
-import { buildDisplayList, hasGrips } from '@acip/editor-core';
+import { buildDisplayList, detectSpaces, hasGrips } from '@acip/editor-core';
 import type { Viewport2D } from './viewport2d';
 import type { OverlayState } from '../ui-state';
 
@@ -22,6 +23,8 @@ const COLORS = {
   regionFillSelected: 'rgba(77, 163, 255, 0.28)',
   grip: '#4da3ff',
   gripBorder: '#0e1116',
+  spaceFill: 'rgba(102, 187, 170, 0.08)',
+  spaceLabel: '#6fa898',
   ghost: '#8fd0ff',
   boxWindow: 'rgba(77, 163, 255, 0.12)',
   boxWindowBorder: '#4da3ff',
@@ -143,6 +146,20 @@ export function drawScene(
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
+  // detected rooms (derived on read): soft net-boundary fill under the walls
+  const spaces: SpaceInfo[] = view.kind === 'plan' ? detectSpaces(doc, view.levelId) : [];
+  if (spaces.length > 0) {
+    ctx.fillStyle = COLORS.spaceFill;
+    ctx.beginPath();
+    for (const space of spaces) {
+      pathGeometry(ctx, { kind: 'polyline', points: space.boundary, closed: true });
+      for (const hole of space.holes) {
+        pathGeometry(ctx, { kind: 'polyline', points: hole, closed: true });
+      }
+    }
+    ctx.fill('evenodd');
+  }
+
   for (const item of buildDisplayList(doc, view)) {
     const isSelected = selection.has(item.entityId);
     // solid regions (wall spans) get a light fill under the stroke
@@ -174,6 +191,20 @@ export function drawScene(
       ctx.lineWidth = 1;
       ctx.fillRect(s.x - GRIP_PIXELS, s.y - GRIP_PIXELS, GRIP_PIXELS * 2, GRIP_PIXELS * 2);
       ctx.strokeRect(s.x - GRIP_PIXELS, s.y - GRIP_PIXELS, GRIP_PIXELS * 2, GRIP_PIXELS * 2);
+    }
+  }
+
+  // room area labels — fixed screen size, hidden once a room shrinks below
+  // roughly a label's worth of pixels
+  if (spaces.length > 0) {
+    ctx.fillStyle = COLORS.spaceLabel;
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const space of spaces) {
+      if (space.netArea * viewport.scale * viewport.scale < 40 * 40) continue;
+      const at = viewport.toScreen(space.labelPoint);
+      ctx.fillText(`${space.netArea.toFixed(1)} m²`, at.x, at.y);
     }
   }
 }

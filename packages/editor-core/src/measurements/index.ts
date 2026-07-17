@@ -66,6 +66,8 @@ export function geometryArea(g: Geometry): number | null {
 
 export type { WallQuantity, MaterialQuantity, QuantityReport } from './quantities.js';
 export { computeQuantities } from './quantities.js';
+export type { SpaceInfo } from './spaces.js';
+export { detectSpaces } from './spaces.js';
 
 /**
  * Read-only queries over EFFECTIVE geometry (openings already subtracted) —

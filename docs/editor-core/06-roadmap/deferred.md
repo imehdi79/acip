@@ -1,6 +1,6 @@
 # Roadmap — Deferred Decisions & Open Questions
 
-Last updated: 2026-07-11
+Last updated: 2026-07-17
 
 ## Deferred (intentionally postponed; the design leaves a slot)
 
@@ -152,7 +152,24 @@ per commit (live price ticking). Core grew exactly one field:
 See [estimator.md](../05-packages/estimator.md). 92 core + 6 agent +
 6 estimator tests.
 
-Next candidates: slabs/floor entities (feeds 3D + BOQ richness), dimensions/
-annotations (unlocks the auto-dimension agent), T-junction... crossing wall
-joins, cost-optimization agent over the estimator's objective function,
-editor-server (persistence/collab/agent host).
+**Spaces / room detection landed 2026-07-17.** Derived, never stored — the
+wall-joins pattern at room scale. `topology/arrangement.ts`: planar
+arrangement of wall baselines (tee snapping at ANY parameter along the host
+with a `halfWidth` allowance for face-flush walls, proper X-crossing splits,
+node clustering, half-edge leftmost-turn face extraction, detached islands
+as holes). `measurements/spaces.ts`: `detectSpaces(doc, levelId)` free
+function (no cache on the document — re-affirmed) reporting per room a
+**gross** (centerline) and **net** (inner-face, assembly thickness deducted)
+boundary + areas, boundary wall ids, and an interior label point.
+`describeDocument()` gains a `spaces` section so agents address rooms
+("the 14 m² room on L1") instead of reasoning over wall envelopes.
+web-editor plan views fill rooms and label net areas live per commit.
+See [spaces.md](../04-systems/spaces.md). 107 core tests.
+
+Next candidates: slabs/floor entities (feeds 3D + BOQ richness; can now be
+generated per detected space — SLAB.FROM_SPACES), dimensions/annotations
+(unlocks the auto-dimension agent; binds to `face+`/`face-` per
+[spaces.md](../04-systems/spaces.md)), crossing wall joins (plan cleanup —
+the arrangement already detects X crossings), cost-optimization agent over
+the estimator's objective function, editor-server (persistence/collab/agent
+host).

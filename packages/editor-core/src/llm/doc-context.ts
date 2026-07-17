@@ -1,6 +1,8 @@
 import type { JsonObject, JsonValue } from '../common/json.js';
+import type { LevelId } from '../common/id.js';
 import type { DrawingDocument } from '../document/document.js';
 import { computeQuantities } from '../measurements/quantities.js';
+import { detectSpaces } from '../measurements/spaces.js';
 
 export interface DescribeDocumentOptions {
   /** entity cap so huge drawings stay inside an LLM context (default 200) */
@@ -49,6 +51,9 @@ export function describeDocument(
     })),
     entities: all.slice(0, maxEntities).map((e) => e.saveData() as unknown as JsonObject),
     relations: doc.relations.all().map((r) => ({ hostId: r.hostId, hostedId: r.hostedId })),
+    // detected rooms make the drawing ADDRESSABLE ("the 14 m² room on L1")
+    // for a few tokens each — far cheaper than reasoning over wall envelopes
+    spaces: spacesDigest(doc),
     quantities: {
       wallLength: quantities.totals.wallLength,
       wallNetFaceArea: quantities.totals.wallNetFaceArea,
@@ -59,4 +64,24 @@ export function describeDocument(
   };
   if (all.length > maxEntities) digest['entitiesTruncated'] = all.length - maxEntities;
   return digest;
+}
+
+/** one entry per detected room, per level (the scopes plan views use) */
+function spacesDigest(doc: DrawingDocument): JsonValue[] {
+  const levels = doc.levels.list();
+  const scopes: (LevelId | null)[] = levels.length > 0 ? levels.map((l) => l.id) : [null];
+  const round = (v: number): number => Math.round(v * 100) / 100;
+  const out: JsonValue[] = [];
+  for (const scope of scopes) {
+    for (const space of detectSpaces(doc, scope)) {
+      out.push({
+        key: space.key,
+        level: scope,
+        netArea: round(space.netArea),
+        grossArea: round(space.grossArea),
+        walls: space.boundaryWallIds as unknown as string[],
+      });
+    }
+  }
+  return out;
 }

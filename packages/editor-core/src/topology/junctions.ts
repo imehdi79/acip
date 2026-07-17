@@ -40,7 +40,7 @@ export const JOIN_TOLERANCE = 1e-4;
 const MITER_LIMIT = 8;
 
 /** infinite line × infinite line; null when parallel */
-function intersectLines(p1: Point, d1: Vector, p2: Point, d2: Vector): Point | null {
+export function intersectLines(p1: Point, d1: Vector, p2: Point, d2: Vector): Point | null {
   const denom = cross(d1, d2);
   if (Math.abs(denom) < 1e-9) return null;
   const t = cross(sub(p2, p1), d2) / denom;

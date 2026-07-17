@@ -98,12 +98,24 @@ export {
   extrudeQuad,
   mergeMeshes,
 } from './geometry/index.js';
-export type { Loop, BoundaryWithHoles, Interval, WallEnd, EndCap } from './topology/index.js';
+export type {
+  Loop,
+  BoundaryWithHoles,
+  Interval,
+  WallEnd,
+  EndCap,
+  ArrangementSegment,
+  FaceEdge,
+  ArrangementFace,
+} from './topology/index.js';
 export {
   mergeIntervals,
   subtractIntervals,
   resolveJunction,
   resolveTeeCap,
+  arrangeSegments,
+  loopSignedArea,
+  pointInLoop,
   JOIN_TOLERANCE,
 } from './topology/index.js';
 
@@ -255,8 +267,8 @@ export type { SelectionEvents } from './selection/index.js';
 export { SelectionSet } from './selection/index.js';
 export { SnapEngine } from './snapping/index.js';
 export { MeasurementService, geometryLength, geometryArea } from './measurements/index.js';
-export type { WallQuantity, MaterialQuantity, QuantityReport } from './measurements/index.js';
-export { computeQuantities } from './measurements/index.js';
+export type { WallQuantity, MaterialQuantity, QuantityReport, SpaceInfo } from './measurements/index.js';
+export { computeQuantities, detectSpaces } from './measurements/index.js';
 export type { ViewDefinition } from './views/index.js';
 export { entitiesInView, isEntityVisible, isEntityInteractive } from './views/index.js';
 export type { DisplayStyle, RenderItem, Renderer } from './rendering/index.js';
