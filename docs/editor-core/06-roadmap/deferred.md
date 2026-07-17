@@ -176,7 +176,9 @@ DIM.ADD (points or walls mode) + DIM.AUTO (regenerates: inner clear widths
 per detected space from net boundaries, outer extents from wall bounds;
 returns `{removed, created}`). The `Geometry` union gained `TextShape`
 (anchor/text/height/rotation — core never measures fonts); web-editor draws
-text screen-space, Y-flip safe. See
+text screen-space, Y-flip safe. Human faces: Dimension palette tool
+(3-click DIMLINEAR flow with live ghost), `DIM`/`DIMAUTO` command-line
+keywords, live length readout on the rubber band while drawing. See
 [dimensions.md](../04-systems/dimensions.md). 115 core tests.
 
 Next candidates: slabs/floor entities (feeds 3D + BOQ richness; can now be

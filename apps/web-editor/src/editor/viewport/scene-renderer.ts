@@ -26,6 +26,7 @@ const COLORS = {
   gripBorder: '#0e1116',
   spaceFill: 'rgba(102, 187, 170, 0.08)',
   spaceLabel: '#6fa898',
+  measure: '#d9c069',
   ghost: '#8fd0ff',
   boxWindow: 'rgba(77, 163, 255, 0.12)',
   boxWindowBorder: '#4da3ff',
@@ -297,6 +298,21 @@ export function drawOverlay(
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
     ctx.setLineDash([]);
+    // live length readout while drawing — world meters, lifted off the line
+    const worldLen = Math.hypot(
+      overlay.rubber.b.x - overlay.rubber.a.x,
+      overlay.rubber.b.y - overlay.rubber.a.y,
+    );
+    const screenLen = Math.hypot(b.x - a.x, b.y - a.y);
+    if (worldLen > 1e-6 && screenLen > 24) {
+      const nx = -(b.y - a.y) / screenLen;
+      const ny = (b.x - a.x) / screenLen;
+      ctx.fillStyle = COLORS.measure;
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(worldLen.toFixed(2), (a.x + b.x) / 2 + nx * 12, (a.y + b.y) / 2 + ny * 12);
+    }
   }
 
   if (overlay.snap) {

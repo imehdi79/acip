@@ -3,6 +3,7 @@ import {
   IconDoor,
   IconLine,
   IconPointer,
+  IconRuler2,
   IconTimeline,
   IconVectorSpline,
   IconWall,
@@ -21,6 +22,7 @@ const TOOLS: { id: string; icon: Icon; title: string }[] = [
   { id: 'wall', icon: IconWall, title: 'Wall (WALL)' },
   { id: 'window', icon: IconWindow, title: 'Window (WINDOW)' },
   { id: 'door', icon: IconDoor, title: 'Door (DOOR)' },
+  { id: 'dimension', icon: IconRuler2, title: 'Dimension (DIM)' },
 ];
 
 export function ToolPalette() {

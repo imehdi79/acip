@@ -6,6 +6,7 @@ import { SelectTool } from './tools/select-tool';
 import { ChainedDrawTool } from './tools/chained-draw-tool';
 import { HostedPlaceTool } from './tools/hosted-place-tool';
 import { ArcTool, CircleTool, PolylineTool } from './tools/circle-tool';
+import { DimensionTool } from './tools/dim-tool';
 
 export interface EditorRuntime {
   readonly ui: EditorUi;
@@ -89,6 +90,12 @@ export function createRuntime(session: EditorSession): EditorRuntime {
   );
   tools.register(new HostedPlaceTool('window', 'WINDOW', 'WINDOW.ADD', ui, tolerance, finish));
   tools.register(new HostedPlaceTool('door', 'DOOR', 'DOOR.ADD', ui, tolerance, finish));
+  tools.register(
+    new DimensionTool(ui, finish, () => {
+      const levelId = ui.activeLevelId.get();
+      return { ...activeLayer(), ...(levelId ? { levelId } : {}) };
+    }),
+  );
   tools.useById('select');
   return { ui, tools };
 }

@@ -77,6 +77,13 @@ renderer's job, like every other shape. Text auto-flips to stay readable
   handful of tokens, deterministic geometry in code.
 - web-editor renders `TextShape` screen-space (fixed world height, Y-flip
   negated rotation, hidden below ~4 px).
+- web-editor human faces of the same commands: a **Dimension tool** in the
+  palette (`DIM` — the DIMLINEAR flow: two extension points, third click
+  places the line and its side; the ghost previews the real entity
+  geometry), a **`DIMAUTO`** command-line keyword (runs `DIM.AUTO` for the
+  active level and logs `{removed, created}`), and a **live length readout**
+  on the rubber band while drawing walls/lines — meters appear as you drag,
+  before anything is committed.
 
 ## Known V1 limitations
 

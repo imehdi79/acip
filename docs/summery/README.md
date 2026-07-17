@@ -151,7 +151,10 @@ shipped with docs-first commits, tests, and a green build.
   detected spaces (inner) and wall bounds (outer) in one undoable
   transaction, returning `{removed, created}` — one intent-level agent call.
   `TextShape` joins the Geometry union (text is geometry; drawing it is the
-  renderer's job). See [dimensions.md](../editor-core/04-systems/dimensions.md).
+  renderer's job). In the app: a Dimension palette tool (DIMLINEAR-style
+  3-click flow with live entity-geometry ghost), `DIM`/`DIMAUTO` command-line
+  keywords, and a live length readout on the rubber band while drawing.
+  See [dimensions.md](../editor-core/04-systems/dimensions.md).
 
 ## Where it stands / what's next
 

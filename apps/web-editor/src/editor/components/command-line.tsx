@@ -52,6 +52,20 @@ export function CommandLine() {
         case 'D':
           tools.useById('door');
           break;
+        case 'DIM':
+          tools.useById('dimension');
+          break;
+        case 'DIMAUTO': {
+          const levelId = ui.activeLevelId.get();
+          const result = session.dispatch<{ removed: number; created: number }>('DIM.AUTO', {
+            ...(levelId ? { levelId } : {}),
+          });
+          ui.appendLog(
+            `Dimensions: ${result.created} placed` +
+              (result.removed > 0 ? `, ${result.removed} replaced.` : '.'),
+          );
+          break;
+        }
         case 'ERASE':
         case 'E': {
           const ids = session.selection.list();
