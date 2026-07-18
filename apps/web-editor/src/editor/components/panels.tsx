@@ -96,7 +96,8 @@ export function Panels() {
   );
 }
 
-function QuantitiesSection() {
+/** takeoff + live BOQ; also reused by the mobile estimate sheet */
+export function QuantitiesSection() {
   const session = useSession();
   useDocRevision(session);
   const report = computeQuantities(session.doc);

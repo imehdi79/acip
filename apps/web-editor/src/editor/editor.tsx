@@ -14,6 +14,7 @@ import { CommandLine } from './components/command-line';
 import { StatusBar } from './components/status-bar';
 import { Panels } from './components/panels';
 import { AgentChat } from './components/agent-chat';
+import { EstimateSheet } from './components/estimate-sheet';
 import './editor.css';
 
 export function Editor() {
@@ -70,6 +71,7 @@ function EditorShell() {
           <ToolPalette />
           <div className="viewport-area">
             <ViewportArea />
+            <EstimateSheet />
             <AgentChat />
           </div>
           <Panels />
