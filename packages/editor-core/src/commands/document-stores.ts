@@ -296,6 +296,7 @@ export interface AddMaterialParams {
   name: string;
   unit?: MaterialUnit;
   hatch?: string;
+  color?: string;
   costCode?: string;
   coverage?: number;
 }
@@ -315,6 +316,7 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
         params.unit = raw['unit'] as MaterialUnit;
       }
       if (raw['hatch'] !== undefined) params.hatch = asName(raw['hatch'], 'hatch');
+      if (raw['color'] !== undefined) params.color = asName(raw['color'], 'color');
       if (raw['costCode'] !== undefined) params.costCode = asName(raw['costCode'], 'costCode');
       if (raw['coverage'] !== undefined) params.coverage = asPositive(raw['coverage'], 'coverage');
       return params;
@@ -324,7 +326,8 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
         {
           name: S.string('material name, e.g. "Concrete block"'),
           unit: S.enum(MATERIAL_UNITS, 'measurement unit (default m3)'),
-          hatch: S.string('optional 2D hatch pattern name'),
+          hatch: S.string('optional 2D hatch pattern name: diagonal, cross, or dots'),
+          color: S.string('optional CSS display color for 3D and swatches, e.g. "#b06a4a"'),
           costCode: S.string('optional cost-item key for estimator rate tables'),
           coverage: S.number('m² covered by one count unit, e.g. tile face area 0.09'),
         },
@@ -338,6 +341,7 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
       unit: params.unit ?? 'm3',
     };
     if (params.hatch !== undefined) material.hatch = params.hatch;
+    if (params.color !== undefined) material.appearance = { color: params.color };
     if (params.costCode !== undefined) material.costCode = params.costCode;
     if (params.coverage !== undefined) material.coverage = params.coverage;
     ctx.tx.storeAdd('materials', material);
@@ -419,6 +423,7 @@ export interface UpdateMaterialParams {
   name?: string;
   unit?: MaterialUnit;
   hatch?: string;
+  color?: string;
   costCode?: string;
   coverage?: number;
 }
@@ -426,9 +431,9 @@ export interface UpdateMaterialParams {
 export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
   name: 'MATERIAL.UPDATE',
   description:
-    'Rename a material or change its unit, hatch, cost code, or coverage. A unit or ' +
-    'cost-code change re-measures and re-prices every BOQ line that uses the material ' +
-    'on the next recompute.',
+    'Rename a material or change its unit, hatch, display color, cost code, or coverage. ' +
+    'A unit or cost-code change re-measures and re-prices every BOQ line that uses the ' +
+    'material on the next recompute.',
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
@@ -441,16 +446,18 @@ export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
         params.unit = raw['unit'] as MaterialUnit;
       }
       if (raw['hatch'] !== undefined) params.hatch = asName(raw['hatch'], 'hatch');
+      if (raw['color'] !== undefined) params.color = asName(raw['color'], 'color');
       if (raw['costCode'] !== undefined) params.costCode = asName(raw['costCode'], 'costCode');
       if (raw['coverage'] !== undefined) params.coverage = asPositive(raw['coverage'], 'coverage');
       if (
         params.name === undefined &&
         params.unit === undefined &&
         params.hatch === undefined &&
+        params.color === undefined &&
         params.costCode === undefined &&
         params.coverage === undefined
       ) {
-        throw new ValidationError('provide name, unit, hatch, costCode, and/or coverage');
+        throw new ValidationError('provide name, unit, hatch, color, costCode, and/or coverage');
       }
       return params;
     },
@@ -460,7 +467,8 @@ export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
           id: S.id('material id'),
           name: S.string('new name'),
           unit: S.enum(MATERIAL_UNITS, 'new measurement unit'),
-          hatch: S.string('new 2D hatch pattern name'),
+          hatch: S.string('new 2D hatch pattern name: diagonal, cross, or dots'),
+          color: S.string('new CSS display color for 3D and swatches, e.g. "#b06a4a"'),
           costCode: S.string('new cost-item key for estimator rate tables'),
           coverage: S.number('m² covered by one count unit (tile face area)'),
         },
@@ -472,6 +480,9 @@ export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
       if (params.name !== undefined) material.name = params.name;
       if (params.unit !== undefined) material.unit = params.unit;
       if (params.hatch !== undefined) material.hatch = params.hatch;
+      if (params.color !== undefined) {
+        material.appearance = { ...material.appearance, color: params.color };
+      }
       if (params.costCode !== undefined) material.costCode = params.costCode;
       if (params.coverage !== undefined) material.coverage = params.coverage;
     });

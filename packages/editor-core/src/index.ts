@@ -345,8 +345,14 @@ export {
 } from './measurements/index.js';
 export type { ViewDefinition } from './views/index.js';
 export { entitiesInView, isEntityVisible, isEntityInteractive } from './views/index.js';
-export type { DisplayStyle, RenderItem, Renderer } from './rendering/index.js';
-export { buildDisplayList } from './rendering/index.js';
+export type {
+  DisplayStyle,
+  RenderItem,
+  Renderer,
+  AssemblyStrip,
+  WallAssemblyStrips,
+} from './rendering/index.js';
+export { buildDisplayList, wallAssemblyStrips } from './rendering/index.js';
 export type { InputModifiers, ToolInputEvent, ToolContext, Tool } from './tools/index.js';
 export type { DocumentData } from './io/index.js';
 export { saveDocument, loadDocument, loadDocumentInto } from './io/index.js';

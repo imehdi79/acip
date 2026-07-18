@@ -24,6 +24,9 @@ export interface Renderer {
   render(items: readonly RenderItem[]): void;
 }
 
+export type { AssemblyStrip, WallAssemblyStrips } from './assembly-strips.js';
+export { wallAssemblyStrips } from './assembly-strips.js';
+
 const DEFAULT_STYLE: DisplayStyle = { stroke: '#e0e0e0', width: 1 };
 
 export function buildDisplayList(doc: DrawingDocument, view: ViewDefinition): RenderItem[] {

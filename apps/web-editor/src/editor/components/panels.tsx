@@ -11,6 +11,7 @@ import { DEFAULT_LAYER_ID, computeQuantities } from '@acip/editor-core';
 import type { AssemblyLayer, EntityTypeDef, Layer } from '@acip/editor-core';
 import { assembleBoq, defaultRules } from '@acip/estimator';
 import { DEMO_RATES } from '../rates';
+import { materialDisplayColor } from '../material-color';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useDocRevision, useSelectionIds } from '../hooks';
@@ -343,6 +344,13 @@ function CatalogSection() {
         {materials.map((m) => (
           <li key={m.id} className="level-form">
             <input
+              type="color"
+              className="layer-color"
+              title="Display color (3D + swatches)"
+              value={materialDisplayColor(m)}
+              onChange={(e) => dispatch('MATERIAL.UPDATE', { id: m.id, color: e.target.value })}
+            />
+            <input
               key={`${m.id}:${m.name}`}
               defaultValue={m.name}
               title="Material name"
@@ -460,6 +468,20 @@ function CatalogSection() {
                 <IconTrash size={14} stroke={1.75} />
               </button>
             </div>
+            {(def.layers ?? []).length > 0 && (
+              <div className="assembly-swatch" title="Build-up, outermost first">
+                {(def.layers ?? []).map((layer, i) => {
+                  const mat = session.doc.materials.get(layer.materialId);
+                  return (
+                    <span
+                      key={`${def.id}:swatch:${i}`}
+                      style={{ flexGrow: layer.thickness, background: materialDisplayColor(mat) }}
+                      title={`${mat?.name ?? layer.materialId} · ${(layer.thickness * 1000).toFixed(0)} mm`}
+                    />
+                  );
+                })}
+              </div>
+            )}
             {(def.layers ?? []).map((layer, i) => (
               <div key={`${def.id}:${i}`} className="level-form">
                 <select

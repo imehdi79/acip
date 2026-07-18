@@ -1,6 +1,6 @@
 # Materials, Type Catalog & Finishes
 
-Status: **Decided** · Last updated: 2026-07-17
+Status: **Decided** · Last updated: 2026-07-18
 
 > **Catalog editing shipped 2026-07-17.** The "change the type → every wall
 > updates" promise is now actionable: `MATERIAL.UPDATE` / `MATERIAL.REMOVE`,
@@ -25,6 +25,29 @@ composition belongs to the **wall type**, not each instance:
 - Change the type → every wall of that type updates (same recompute propagation).
 - Yields: total wall thickness, per-layer hatching in plan view, per-material quantities for
   the estimator.
+
+### Per-layer display shipped (2026-07-18)
+
+The "per-layer hatching in plan view" yield is now real, on three surfaces at once:
+
+- **Plan** — `wallAssemblyStrips` (Layer-3 free function in `rendering/`, derived on
+  read, never stored) turns a typed wall into per-layer strips plus separation
+  lines, outermost layer on the wall's `face+` side, split by the solid spans so
+  openings cut through every layer. The web-editor draws separation lines, an
+  alternating tint (readable with zero hatch config), and `Material.hatch`
+  patterns — `diagonal`, `cross`, `dots`; unknown names fall back to diagonal —
+  gated to walls ≥ ~6 px thick on screen (coarse/fine detail, Revit-style). V1
+  strips skip junction miters and stop at baseline endpoints (wall-joins.md).
+- **3D** — the viewer builds one Three material per document material instead of
+  one gray for the whole scene. `Material.appearance.color` wins
+  (`MATERIAL.ADD`/`MATERIAL.UPDATE` gained a `color` param that writes it); a
+  material without a color gets a stable name-derived tint. Walls/slabs/roofs
+  show their outermost assembly layer's material, finishes their own.
+- **Catalog panel** — each type shows a build-up swatch (segment width ∝ layer
+  thickness, same display colors) and each material a color picker.
+
+Still deferred there: hatch-aware junction miters, per-face 3D materials, and a
+section/cutaway mode that exposes the build-up at a cut plane.
 
 ### Layer quantities are unit-aware (2026-07-18)
 

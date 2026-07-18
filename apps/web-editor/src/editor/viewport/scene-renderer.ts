@@ -6,8 +6,15 @@ import type {
   SpaceInfo,
   TextShape,
   ViewDefinition,
+  WallAssemblyStrips,
 } from '@acip/editor-core';
-import { buildDisplayList, detectSpaces, hasGrips } from '@acip/editor-core';
+import {
+  WallEntity,
+  buildDisplayList,
+  detectSpaces,
+  hasGrips,
+  wallAssemblyStrips,
+} from '@acip/editor-core';
 import type { Viewport2D } from './viewport2d';
 import type { OverlayState } from '../ui-state';
 
@@ -33,9 +40,15 @@ const COLORS = {
   boxWindowBorder: '#4da3ff',
   boxCrossing: 'rgba(102, 187, 106, 0.12)',
   boxCrossingBorder: '#66bb6a',
+  assemblyTint: 'rgba(255, 255, 255, 0.05)',
+  assemblySeparator: 'rgba(224, 224, 224, 0.45)',
+  assemblyHatch: 'rgba(224, 224, 224, 0.28)',
 };
 
 export const GRIP_PIXELS = 4;
+
+/** assembly build-up only shows once the wall is thick enough on screen to read */
+const MIN_ASSEMBLY_PX = 6;
 
 function collectRegions(g: Geometry, out: RegionShape[]): void {
   if (g.kind === 'region') out.push(g);
@@ -80,6 +93,98 @@ function pathGeometry(ctx: CanvasRenderingContext2D, g: Geometry): void {
       for (const child of g.children) pathGeometry(ctx, child);
       break;
   }
+}
+
+/** 45° hatch line family: dir=1 draws y=x+c, dir=-1 draws y=-x+c, clipped by caller */
+function hatchLines(
+  ctx: CanvasRenderingContext2D,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+  dir: 1 | -1,
+  spacing: number,
+): void {
+  const step = spacing * Math.SQRT2;
+  const c0 = dir === 1 ? minY - maxX : minY + minX;
+  const c1 = dir === 1 ? maxY - minX : maxY + maxX;
+  for (let c = Math.ceil(c0 / step) * step; c <= c1; c += step) {
+    ctx.moveTo(minX, dir * minX + c);
+    ctx.lineTo(maxX, dir * maxX + c);
+  }
+}
+
+function hatchRegions(
+  ctx: CanvasRenderingContext2D,
+  regions: readonly RegionShape[],
+  pattern: string,
+  scale: number,
+): void {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const region of regions) {
+    for (const p of region.boundary) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+  }
+  if (minX > maxX) return;
+  const spacing = 5 / scale;
+  ctx.save();
+  ctx.beginPath();
+  for (const region of regions) pathGeometry(ctx, region);
+  ctx.clip('evenodd');
+  if (pattern === 'dots') {
+    const r = 0.75 / scale;
+    ctx.fillStyle = COLORS.assemblyHatch;
+    ctx.beginPath();
+    for (let x = minX; x <= maxX; x += spacing) {
+      for (let y = minY; y <= maxY; y += spacing) {
+        ctx.rect(x, y, r, r);
+      }
+    }
+    ctx.fill();
+  } else {
+    // any named pattern gets a diagonal set; cross adds the opposite family
+    ctx.strokeStyle = COLORS.assemblyHatch;
+    ctx.lineWidth = 0.5 / scale;
+    ctx.beginPath();
+    hatchLines(ctx, minX, minY, maxX, maxY, 1, spacing);
+    if (pattern === 'cross') hatchLines(ctx, minX, minY, maxX, maxY, -1, spacing);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawAssemblyStrips(
+  ctx: CanvasRenderingContext2D,
+  doc: DrawingDocument,
+  assembly: WallAssemblyStrips,
+  scale: number,
+): void {
+  assembly.strips.forEach((strip, i) => {
+    // alternating tint keeps the build-up readable with no hatch configured
+    if (i % 2 === 1) {
+      ctx.fillStyle = COLORS.assemblyTint;
+      ctx.beginPath();
+      for (const region of strip.regions) pathGeometry(ctx, region);
+      ctx.fill('evenodd');
+    }
+    const hatch = doc.materials.get(strip.materialId)?.hatch;
+    if (hatch) hatchRegions(ctx, strip.regions, hatch, scale);
+  });
+  ctx.strokeStyle = COLORS.assemblySeparator;
+  ctx.lineWidth = 0.75 / scale;
+  ctx.beginPath();
+  for (const s of assembly.separators) {
+    ctx.moveTo(s.a.x, s.a.y);
+    ctx.lineTo(s.b.x, s.b.y);
+  }
+  ctx.stroke();
 }
 
 function drawGrid(
@@ -182,9 +287,15 @@ export function drawScene(
       for (const region of regions) pathGeometry(ctx, region);
       ctx.fill('evenodd');
     }
+    const entity = doc.get(item.entityId as EntityId);
+    // typed walls expose their assembly build-up once zoomed in enough to read
+    if (entity instanceof WallEntity && entity.getThickness() * viewport.scale >= MIN_ASSEMBLY_PX) {
+      const assembly = wallAssemblyStrips(doc, entity);
+      if (assembly) drawAssemblyStrips(ctx, doc, assembly, viewport.scale);
+    }
     // finishes render as a dashed band hugging the wall face, so they read
     // apart from wall linework
-    const isFinish = doc.get(item.entityId as EntityId)?.type === 'finish';
+    const isFinish = entity?.type === 'finish';
     const color = isSelected
       ? COLORS.selected
       : isFinish

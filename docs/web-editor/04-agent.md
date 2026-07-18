@@ -1,25 +1,43 @@
-# Agent Integration — the prompt box
+# Agent Integration — the chat panel
 
-Status: **Decided** (shipped 2026-07-12; multi-provider 2026-07-18)
+Status: **Decided** (shipped 2026-07-12; multi-provider 2026-07-18; chat +
+voice 2026-07-18)
 
-The drafter agent surfaces as a second input row under the command line —
-deliberately: the command line is the human face of the command bus, the
-agent row is the natural-language face of the *same* bus. Both converge on
+The drafter agent surfaces as a floating chat over the viewport — a sparkles
+bubble bottom-right that opens into a conversation. Deliberately still the
+same seam: the command line is the human face of the command bus, the chat
+is the natural-language face of the *same* bus. Both converge on
 `session.dispatch`.
 
 ## How it works
 
 - `src/editor/agent.ts` owns the run: builds an `LlmClient` (`AnthropicClient`
   or `OpenAiClient`) + `DrafterAgent` from `@acip/agent-drafter`, streams
-  progress into the command log via the agent's `onDispatch` callback (one
-  line per command, errors marked), then logs the model's summary. React stays
-  thin — the `AgentRow` component collects the prompt and provider settings
-  and calls `runDrafter`.
+  progress to **two surfaces at once** — the command log (the bus trace, one
+  line per command) and the chat (`EditorUi.agentChat`: user bubbles right,
+  agent summaries left, per-command progress as small muted lines, errors
+  red). React stays thin — `AgentChat` collects the prompt and provider
+  settings and calls `runDrafter`.
 - **Busy state** lives in `EditorUi.agentBusy` (ValueStore); the input
-  disables and the sparkles icon pulses while the agent draws. The viewport
-  updates live as commands land — the drawing appears wall by wall.
+  disables, a "drawing…" typing indicator pulses, and the bubble icon pulses
+  while collapsed. The viewport updates live as commands land — the drawing
+  appears wall by wall behind the panel.
 - **Undo**: the whole run is one Ctrl+Z (history grouping in core). The
-  finish line in the log says so.
+  finish line in the chat says so.
+- **Chat state** lives in `EditorUi` (`agentChat`, `agentChatOpen`), so
+  minimizing the panel keeps the conversation.
+
+## Voice (zero cost — browser Web Speech API)
+
+No STT/TTS service, no backend, no key: dictation uses the browser's
+`SpeechRecognition` (webkit-prefixed in Chrome/Edge), replies use
+`speechSynthesis`. The mic button streams interim transcripts into the input
+as a preview; the final transcript auto-sends, and **voice-initiated runs
+speak the model's summary back** — talk in, hear out. Typed prompts stay
+silent. Browsers without `SpeechRecognition` (Firefox) simply don't get a mic
+button; everything else works unchanged. If cloud-grade accuracy is ever
+needed, the upgrade path is Whisper (~$0.006/min) behind editor-server — the
+hook's `onInterim`/`onFinal` contract wouldn't change.
 
 ## Providers (Anthropic + OpenAI / Codex)
 

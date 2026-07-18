@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { isEntityVisible, isMeshable } from '@acip/editor-core';
+import { FinishEntity, isEntityVisible, isMeshable } from '@acip/editor-core';
+import type { Entity, MaterialId } from '@acip/editor-core';
+import { materialDisplayColor } from '../material-color';
 import { useSession } from '../session-context';
 
 /**
@@ -44,16 +46,42 @@ export function Viewer3D() {
 
     const meshGroup = new THREE.Group();
     scene.add(meshGroup);
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x8fa3b8,
-      side: THREE.DoubleSide,
-    });
+
+    // one Three material per document material — appearance.color wins, else
+    // a stable name-derived tint (material-color.ts). Rebuilt with the doc so
+    // catalog edits recolor the model live.
+    const materialCache = new Map<string, THREE.MeshStandardMaterial>();
+    const disposeMaterials = () => {
+      for (const m of materialCache.values()) m.dispose();
+      materialCache.clear();
+    };
+    const displayMaterialId = (entity: Entity): MaterialId | null => {
+      if (entity instanceof FinishEntity) return entity.materialId;
+      const def = entity.typeRef ? session.doc.types.get(entity.typeRef) : undefined;
+      // the outermost assembly layer is what you see from outside
+      return def?.layers?.[0]?.materialId ?? null;
+    };
+    const materialFor = (id: MaterialId | null): THREE.MeshStandardMaterial => {
+      const key = id ?? 'default';
+      const cached = materialCache.get(key);
+      if (cached) return cached;
+      const record = id ? session.doc.materials.get(id) : undefined;
+      const rough = record?.appearance?.['roughness'];
+      const created = new THREE.MeshStandardMaterial({
+        color: materialDisplayColor(record),
+        side: THREE.DoubleSide,
+        roughness: typeof rough === 'number' ? rough : 0.85,
+      });
+      materialCache.set(key, created);
+      return created;
+    };
 
     const rebuildMeshes = () => {
       for (const child of [...meshGroup.children]) {
         meshGroup.remove(child);
         if (child instanceof THREE.Mesh) (child.geometry as THREE.BufferGeometry).dispose();
       }
+      disposeMaterials();
       for (const entity of session.doc.all()) {
         if (!isMeshable(entity) || !isEntityVisible(session.doc, entity)) continue;
         const mesh3d = entity.toMesh('medium');
@@ -64,7 +92,7 @@ export function Viewer3D() {
         );
         geometry.setIndex([...mesh3d.indices]);
         geometry.computeVertexNormals();
-        meshGroup.add(new THREE.Mesh(geometry, material));
+        meshGroup.add(new THREE.Mesh(geometry, materialFor(displayMaterialId(entity))));
       }
     };
     const unsubscribe = session.doc.events.on('change', rebuildMeshes);
@@ -92,6 +120,7 @@ export function Viewer3D() {
       unsubscribe();
       observer.disconnect();
       controls.dispose();
+      disposeMaterials();
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };

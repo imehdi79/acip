@@ -8,6 +8,13 @@ export interface LogEntry {
   readonly kind: 'info' | 'error' | 'echo';
 }
 
+export type ChatRole = 'user' | 'agent' | 'progress' | 'error';
+
+export interface ChatMessage {
+  readonly role: ChatRole;
+  readonly text: string;
+}
+
 export interface SelectionBox {
   readonly a: Point;
   readonly b: Point;
@@ -39,9 +46,16 @@ export class EditorUi {
   readonly overlay = new ValueStore<OverlayState>(EMPTY_OVERLAY);
   /** true while the drafter agent is running (input disabled, viewport live) */
   readonly agentBusy = new ValueStore<boolean>(false);
+  /** drafter chat panel: bubble collapsed vs conversation open */
+  readonly agentChatOpen = new ValueStore<boolean>(false);
+  readonly agentChat = new ValueStore<readonly ChatMessage[]>([]);
 
   appendLog(text: string, kind: LogEntry['kind'] = 'info'): void {
     this.log.set([...this.log.get().slice(-99), { text, kind }]);
+  }
+
+  appendChat(text: string, role: ChatRole = 'agent'): void {
+    this.agentChat.set([...this.agentChat.get().slice(-199), { role, text }]);
   }
 
   setSnap(snap: SnapPoint | null): void {

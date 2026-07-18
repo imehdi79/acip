@@ -1,20 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { IconKey, IconSparkles } from '@tabler/icons-react';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useStoreValue } from '../store';
-import type { AgentProvider } from '../agent';
-import {
-  PROVIDERS,
-  getApiKey,
-  getProvider,
-  providerInfo,
-  resolvedModel,
-  runDrafter,
-  setApiKey,
-  setModel,
-  setProvider,
-} from '../agent';
 
 export function CommandLine() {
   const session = useSession();
@@ -213,111 +200,6 @@ export function CommandLine() {
           }}
         />
       </div>
-      <AgentRow />
-    </div>
-  );
-}
-
-function AgentRow() {
-  const session = useSession();
-  const { ui } = useRuntime();
-  const busy = useStoreValue(ui.agentBusy);
-  const [prompt, setPrompt] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
-  const [provider, setProviderState] = useState<AgentProvider>(getProvider);
-  const [key, setKey] = useState(() => getApiKey(getProvider()));
-  const [model, setModelState] = useState(() => resolvedModel(getProvider()));
-
-  const info = providerInfo(provider);
-
-  const submit = () => {
-    const text = prompt.trim();
-    if (!text || busy) return;
-    setPrompt('');
-    void runDrafter(session, ui, text);
-  };
-
-  // switching provider loads that provider's stored key and effective model
-  const switchProvider = (next: AgentProvider) => {
-    setProviderState(next);
-    setProvider(next);
-    setKey(getApiKey(next));
-    setModelState(resolvedModel(next));
-  };
-
-  const saveSettings = () => {
-    setApiKey(provider, key);
-    setModel(provider, model);
-    setShowSettings(false);
-    ui.appendLog(
-      key.trim()
-        ? `${info.label} key saved (this browser only), model ${model}.`
-        : `${info.label} key cleared.`,
-    );
-  };
-
-  return (
-    <div className="agent-row">
-      <IconSparkles size={16} stroke={1.75} className={busy ? 'agent-icon busy' : 'agent-icon'} />
-      <input
-        value={prompt}
-        disabled={busy}
-        placeholder={
-          busy
-            ? 'Agent is drawing…'
-            : `Ask ${info.label} — e.g. "draw a 6 by 4 m room with a door"`
-        }
-        onChange={(e) => setPrompt(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') submit();
-          e.stopPropagation();
-        }}
-      />
-      {showSettings && (
-        <>
-          <select
-            className="agent-provider"
-            value={provider}
-            onChange={(e) => switchProvider(e.target.value as AgentProvider)}
-          >
-            {PROVIDERS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-          <select
-            className="agent-provider agent-model"
-            value={model}
-            title="Model"
-            onChange={(e) => setModelState(e.target.value)}
-          >
-            {info.models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-          <input
-            type="password"
-            className="key-input"
-            placeholder={info.keyPlaceholder}
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveSettings();
-              e.stopPropagation();
-            }}
-          />
-        </>
-      )}
-      <button
-        type="button"
-        title={showSettings ? 'Save agent settings' : `Agent settings (${info.label})`}
-        onClick={() => (showSettings ? saveSettings() : setShowSettings(true))}
-      >
-        <IconKey size={16} stroke={1.75} />
-      </button>
     </div>
   );
 }

@@ -99,38 +99,61 @@ function makeClient(provider: AgentProvider, apiKey: string): LlmClient {
  * deployment would proxy through editor-server instead. DrafterAgent is
  * provider-agnostic — only the LlmClient differs. The whole run lands as a
  * single undo step via history grouping.
+ *
+ * Progress streams to two surfaces at once: the command log (the bus trace)
+ * and the chat panel (the conversation). Returns the model's summary so the
+ * chat can speak it for voice-initiated runs.
  */
 export async function runDrafter(
   session: EditorSession,
   ui: EditorUi,
   prompt: string,
-): Promise<void> {
-  if (ui.agentBusy.get()) return;
+): Promise<string | null> {
+  if (ui.agentBusy.get()) return null;
   const provider = getProvider();
   const info = providerInfo(provider);
   const apiKey = getApiKey(provider);
+  ui.appendChat(prompt, 'user');
   if (!apiKey) {
-    ui.appendLog(`No ${info.label} key set — use the key button to paste it.`, 'error');
-    return;
+    const message = `No ${info.label} key set — open the chat settings to paste it.`;
+    ui.appendLog(message, 'error');
+    ui.appendChat(message, 'error');
+    return null;
   }
   ui.agentBusy.set(true);
   ui.appendLog(`ai(${info.label})> ${prompt}`, 'echo');
   try {
     const agent = new DrafterAgent(session, makeClient(provider, apiKey));
     const result = await agent.run(prompt, {
-      onDispatch: (entry) =>
-        entry.ok
-          ? ui.appendLog(`  ${entry.command} ok`)
-          : ui.appendLog(`  ${entry.command} failed: ${entry.error}`, 'error'),
+      onDispatch: (entry) => {
+        if (entry.ok) {
+          ui.appendLog(`  ${entry.command} ok`);
+          ui.appendChat(`${entry.command} ✓`, 'progress');
+        } else {
+          ui.appendLog(`  ${entry.command} failed: ${entry.error}`, 'error');
+          ui.appendChat(`${entry.command} ✗ ${entry.error}`, 'error');
+        }
+      },
     });
-    if (result.summary) ui.appendLog(result.summary);
-    const okCount = result.dispatched.filter((d) => d.ok).length;
-    ui.appendLog(`Agent finished: ${okCount} commands in ${result.turns} turn(s) — one undo step.`);
-    if (result.stopped === 'max-turns') {
-      ui.appendLog('Stopped at the turn limit before the agent declared itself done.', 'error');
+    if (result.summary) {
+      ui.appendLog(result.summary);
+      ui.appendChat(result.summary, 'agent');
     }
+    const okCount = result.dispatched.filter((d) => d.ok).length;
+    const finish = `${okCount} commands in ${result.turns} turn(s) — one undo step.`;
+    ui.appendLog(`Agent finished: ${finish}`);
+    ui.appendChat(finish, 'progress');
+    if (result.stopped === 'max-turns') {
+      const warning = 'Stopped at the turn limit — say "continue" to pick up where it left off.';
+      ui.appendLog(warning, 'error');
+      ui.appendChat(warning, 'error');
+    }
+    return result.summary || null;
   } catch (err) {
-    ui.appendLog(err instanceof Error ? err.message : String(err), 'error');
+    const message = err instanceof Error ? err.message : String(err);
+    ui.appendLog(message, 'error');
+    ui.appendChat(message, 'error');
+    return null;
   } finally {
     ui.agentBusy.set(false);
   }
