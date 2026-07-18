@@ -252,8 +252,19 @@ body,
 }
 
 .agent-row .key-input {
-  flex: 0 0 220px;
+  flex: 0 0 180px;
   font-family: 'Cascadia Mono', Consolas, monospace;
+}
+
+.agent-row .agent-provider {
+  flex: 0 0 auto;
+  max-width: 130px;
+  background: #1b1e23;
+  color: #e8ecf1;
+  border: 1px solid #2c313a;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
 }
 
 .agent-row button {

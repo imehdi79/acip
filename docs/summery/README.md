@@ -220,10 +220,16 @@ shipped with docs-first commits, tests, and a green build.
   billed flight in the BOQ. **This completes all five originally-requested
   features** — space detection, assembly layers, floors, roofs, stairs.
   See [stairs.md](../editor-core/04-systems/stairs.md).
+- **Multi-provider agent**: `DrafterAgent` depends only on the `LlmClient`
+  protocol, so a second provider is just a second client — `OpenAiClient`
+  (Codex / GPT) translates the normalized Anthropic shape ⇄ OpenAI Chat
+  Completions (tool_use ⇄ tool_calls, tool_result ⇄ `tool` messages), both
+  fetch-based and SDK-free. The agent row gained a provider/model/key selector
+  (persisted per provider); Anthropic and OpenAI keys stay in the browser.
 
 ## Where it stands / what's next
 
-179 tests across three packages; all typechecks and builds green. The
+184 tests across four packages; all typechecks and builds green. The
 architecture has survived its three intended stress tests: a semantic model
 (joins/hosting), an acting external package (agent), and an observing external
 package (estimator) — none required core rework.

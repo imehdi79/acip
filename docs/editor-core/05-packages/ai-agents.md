@@ -77,13 +77,18 @@ walls auto-join, parametric t placement) + document digest + tool catalog →
 model returns tool calls → each call dispatches through the bus →
 **validation errors return to the model as `is_error` tool results so it can
 self-correct** → loop until a text-only reply or `maxTurns`. The LLM client
-is an injected interface (`LlmClient`); tests script a fake, production uses
-the fetch-based `AnthropicClient` (no SDK dependency — headless everywhere
-the core runs). `onDispatch` streams per-command progress to UIs;
-`dangerouslyAllowBrowser` opts into direct browser calls (required CORS
-header) for the user's-own-key case — hosted deployments proxy via
-editor-server. web-editor wires this as a prompt row under the command line
-(see [web-editor 04-agent.md](../../web-editor/04-agent.md)).
+is an injected interface (`LlmClient`, normalized in the Anthropic Messages
+shape); tests script a fake, production picks a provider — the fetch-based
+`AnthropicClient` or `OpenAiClient` (Codex / GPT), both SDK-free so the agent
+stays headless everywhere the core runs. A new provider is a new client, not
+an agent change: `OpenAiClient` translates the normalized shape ⇄ OpenAI Chat
+Completions (tool_use ⇄ tool_calls, tool_result ⇄ `tool` messages,
+`input_schema` ⇄ `function.parameters`). `onDispatch` streams per-command
+progress to UIs; direct-browser calls are the user's-own-key case (Anthropic
+needs a CORS opt-in header, OpenAI serves CORS) — hosted deployments proxy
+via editor-server. web-editor wires this as a prompt row under the command
+line, with a provider/model/key selector (see
+[web-editor 04-agent.md](../../web-editor/04-agent.md)).
 
 ## Remaining candidates (build later, same contract)
 

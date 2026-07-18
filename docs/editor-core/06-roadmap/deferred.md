@@ -295,6 +295,18 @@ top), `STAIR` keyword, demo rate. See [stairs.md](../04-systems/stairs.md).
 assembly layers (+ unit-aware pricing + finishes), floors (slabs), roofs, and
 stairs.
 
+**Multi-provider agent landed 2026-07-18.** `DrafterAgent` already depended
+only on the `LlmClient` protocol (normalized in the Anthropic Messages shape),
+so a second provider is a second client, not an agent change. `OpenAiClient`
+(Codex / GPT) translates that shape ⇄ OpenAI Chat Completions — tool_use ⇄
+tool_calls, tool_result ⇄ `tool` messages, `input_schema` ⇄
+`function.parameters`, `finish_reason` ⇄ stop reason; malformed tool args
+degrade to empty input (the bus rejects, the model self-corrects). Both
+clients are fetch-based/SDK-free. web-editor: the agent row gained a
+provider/model/key selector, persisted per provider in localStorage; Anthropic
+uses its CORS opt-in header, OpenAI sends only the Bearer key. 11 drafter
+tests (5 new for OpenAiClient).
+
 Next candidates: multi-flight stairs (landings/winders), finishes on bare room
 polygons (no slab required), gable roofs (ridge half-plane split over the
 shipped mono-pitch), wall-top trimming to the roof underside, crossing wall

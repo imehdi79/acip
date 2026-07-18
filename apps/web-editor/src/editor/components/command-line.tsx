@@ -3,7 +3,18 @@ import { IconKey, IconSparkles } from '@tabler/icons-react';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useStoreValue } from '../store';
-import { getApiKey, runDrafter, setApiKey } from '../agent';
+import type { AgentProvider } from '../agent';
+import {
+  PROVIDERS,
+  getApiKey,
+  getProvider,
+  providerInfo,
+  resolvedModel,
+  runDrafter,
+  setApiKey,
+  setModel,
+  setProvider,
+} from '../agent';
 
 export function CommandLine() {
   const session = useSession();
@@ -212,8 +223,12 @@ function AgentRow() {
   const { ui } = useRuntime();
   const busy = useStoreValue(ui.agentBusy);
   const [prompt, setPrompt] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  const [key, setKey] = useState(getApiKey);
+  const [showSettings, setShowSettings] = useState(false);
+  const [provider, setProviderState] = useState<AgentProvider>(getProvider);
+  const [key, setKey] = useState(() => getApiKey(getProvider()));
+  const [model, setModelState] = useState(() => resolvedModel(getProvider()));
+
+  const info = providerInfo(provider);
 
   const submit = () => {
     const text = prompt.trim();
@@ -222,10 +237,23 @@ function AgentRow() {
     void runDrafter(session, ui, text);
   };
 
-  const saveKey = () => {
-    setApiKey(key);
-    setShowKey(false);
-    ui.appendLog(key.trim() ? 'API key saved (this browser only).' : 'API key cleared.');
+  // switching provider loads that provider's stored key and effective model
+  const switchProvider = (next: AgentProvider) => {
+    setProviderState(next);
+    setProvider(next);
+    setKey(getApiKey(next));
+    setModelState(resolvedModel(next));
+  };
+
+  const saveSettings = () => {
+    setApiKey(provider, key);
+    setModel(provider, model);
+    setShowSettings(false);
+    ui.appendLog(
+      key.trim()
+        ? `${info.label} key saved (this browser only), model ${model}.`
+        : `${info.label} key cleared.`,
+    );
   };
 
   return (
@@ -235,7 +263,9 @@ function AgentRow() {
         value={prompt}
         disabled={busy}
         placeholder={
-          busy ? 'Agent is drawing…' : 'Ask the agent — e.g. "draw a 6 by 4 m room with a door"'
+          busy
+            ? 'Agent is drawing…'
+            : `Ask ${info.label} — e.g. "draw a 6 by 4 m room with a door"`
         }
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={(e) => {
@@ -243,23 +273,48 @@ function AgentRow() {
           e.stopPropagation();
         }}
       />
-      {showKey && (
-        <input
-          type="password"
-          className="key-input"
-          placeholder="sk-ant-…"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') saveKey();
-            e.stopPropagation();
-          }}
-        />
+      {showSettings && (
+        <>
+          <select
+            className="agent-provider"
+            value={provider}
+            onChange={(e) => switchProvider(e.target.value as AgentProvider)}
+          >
+            {PROVIDERS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="agent-provider agent-model"
+            value={model}
+            title="Model"
+            onChange={(e) => setModelState(e.target.value)}
+          >
+            {info.models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <input
+            type="password"
+            className="key-input"
+            placeholder={info.keyPlaceholder}
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveSettings();
+              e.stopPropagation();
+            }}
+          />
+        </>
       )}
       <button
         type="button"
-        title={showKey ? 'Save API key' : 'Set Anthropic API key'}
-        onClick={() => (showKey ? saveKey() : setShowKey(true))}
+        title={showSettings ? 'Save agent settings' : `Agent settings (${info.label})`}
+        onClick={() => (showSettings ? saveSettings() : setShowSettings(true))}
       >
         <IconKey size={16} stroke={1.75} />
       </button>

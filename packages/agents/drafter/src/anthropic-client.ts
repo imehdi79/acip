@@ -34,7 +34,9 @@ export class AnthropicClient implements LlmClient {
     this.maxTokens = options.maxTokens ?? 4096;
     this.baseUrl = options.baseUrl ?? 'https://api.anthropic.com';
     this.allowBrowser = options.dangerouslyAllowBrowser ?? false;
-    this.fetchFn = options.fetchFn ?? fetch;
+    // bind to the global: browser fetch throws "Illegal invocation" if called
+    // as a method on any object other than the window/worker global
+    this.fetchFn = options.fetchFn ?? fetch.bind(globalThis);
   }
 
   async complete(request: LlmRequest): Promise<LlmTurn> {
