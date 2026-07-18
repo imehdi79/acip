@@ -1,4 +1,8 @@
-import { AnthropicClient, DrafterAgent, OpenAiClient } from '@acip/agent-drafter';
+import {
+  AnthropicClient,
+  DrafterAgent,
+  OpenAiClient,
+} from '@acip/agent-drafter';
 import type { LlmClient } from '@acip/agent-drafter';
 import type { EditorSession } from '@acip/editor-core';
 import type { EditorUi } from './ui-state';
@@ -55,7 +59,9 @@ const modelStorage = (p: AgentProvider): string => `acip.${p}-model`;
  * dev defaults to the local Nest server.
  */
 export function serverUrl(): string {
-  const configured = import.meta.env.VITE_EDITOR_SERVER_URL as string | undefined;
+  const configured =
+    (import.meta.env.VITE_EDITOR_SERVER_URL as string | undefined) ??
+    'https://acip-api.mehdify.com/api';
   if (configured) return configured.replace(/\/+$/, '');
   return import.meta.env.DEV ? 'http://localhost:3000' : '';
 }
@@ -65,7 +71,9 @@ export function providerInfo(id: AgentProvider): ProviderInfo {
 }
 
 export function getProvider(): AgentProvider {
-  return localStorage.getItem(PROVIDER_STORAGE) === 'openai' ? 'openai' : 'anthropic';
+  return localStorage.getItem(PROVIDER_STORAGE) === 'openai'
+    ? 'openai'
+    : 'anthropic';
 }
 
 export function setProvider(provider: AgentProvider): void {
@@ -104,7 +112,9 @@ export async function transcribeAudio(blob: Blob): Promise<string> {
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
-    throw new Error(`Transcription failed (${response.status}): ${detail.slice(0, 200)}`);
+    throw new Error(
+      `Transcription failed (${response.status}): ${detail.slice(0, 200)}`,
+    );
   }
   const data = (await response.json()) as { text?: string };
   return (data.text ?? '').trim();
@@ -170,7 +180,8 @@ export async function runDrafter(
     ui.appendLog(`Agent finished: ${finish}`);
     ui.appendChat(finish, 'progress');
     if (result.stopped === 'max-turns') {
-      const warning = 'Stopped at the turn limit — say "continue" to pick up where it left off.';
+      const warning =
+        'Stopped at the turn limit — say "continue" to pick up where it left off.';
       ui.appendLog(warning, 'error');
       ui.appendChat(warning, 'error');
     }
