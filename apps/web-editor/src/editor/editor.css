@@ -3,12 +3,15 @@ body,
 #root {
   margin: 0;
   height: 100%;
+  /* no pull-to-refresh or rubber-banding under pan gestures */
+  overscroll-behavior: none;
 }
 
 .editor-shell {
   display: grid;
   grid-template-rows: 42px minmax(0, 1fr) auto 26px;
   height: 100vh;
+  height: 100dvh; /* mobile: exclude the browser address bar */
   background: #16181d;
   color: #cfd3da;
   font-family: 'Segoe UI', system-ui, sans-serif;
@@ -34,6 +37,17 @@ body,
   width: 100%;
   height: 100%;
   display: block;
+  /* all touch gestures belong to the viewport, not the browser */
+  touch-action: none;
+}
+
+/* long-press on chrome must not start a text selection */
+.top-bar,
+.tool-palette,
+.status-bar,
+.viewport {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ── top bar ── */
@@ -706,4 +720,62 @@ body,
 .add-layer:hover {
   color: #cfd3da;
   border-color: #3a414d;
+}
+
+/* ── phone layout ──
+   Viewer + agent chat only: side panels and the command line are desktop
+   tooling; on a phone the drafter chat IS the command line. */
+@media (max-width: 720px) {
+  .editor-main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .tool-palette {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 6px 8px;
+    border-right: none;
+    border-bottom: 1px solid #2c313a;
+  }
+
+  .tool-palette button {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .panels,
+  .command-line,
+  .brand {
+    display: none;
+  }
+
+  .top-bar {
+    gap: 8px;
+    overflow-x: auto;
+  }
+
+  .top-bar button {
+    padding: 7px 10px;
+    white-space: nowrap;
+  }
+
+  .status-bar {
+    gap: 12px;
+    overflow: hidden;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .editor-shell {
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  .chat-panel {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: min(62vh, calc(100% - 16px));
+  }
 }
