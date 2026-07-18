@@ -1,0 +1,13 @@
+// Cloudflare Workers deployment — static assets only, no Worker script.
+// Deploy: bun x nx build web-editor && bunx wrangler deploy -c apps/web-editor/wrangler.jsonc
+// When editor-server lands (key proxy for shared deployments), add "main"
+// here and the same Worker serves both the SPA and the API.
+{
+  "name": "acip-web-editor",
+  "compatibility_date": "2026-07-18",
+  "assets": {
+    "directory": "./dist",
+    // react-router SPA: unknown paths fall back to index.html
+    "not_found_handling": "single-page-application"
+  }
+}
