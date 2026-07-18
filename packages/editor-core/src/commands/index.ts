@@ -82,5 +82,7 @@ export {
   SetTypeCommand,
   registerDocumentStoreCommands,
 } from './document-stores.js';
+export type { LogRequestParams, RequestKind } from './requests.js';
+export { LogRequestCommand, REQUEST_KINDS, registerRequestCommands } from './requests.js';
 export { asPoint, asIdArray, asId, asNumber, asPositive } from './validate.js';
 export { S } from './schema.js';

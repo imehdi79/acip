@@ -20,6 +20,10 @@ module.exports = {
       outputHashing: 'none',
       generatePackageJson: false,
       sourceMap: true,
+      // keep node_modules as runtime requires — Prisma's client loads a
+      // native query engine relative to node_modules/.prisma, and bundling
+      // breaks that lookup (deploy = bun install + node dist/main.js)
+      externalDependencies: 'all',
     }),
   ],
 };

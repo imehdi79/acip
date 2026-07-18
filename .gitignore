@@ -50,3 +50,8 @@ out
 
 vite.config.*.timestamp*
 .nx/polygraph
+
+# secrets & local databases
+.env
+*.db
+*.db-journal

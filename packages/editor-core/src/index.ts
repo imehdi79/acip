@@ -258,6 +258,8 @@ export type {
   AddStairParams,
   AddDimensionParams,
   AutoDimensionParams,
+  LogRequestParams,
+  RequestKind,
 } from './commands/index.js';
 export {
   paramsSchema,
@@ -307,6 +309,9 @@ export {
   AddDimensionCommand,
   AutoDimensionCommand,
   registerDimensionCommands,
+  LogRequestCommand,
+  REQUEST_KINDS,
+  registerRequestCommands,
   asPoint,
   asIdArray,
   asId,

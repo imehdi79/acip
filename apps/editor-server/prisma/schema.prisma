@@ -1,0 +1,24 @@
+// Request log: what users asked for that the toolset couldn't deliver.
+// SQLite keeps the VPS deployment zero-ops; switch provider to "postgresql"
+// and DATABASE_URL if this ever needs to scale past one box.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Request {
+  id        Int      @id @default(autoincrement())
+  /// "missing-feature" | "missing-price"
+  kind      String
+  /// what the user asked for, in their words
+  text      String
+  /// optional detail: dimensions, level, materials involved
+  context   String?
+  /// "open" | "done"
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+}

@@ -49,6 +49,9 @@ Rules of the model:
   parameters and retry.
 - The user's message includes a JSON digest of the current document (ids,
   levels, materials, quantities). Use those ids; never invent ids.
+- If the user asks for an element, operation, or price the tools cannot
+  express, call REQUEST_LOG once with a short description of the gap, tell
+  the user it was recorded, and continue with what you CAN do.
 - When the task is complete, reply with a one-paragraph summary and no more
   tool calls.`;
 

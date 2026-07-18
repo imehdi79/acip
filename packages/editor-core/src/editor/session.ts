@@ -13,6 +13,7 @@ import { registerSlabCommands } from '../commands/slabs.js';
 import { registerRoofCommands } from '../commands/roofs.js';
 import { registerFinishCommands } from '../commands/finishes.js';
 import { registerStairCommands } from '../commands/stairs.js';
+import { registerRequestCommands } from '../commands/requests.js';
 import { LineEntity, createLineEntity } from '../entities/primitives/line-entity.js';
 import { CircleEntity, createCircleEntity } from '../entities/primitives/circle-entity.js';
 import { ArcEntity, createArcEntity } from '../entities/primitives/arc-entity.js';
@@ -85,6 +86,7 @@ export class EditorSession {
       registerFinishCommands(this.commands);
       registerStairCommands(this.commands);
       registerDimensionCommands(this.commands);
+      registerRequestCommands(this.commands);
     }
   }
 

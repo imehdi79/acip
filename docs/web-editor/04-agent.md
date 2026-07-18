@@ -1,7 +1,8 @@
 # Agent Integration — the chat panel
 
 Status: **Decided** (shipped 2026-07-12; multi-provider 2026-07-18; chat +
-voice 2026-07-18)
+voice 2026-07-18; editor-server proxy + Whisper voice + request log
+2026-07-18)
 
 The drafter agent surfaces as a floating chat over the viewport — a sparkles
 bubble bottom-right that opens into a conversation. Deliberately still the
@@ -27,17 +28,16 @@ is the natural-language face of the *same* bus. Both converge on
 - **Chat state** lives in `EditorUi` (`agentChat`, `agentChatOpen`), so
   minimizing the panel keeps the conversation.
 
-## Voice (zero cost — browser Web Speech API)
+## Voice (any language — Whisper behind editor-server)
 
-No STT/TTS service, no backend, no key: dictation uses the browser's
-`SpeechRecognition` (webkit-prefixed in Chrome/Edge), replies use
-`speechSynthesis`. The mic button streams interim transcripts into the input
-as a preview; the final transcript auto-sends, and **voice-initiated runs
-speak the model's summary back** — talk in, hear out. Typed prompts stay
-silent. Browsers without `SpeechRecognition` (Firefox) simply don't get a mic
-button; everything else works unchanged. If cloud-grade accuracy is ever
-needed, the upgrade path is Whisper (~$0.006/min) behind editor-server — the
-hook's `onInterim`/`onFinal` contract wouldn't change.
+Push-to-talk: the mic button records with `MediaRecorder` (all modern
+browsers, Firefox included), a second click stops and POSTs the audio to
+editor-server's `/api/stt`, which forwards it to OpenAI Whisper. **Whisper
+auto-detects the spoken language**, so the user can draft in anything.
+The transcript auto-sends, and voice-initiated runs speak the model's
+summary back via `speechSynthesis` (free, built-in) — talk in, hear out.
+Typed prompts stay silent. Cost is ~$0.006/min of audio; there is no
+browser speech engine in the loop anymore.
 
 ## Providers (Anthropic + OpenAI / Codex)
 
@@ -49,27 +49,39 @@ tool_use ⇄ tool_calls, tool_result ⇄ `tool` messages, `input_schema` ⇄
 `function.parameters`, `finish_reason` ⇄ stop reason. Both clients are
 fetch-based and SDK-free, so the agent stays as headless as the core.
 
-The settings button reveals a **provider select**, a **model select** (the
-list per provider — Anthropic: Fable 5 / Opus 4.8 / Sonnet 4.6 / Haiku 4.5;
-OpenAI: GPT-5 Codex / GPT-5 / GPT-5 mini / GPT-4o / GPT-4o mini; first is the
-default), and the **key** field. Provider, key, and model persist
-per-provider in `localStorage` (`acip.agent-provider`,
-`acip.{provider}-api-key`, `acip.{provider}-model`); switching provider loads
-that provider's saved key and model.
+The settings button reveals a **provider select** and a **model select**
+(Anthropic: Fable 5 / Opus 4.8 / Sonnet 4.6 / Haiku 4.5; OpenAI: GPT-5
+Codex / GPT-5 / GPT-5 mini / GPT-4o / GPT-4o mini; first is the default).
+Provider and model persist per-provider in `localStorage`
+(`acip.agent-provider`, `acip.{provider}-model`). There is no key field
+anymore — keys live on the server.
 
 Fetch note: both clients bind the default `fetch` to the global
 (`fetch.bind(globalThis)`) — a browser `fetch` called as a method on any
 object other than the window throws "Illegal invocation".
 
-## API key handling (browser-only deployment)
+## API keys live in editor-server's .env (shipped 2026-07-18)
 
-Keys stay in this browser (`localStorage`) and are sent directly to the
-provider. Anthropic needs the `anthropic-dangerous-direct-browser-access:
-true` header (`dangerouslyAllowBrowser` on `AnthropicClient`); OpenAI serves
-CORS for direct browser calls, so `OpenAiClient` sends only the `Bearer`
-key. Direct-from-browser is acceptable **only** because the key belongs to
-the person at the keyboard. A shared/hosted deployment must proxy through
-editor-server instead — that slot is already reserved in the roadmap.
+The browser never sees a provider key. Both `LlmClient`s point their
+`baseUrl` at editor-server's `/api/llm/<provider>` — the proxy routes mirror
+the provider paths exactly (`/v1/messages`, `/v1/chat/completions`), so the
+clients needed zero changes, they just send an empty key and the server
+injects the real one from `.env` (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+configured once). The web app finds the server via `VITE_EDITOR_SERVER_URL`
+(dev default `http://localhost:3000`, empty = same origin), and the server's
+`CORS_ORIGIN` allowlists the frontend origin.
+
+## The request log (REQUEST.LOG → Prisma)
+
+The drafter's system prompt tells it: asked for something you have no tool
+for (an element, operation, or price)? Call `REQUEST_LOG` once, tell the
+user it was recorded, continue with what you can do. `REQUEST.LOG` is a
+**signal command** — it mutates nothing in the document (so undoing a run
+never erases the record); `runDrafter` observes the dispatch and forwards it
+to `POST /api/requests`, where editor-server persists it via Prisma into
+SQLite (`Request`: kind = missing-feature | missing-price, text, context,
+status open/done). `GET /api/requests` lists them; `PATCH /api/requests/:id`
+closes them. That table is the product backlog, in users' own words.
 
 ## Known caveat
 

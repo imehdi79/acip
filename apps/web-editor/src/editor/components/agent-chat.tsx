@@ -12,40 +12,14 @@ import { useStoreValue } from '../store';
 import type { AgentProvider } from '../agent';
 import {
   PROVIDERS,
-  getApiKey,
   getProvider,
   providerInfo,
   resolvedModel,
   runDrafter,
-  setApiKey,
   setModel,
   setProvider,
+  transcribeAudio,
 } from '../agent';
-
-// ── speech (zero-cost voice: browser Web Speech API, no backend, no key) ──
-// TypeScript's dom lib has no SpeechRecognition types; declare the sliver we use.
-interface SpeechResultEvent {
-  readonly resultIndex: number;
-  readonly results: ArrayLike<{ readonly isFinal: boolean } & ArrayLike<{ transcript: string }>>;
-}
-interface SpeechRecognitionLike {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  onresult: ((e: SpeechResultEvent) => void) | null;
-  onend: (() => void) | null;
-  onerror: ((e: { error?: string }) => void) | null;
-  start(): void;
-  stop(): void;
-}
-
-function speechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
-  const w = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecognitionLike;
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
 
 /** speak an agent reply aloud — free, built-in, cancellable by the next one */
 function speak(text: string): void {
@@ -54,65 +28,81 @@ function speak(text: string): void {
   window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
 }
 
+type VoiceState = 'idle' | 'recording' | 'transcribing';
+
 /**
- * Dictation hook: interim transcripts preview into the input, the final
- * transcript is handed to onFinal (the chat auto-sends it and speaks the
- * reply — talk in, hear out). Unsupported browsers simply get no mic button.
+ * Push-to-talk in any language: MediaRecorder captures audio, editor-server's
+ * /api/stt (Whisper) transcribes it — the language is auto-detected, no
+ * browser speech engine involved. Click to record, click again to send.
  */
-function useSpeechInput(handlers: {
-  onInterim: (text: string) => void;
+function useVoiceInput(handlers: {
   onFinal: (text: string) => void;
-}): { supported: boolean; listening: boolean; toggle: () => void } {
-  const [listening, setListening] = useState(false);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  onError: (message: string) => void;
+}): { supported: boolean; state: VoiceState; toggle: () => void } {
+  const [state, setState] = useState<VoiceState>('idle');
+  const recorderRef = useRef<MediaRecorder | null>(null);
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
-  const supported = speechRecognitionCtor() !== null;
+  const supported =
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    typeof MediaRecorder !== 'undefined';
 
   const toggle = () => {
-    if (listening) {
-      recognitionRef.current?.stop();
+    if (state === 'transcribing') return;
+    if (state === 'recording') {
+      recorderRef.current?.stop();
       return;
     }
-    const Ctor = speechRecognitionCtor();
-    if (!Ctor) return;
-    const recognition = new Ctor();
-    recognition.lang = navigator.language || 'en-US';
-    recognition.interimResults = true;
-    recognition.continuous = false;
-    let finalText = '';
-    recognition.onresult = (e) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const result = e.results[i];
-        if (result.isFinal) finalText += result[0].transcript;
-        else interim += result[0].transcript;
-      }
-      handlersRef.current.onInterim(finalText + interim);
-    };
-    recognition.onend = () => {
-      setListening(false);
-      recognitionRef.current = null;
-      const text = finalText.trim();
-      if (text) handlersRef.current.onFinal(text);
-    };
-    recognition.onerror = () => {
-      // onend fires after onerror; nothing to send, the input keeps the interim
-    };
-    recognitionRef.current = recognition;
-    setListening(true);
-    recognition.start();
+    void navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        const recorder = new MediaRecorder(stream);
+        const chunks: Blob[] = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+        recorder.onstop = () => {
+          for (const track of stream.getTracks()) track.stop();
+          recorderRef.current = null;
+          const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+          if (blob.size === 0) {
+            setState('idle');
+            return;
+          }
+          setState('transcribing');
+          transcribeAudio(blob)
+            .then((text) => {
+              setState('idle');
+              if (text) handlersRef.current.onFinal(text);
+            })
+            .catch((err) => {
+              setState('idle');
+              handlersRef.current.onError(err instanceof Error ? err.message : String(err));
+            });
+        };
+        recorderRef.current = recorder;
+        setState('recording');
+        recorder.start();
+      })
+      .catch(() => handlersRef.current.onError('Microphone access was denied.'));
   };
 
-  useEffect(() => () => recognitionRef.current?.stop(), []);
+  useEffect(
+    () => () => {
+      recorderRef.current?.stop();
+    },
+    [],
+  );
 
-  return { supported, listening, toggle };
+  return { supported, state, toggle };
 }
 
 /**
  * The drafter as a chat: a floating bubble over the viewport that opens into
  * a conversation. Same command bus underneath — bubbles are just the
- * natural-language face of session.dispatch, exactly like the old agent row.
+ * natural-language face of session.dispatch. All provider traffic goes
+ * through editor-server; there is no key to paste in the browser anymore.
  */
 export function AgentChat() {
   const session = useSession();
@@ -123,7 +113,6 @@ export function AgentChat() {
   const [input, setInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [provider, setProviderState] = useState<AgentProvider>(getProvider);
-  const [key, setKey] = useState(() => getApiKey(getProvider()));
   const [model, setModelState] = useState(() => resolvedModel(getProvider()));
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -143,26 +132,21 @@ export function AgentChat() {
     });
   };
 
-  const { supported, listening, toggle } = useSpeechInput({
-    onInterim: setInput,
+  const voice = useVoiceInput({
     onFinal: (text) => send(text, true),
+    onError: (message) => ui.appendChat(message, 'error'),
   });
 
   const switchProvider = (next: AgentProvider) => {
     setProviderState(next);
     setProvider(next);
-    setKey(getApiKey(next));
     setModelState(resolvedModel(next));
   };
 
   const saveSettings = () => {
-    setApiKey(provider, key);
     setModel(provider, model);
     setShowSettings(false);
-    ui.appendChat(
-      key.trim() ? `${info.label} key saved (this browser only), model ${model}.` : `${info.label} key cleared.`,
-      'progress',
-    );
+    ui.appendChat(`${info.label} · ${model} selected.`, 'progress');
   };
 
   if (!open) {
@@ -187,7 +171,7 @@ export function AgentChat() {
         </span>
         <button
           type="button"
-          title="Provider, model & key"
+          title="Provider & model"
           onClick={() => setShowSettings((v) => !v)}
         >
           <IconSettings size={15} stroke={1.75} />
@@ -212,16 +196,6 @@ export function AgentChat() {
               </option>
             ))}
           </select>
-          <input
-            type="password"
-            placeholder={info.keyPlaceholder}
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveSettings();
-              e.stopPropagation();
-            }}
-          />
           <button type="button" onClick={saveSettings}>
             Save
           </button>
@@ -231,7 +205,7 @@ export function AgentChat() {
         {messages.length === 0 && (
           <p className="chat-empty">
             Ask for a drawing — “a 6 by 4 m room with a door and two windows”.
-            {supported ? ' Or tap the mic and just say it.' : ''}
+            {voice.supported ? ' Or tap the mic and say it in any language.' : ''}
           </p>
         )}
         {messages.map((m, i) => (
@@ -242,12 +216,19 @@ export function AgentChat() {
         {busy && <div className="chat-msg chat-progress chat-typing">drawing…</div>}
       </div>
       <div className="chat-input-row">
-        {supported && (
+        {voice.supported && (
           <button
             type="button"
-            className={listening ? 'chat-mic listening' : 'chat-mic'}
-            title={listening ? 'Stop listening (sends what was heard)' : 'Speak your prompt'}
-            onClick={toggle}
+            className={voice.state === 'idle' ? 'chat-mic' : 'chat-mic listening'}
+            title={
+              voice.state === 'recording'
+                ? 'Stop recording (transcribes & sends)'
+                : voice.state === 'transcribing'
+                  ? 'Transcribing…'
+                  : 'Speak your prompt — any language'
+            }
+            disabled={voice.state === 'transcribing'}
+            onClick={voice.toggle}
           >
             <IconMicrophone size={16} stroke={1.75} />
           </button>
@@ -256,7 +237,13 @@ export function AgentChat() {
           value={input}
           disabled={busy}
           placeholder={
-            listening ? 'Listening…' : busy ? 'Agent is drawing…' : `Ask ${info.label}…`
+            voice.state === 'recording'
+              ? 'Recording — click the mic to send…'
+              : voice.state === 'transcribing'
+                ? 'Transcribing…'
+                : busy
+                  ? 'Agent is drawing…'
+                  : `Ask ${info.label}…`
           }
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {

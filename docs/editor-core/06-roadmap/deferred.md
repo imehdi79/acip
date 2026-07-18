@@ -1,12 +1,12 @@
 # Roadmap — Deferred Decisions & Open Questions
 
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 ## Deferred (intentionally postponed; the design leaves a slot)
 
 | Topic | Status | Notes |
 | --- | --- | --- |
-| **editor-server** (persistence, collaboration) | Deferred by user decision — "we talk about editor server later" | The transaction **commit record stream is the future sync protocol**; core design already accommodates it. See [command-transaction.md](../03-contracts/command-transaction.md). |
+| **editor-server** (persistence, collaboration) | First slice shipped 2026-07-18: LLM key proxy (`/api/llm/*`), Whisper STT (`/api/stt`), request log (`/api/requests`, Prisma + SQLite). Document persistence & collaboration still deferred | The transaction **commit record stream is the future sync protocol**; core design already accommodates it. See [command-transaction.md](../03-contracts/command-transaction.md). |
 | **IFC import/export** | Confirmed coming (user: yes) | Massive spec; `io/` + entity data schemas are the mapping anchors. Design `io/` knowing IFC arrives. |
 | **Xrefs / underlays** (AutoCAD-style external attachments) | Deferred, not rejected | Touches io + rendering + document at once; design when those exist. |
 | **3D editing** | Deferred (v1: 3D is read-only) | See [2.5D strategy](../04-systems/2-5d-strategy.md). |

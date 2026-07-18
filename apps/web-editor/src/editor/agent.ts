@@ -13,7 +13,6 @@ export interface ModelOption {
 export interface ProviderInfo {
   readonly id: AgentProvider;
   readonly label: string;
-  readonly keyPlaceholder: string;
   /** selectable models; the first is the default */
   readonly models: readonly ModelOption[];
 }
@@ -22,7 +21,6 @@ export const PROVIDERS: readonly ProviderInfo[] = [
   {
     id: 'anthropic',
     label: 'Anthropic',
-    keyPlaceholder: 'sk-ant-…',
     models: [
       { id: 'claude-fable-5', label: 'Fable 5' },
       { id: 'claude-opus-4-8', label: 'Opus 4.8' },
@@ -33,7 +31,6 @@ export const PROVIDERS: readonly ProviderInfo[] = [
   {
     id: 'openai',
     label: 'OpenAI (Codex)',
-    keyPlaceholder: 'sk-…',
     models: [
       { id: 'gpt-5-codex', label: 'GPT-5 Codex' },
       { id: 'gpt-5', label: 'GPT-5' },
@@ -50,8 +47,18 @@ export function resolvedModel(provider: AgentProvider): string {
 }
 
 const PROVIDER_STORAGE = 'acip.agent-provider';
-const keyStorage = (p: AgentProvider): string => `acip.${p}-api-key`;
 const modelStorage = (p: AgentProvider): string => `acip.${p}-model`;
+
+/**
+ * editor-server base URL. Keys live in the server's .env — configured once,
+ * never in the browser. Empty string = same origin (reverse-proxy setups);
+ * dev defaults to the local Nest server.
+ */
+export function serverUrl(): string {
+  const configured = import.meta.env.VITE_EDITOR_SERVER_URL as string | undefined;
+  if (configured) return configured.replace(/\/+$/, '');
+  return import.meta.env.DEV ? 'http://localhost:3000' : '';
+}
 
 export function providerInfo(id: AgentProvider): ProviderInfo {
   return PROVIDERS.find((p) => p.id === id) ?? PROVIDERS[0];
@@ -65,16 +72,6 @@ export function setProvider(provider: AgentProvider): void {
   localStorage.setItem(PROVIDER_STORAGE, provider);
 }
 
-export function getApiKey(provider: AgentProvider): string {
-  return localStorage.getItem(keyStorage(provider)) ?? '';
-}
-
-export function setApiKey(provider: AgentProvider, key: string): void {
-  const trimmed = key.trim();
-  if (trimmed) localStorage.setItem(keyStorage(provider), trimmed);
-  else localStorage.removeItem(keyStorage(provider));
-}
-
 /** empty string = the provider default (the client picks it) */
 export function getModel(provider: AgentProvider): string {
   return localStorage.getItem(modelStorage(provider)) ?? '';
@@ -86,11 +83,44 @@ export function setModel(provider: AgentProvider, model: string): void {
   else localStorage.removeItem(modelStorage(provider));
 }
 
-function makeClient(provider: AgentProvider, apiKey: string): LlmClient {
+/** fire-and-forget persistence of a REQUEST.LOG dispatch into the server DB */
+function forwardRequest(params: unknown): void {
+  void fetch(`${serverUrl()}/api/requests`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(params),
+  }).catch(() => undefined);
+}
+
+/**
+ * Transcribe recorded audio via editor-server → Whisper. Language-agnostic:
+ * Whisper auto-detects whatever the user spoke.
+ */
+export async function transcribeAudio(blob: Blob): Promise<string> {
+  const response = await fetch(`${serverUrl()}/api/stt`, {
+    method: 'POST',
+    headers: { 'content-type': blob.type || 'audio/webm' },
+    body: blob,
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`Transcription failed (${response.status}): ${detail.slice(0, 200)}`);
+  }
+  const data = (await response.json()) as { text?: string };
+  return (data.text ?? '').trim();
+}
+
+/**
+ * Both clients speak through the editor-server proxy: the proxy routes mirror
+ * the provider paths, so pointing baseUrl at /api/llm/<provider> is the whole
+ * integration. No key leaves the server.
+ */
+function makeClient(provider: AgentProvider): LlmClient {
   const model = resolvedModel(provider);
+  const baseUrl = `${serverUrl()}/api/llm/${provider}`;
   return provider === 'openai'
-    ? new OpenAiClient({ apiKey, model })
-    : new AnthropicClient({ apiKey, model, dangerouslyAllowBrowser: true });
+    ? new OpenAiClient({ apiKey: '', model, baseUrl })
+    : new AnthropicClient({ apiKey: '', model, baseUrl });
 }
 
 /**
@@ -112,23 +142,19 @@ export async function runDrafter(
   if (ui.agentBusy.get()) return null;
   const provider = getProvider();
   const info = providerInfo(provider);
-  const apiKey = getApiKey(provider);
   ui.appendChat(prompt, 'user');
-  if (!apiKey) {
-    const message = `No ${info.label} key set — open the chat settings to paste it.`;
-    ui.appendLog(message, 'error');
-    ui.appendChat(message, 'error');
-    return null;
-  }
   ui.agentBusy.set(true);
   ui.appendLog(`ai(${info.label})> ${prompt}`, 'echo');
   try {
-    const agent = new DrafterAgent(session, makeClient(provider, apiKey));
+    const agent = new DrafterAgent(session, makeClient(provider));
     const result = await agent.run(prompt, {
       onDispatch: (entry) => {
         if (entry.ok) {
           ui.appendLog(`  ${entry.command} ok`);
           ui.appendChat(`${entry.command} ✓`, 'progress');
+          // the wishlist: a REQUEST.LOG dispatch is the agent saying "the
+          // user wanted something we don't have" — persist it server-side
+          if (entry.command === 'REQUEST.LOG') forwardRequest(entry.params);
         } else {
           ui.appendLog(`  ${entry.command} failed: ${entry.error}`, 'error');
           ui.appendChat(`${entry.command} ✗ ${entry.error}`, 'error');
