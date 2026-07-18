@@ -79,7 +79,7 @@ user it was recorded, continue with what you can do. `REQUEST.LOG` is a
 **signal command** — it mutates nothing in the document (so undoing a run
 never erases the record); `runDrafter` observes the dispatch and forwards it
 to `POST /api/requests`, where editor-server persists it via Prisma into
-SQLite (`Request`: kind = missing-feature | missing-price, text, context,
+Postgres (`Request`: kind = missing-feature | missing-price, text, context,
 status open/done). `GET /api/requests` lists them; `PATCH /api/requests/:id`
 closes them. That table is the product backlog, in users' own words.
 

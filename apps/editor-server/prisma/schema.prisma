@@ -1,12 +1,12 @@
 // Request log: what users asked for that the toolset couldn't deliver.
-// SQLite keeps the VPS deployment zero-ops; switch provider to "postgresql"
-// and DATABASE_URL if this ever needs to scale past one box.
+// Postgres from day one (user decision 2026-07-18) — same DB the future
+// persistence/collaboration slice of editor-server will need anyway.
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
