@@ -1,0 +1,18 @@
+# keep the build context lean; bun install recreates all of this in-image
+node_modules
+**/node_modules
+**/dist
+**/.next
+.git
+.nx
+.claude
+docs
+tmp
+out-tsc
+coverage
+
+# never bake secrets or local databases into an image
+.env
+**/.env
+*.db
+*.db-journal
