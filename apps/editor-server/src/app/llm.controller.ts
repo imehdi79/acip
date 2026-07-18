@@ -37,7 +37,8 @@ export class LlmController {
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
-  if (!value) throw new HttpException(`${name} is not configured on the server`, 503);
+  if (!value)
+    throw new HttpException(`${name} is not configured on the server`, 503);
   return value;
 }
 

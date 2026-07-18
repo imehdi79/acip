@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { EditorSession, StairEntity, computeQuantities, point } from '../src/index.js';
+import {
+  EditorSession,
+  StairEntity,
+  computeQuantities,
+  point,
+} from '../src/index.js';
 import type { EntityId, LevelId } from '../src/index.js';
 
 describe('StairEntity — derived flight from the rise', () => {
@@ -21,8 +26,14 @@ describe('StairEntity — derived flight from the rise', () => {
 
   test('a stair spans two levels and re-treads when the top level moves', () => {
     const session = new EditorSession();
-    const l1 = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L1', elevation: 0 });
-    const l2 = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L2', elevation: 2.8 });
+    const l1 = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L1',
+      elevation: 0,
+    });
+    const l2 = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L2',
+      elevation: 2.8,
+    });
     const id = session.dispatch<EntityId>('STAIR.ADD', {
       origin: point(0, 0),
       baseLevelId: l1,
@@ -40,8 +51,14 @@ describe('StairEntity — derived flight from the rise', () => {
 
   test('a change to the TOP level dirties the stair (cross-level relation)', () => {
     const session = new EditorSession();
-    const l1 = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L1', elevation: 0 });
-    const l2 = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L2', elevation: 3 });
+    const l1 = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L1',
+      elevation: 0,
+    });
+    const l2 = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L2',
+      elevation: 3,
+    });
     const id = session.dispatch<EntityId>('STAIR.ADD', {
       origin: point(0, 0),
       baseLevelId: l1,
@@ -55,15 +72,28 @@ describe('StairEntity — derived flight from the rise', () => {
 
   test('LEVEL.REMOVE is blocked while a stair uses the level as its top', () => {
     const session = new EditorSession();
-    const l1 = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L1', elevation: 0 });
-    const l2 = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L2', elevation: 3 });
-    session.dispatch('STAIR.ADD', { origin: point(0, 0), baseLevelId: l1, topLevelId: l2 });
+    const l1 = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L1',
+      elevation: 0,
+    });
+    const l2 = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L2',
+      elevation: 3,
+    });
+    session.dispatch('STAIR.ADD', {
+      origin: point(0, 0),
+      baseLevelId: l1,
+      topLevelId: l2,
+    });
     expect(() => session.dispatch('LEVEL.REMOVE', { id: l2 })).toThrow();
   });
 
   test('the 3D mesh climbs from the base elevation to the rise', () => {
     const session = new EditorSession();
-    const l1 = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L1', elevation: 3 });
+    const l1 = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L1',
+      elevation: 3,
+    });
     const id = session.dispatch<EntityId>('STAIR.ADD', {
       origin: point(0, 0),
       baseLevelId: l1,
@@ -84,9 +114,20 @@ describe('StairEntity — derived flight from the rise', () => {
 
   test('validates its levels and round-trips through save/open', () => {
     const session = new EditorSession();
-    expect(() => session.dispatch('STAIR.ADD', { origin: point(0, 0), topLevelId: 'ghost' })).toThrow();
-    const l1 = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L1', elevation: 0 });
-    const l2 = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L2', elevation: 3 });
+    expect(() =>
+      session.dispatch('STAIR.ADD', {
+        origin: point(0, 0),
+        topLevelId: 'ghost',
+      }),
+    ).toThrow();
+    const l1 = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L1',
+      elevation: 0,
+    });
+    const l2 = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L2',
+      elevation: 3,
+    });
     session.dispatch('STAIR.ADD', {
       origin: point(1, 2),
       direction: point(0, 1),
@@ -94,7 +135,9 @@ describe('StairEntity — derived flight from the rise', () => {
       topLevelId: l2,
     });
     session.open(session.save());
-    const stairs = session.doc.all().filter((e): e is StairEntity => e instanceof StairEntity);
+    const stairs = session.doc
+      .all()
+      .filter((e): e is StairEntity => e instanceof StairEntity);
     expect(stairs.length).toBe(1);
     expect(stairs[0].getRise()).toBeCloseTo(3, 9);
     expect(computeQuantities(session.doc).totals.stairCount).toBe(1);

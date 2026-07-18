@@ -16,7 +16,11 @@ export type StoreChange =
       readonly before: StoreItem;
       readonly after: StoreItem;
     }
-  | { readonly store: StoreName; readonly op: 'remove'; readonly item: StoreItem };
+  | {
+      readonly store: StoreName;
+      readonly op: 'remove';
+      readonly item: StoreItem;
+    };
 
 /**
  * The immutable result of one committed command. History replays it for
@@ -54,7 +58,11 @@ export interface Transaction {
   ): Relation;
   detach(relationId: RelationId): void;
   storeAdd<T extends StoreItem>(store: StoreName, item: T): T;
-  storeUpdate<T extends StoreItem>(store: StoreName, id: string, mutate: (draft: T) => void): void;
+  storeUpdate<T extends StoreItem>(
+    store: StoreName,
+    id: string,
+    mutate: (draft: T) => void,
+  ): void;
   storeRemove(store: StoreName, id: string): void;
 }
 
@@ -62,7 +70,10 @@ export class TransactionImpl implements Transaction {
   private createdIds = new Set<EntityId>();
   private createdOrder: EntityId[] = [];
   private before = new Map<EntityId, EntityData>();
-  private removedEntities = new Map<EntityId, { entity: Entity; data: EntityData }>();
+  private removedEntities = new Map<
+    EntityId,
+    { entity: Entity; data: EntityData }
+  >();
   private relationOps: RelationChange[] = [];
   private storeOps: StoreChange[] = [];
   private closed = false;
@@ -70,7 +81,8 @@ export class TransactionImpl implements Transaction {
   constructor(private doc: DrawingDocument) {}
 
   private assertOpen(): void {
-    if (this.closed) throw new TransactionError('transaction is already closed');
+    if (this.closed)
+      throw new TransactionError('transaction is already closed');
   }
 
   create(entity: Entity): void {
@@ -83,7 +95,9 @@ export class TransactionImpl implements Transaction {
   update<E extends Entity>(entity: E, mutate: (draft: E) => void): void {
     this.assertOpen();
     if (!this.doc.has(entity.id)) {
-      throw new TransactionError(`cannot update entity ${entity.id}: not in document`);
+      throw new TransactionError(
+        `cannot update entity ${entity.id}: not in document`,
+      );
     }
     if (!this.createdIds.has(entity.id) && !this.before.has(entity.id)) {
       this.before.set(entity.id, entity.saveData());
@@ -123,7 +137,12 @@ export class TransactionImpl implements Transaction {
     params: PlacementParams,
   ): Relation {
     this.assertOpen();
-    const relation = this.doc.relations.attach(hostId, hostedId, anchorIndex, params);
+    const relation = this.doc.relations.attach(
+      hostId,
+      hostedId,
+      anchorIndex,
+      params,
+    );
     this.relationOps.push({ op: 'attach', relation });
     return relation;
   }
@@ -153,19 +172,26 @@ export class TransactionImpl implements Transaction {
     this.assertOpen();
     const table = this.doc._store(store);
     const current = table.get(id);
-    if (!current) throw new TransactionError(`${store} item ${id} does not exist`);
+    if (!current)
+      throw new TransactionError(`${store} item ${id} does not exist`);
     const before = structuredClone(current);
     const draft = structuredClone(current) as T;
     mutate(draft);
     table.set(draft);
-    this.storeOps.push({ store, op: 'update', before, after: structuredClone(draft) });
+    this.storeOps.push({
+      store,
+      op: 'update',
+      before,
+      after: structuredClone(draft),
+    });
   }
 
   storeRemove(store: StoreName, id: string): void {
     this.assertOpen();
     const table = this.doc._store(store);
     const current = table.get(id);
-    if (!current) throw new TransactionError(`${store} item ${id} does not exist`);
+    if (!current)
+      throw new TransactionError(`${store} item ${id} does not exist`);
     table.delete(id);
     this.storeOps.push({ store, op: 'remove', item: structuredClone(current) });
   }

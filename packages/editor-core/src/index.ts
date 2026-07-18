@@ -322,13 +322,22 @@ export {
 
 // ── LLM projections (Layer 3) ──
 export type { ToolDefinition, DescribeDocumentOptions } from './llm/index.js';
-export { toolDefinitions, toolNameFromCommand, commandNameFromTool, describeDocument } from './llm/index.js';
+export {
+  toolDefinitions,
+  toolNameFromCommand,
+  commandNameFromTool,
+  describeDocument,
+} from './llm/index.js';
 
 // ── engine systems (Layer 3) ──
 export type { SelectionEvents } from './selection/index.js';
 export { SelectionSet } from './selection/index.js';
 export { SnapEngine } from './snapping/index.js';
-export { MeasurementService, geometryLength, geometryArea } from './measurements/index.js';
+export {
+  MeasurementService,
+  geometryLength,
+  geometryArea,
+} from './measurements/index.js';
 export type {
   WallQuantity,
   SlabQuantity,
@@ -349,7 +358,11 @@ export {
   offsetBoundary,
 } from './measurements/index.js';
 export type { ViewDefinition } from './views/index.js';
-export { entitiesInView, isEntityVisible, isEntityInteractive } from './views/index.js';
+export {
+  entitiesInView,
+  isEntityVisible,
+  isEntityInteractive,
+} from './views/index.js';
 export type {
   DisplayStyle,
   RenderItem,
@@ -358,7 +371,12 @@ export type {
   WallAssemblyStrips,
 } from './rendering/index.js';
 export { buildDisplayList, wallAssemblyStrips } from './rendering/index.js';
-export type { InputModifiers, ToolInputEvent, ToolContext, Tool } from './tools/index.js';
+export type {
+  InputModifiers,
+  ToolInputEvent,
+  ToolContext,
+  Tool,
+} from './tools/index.js';
 export type { DocumentData } from './io/index.js';
 export { saveDocument, loadDocument, loadDocumentInto } from './io/index.js';
 

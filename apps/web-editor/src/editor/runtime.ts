@@ -1,5 +1,10 @@
 import { createContext, useContext } from 'react';
-import type { EditorSession, MaterialId, ToolContext, TypeId } from '@acip/editor-core';
+import type {
+  EditorSession,
+  MaterialId,
+  ToolContext,
+  TypeId,
+} from '@acip/editor-core';
 import { EditorUi } from './ui-state';
 import { ToolManager } from './tools/tool-manager';
 import { SelectTool } from './tools/select-tool';
@@ -77,7 +82,9 @@ export function seedCatalog(session: EditorSession): TypeId | null {
         coverage: 0.09, // 0.3 × 0.3 m tile
       });
     }
-    if (!session.doc.materials.list().some((m) => m.costCode === 'floor-tile')) {
+    if (
+      !session.doc.materials.list().some((m) => m.costCode === 'floor-tile')
+    ) {
       session.dispatch<MaterialId>('MATERIAL.ADD', {
         name: 'Floor tile',
         unit: 'm2',
@@ -118,7 +125,8 @@ export function createRuntime(session: EditorSession): EditorRuntime {
     doc: session.doc,
     selection: session.selection,
     snap: session.snap,
-    dispatch: <R,>(name: string, params?: unknown): R => session.dispatch<R>(name, params),
+    dispatch: <R>(name: string, params?: unknown): R =>
+      session.dispatch<R>(name, params),
   };
   const tools = new ToolManager(toolCtx, ui);
   const finish = () => tools.useById('select');
@@ -128,7 +136,9 @@ export function createRuntime(session: EditorSession): EditorRuntime {
     return layerId ? { layerId } : {};
   };
   tools.register(new SelectTool(ui, tolerance));
-  tools.register(new ChainedDrawTool('line', 'LINE', 'LINE.ADD', ui, finish, activeLayer));
+  tools.register(
+    new ChainedDrawTool('line', 'LINE', 'LINE.ADD', ui, finish, activeLayer),
+  );
   tools.register(new CircleTool(ui, finish, activeLayer));
   tools.register(new ArcTool(ui, finish, activeLayer));
   tools.register(new PolylineTool(ui, tolerance, finish, activeLayer));
@@ -144,8 +154,19 @@ export function createRuntime(session: EditorSession): EditorRuntime {
       };
     }),
   );
-  tools.register(new HostedPlaceTool('window', 'WINDOW', 'WINDOW.ADD', ui, tolerance, finish));
-  tools.register(new HostedPlaceTool('door', 'DOOR', 'DOOR.ADD', ui, tolerance, finish));
+  tools.register(
+    new HostedPlaceTool(
+      'window',
+      'WINDOW',
+      'WINDOW.ADD',
+      ui,
+      tolerance,
+      finish,
+    ),
+  );
+  tools.register(
+    new HostedPlaceTool('door', 'DOOR', 'DOOR.ADD', ui, tolerance, finish),
+  );
   tools.register(
     new SlabTool(ui, tolerance, finish, () => {
       const levelId = ui.activeLevelId.get();
@@ -162,7 +183,9 @@ export function createRuntime(session: EditorSession): EditorRuntime {
       // base = active level; top = the next level up by elevation, else a 3 m flight
       const baseId = ui.activeLevelId.get();
       const levels = session.doc.levels.list();
-      const baseElev = baseId ? (levels.find((l) => l.id === baseId)?.elevation ?? 0) : 0;
+      const baseElev = baseId
+        ? (levels.find((l) => l.id === baseId)?.elevation ?? 0)
+        : 0;
       const top = levels.find((l) => l.elevation > baseElev + 1e-6);
       return {
         ...activeLayer(),

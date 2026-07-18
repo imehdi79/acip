@@ -11,7 +11,7 @@ BOQ from one trade (walls) to multi-trade (concrete, screed, finishes).
 
 A slab is plan truth + vertical data, like every entity: the 2D footprint is
 authored, 3D is derived. The **top face sits flush with the level elevation**
-and the body extrudes downward by the assembly thickness — you stand *on*
+and the body extrudes downward by the assembly thickness — you stand _on_
 the level, and a Level 2 slab's underside is naturally Level 1's ceiling.
 Multi-storey stacks need no special casing.
 
@@ -25,7 +25,7 @@ so the thickness-proportional material split is exact, not approximate.
 The macro creates one slab per detected space using the room's **net
 boundary** — the polygon along inner wall faces. That is the floor you
 screed and tile, matching the finish-region vision, and it is what per-room
-flooring trades price. A structural plate that runs *under* the walls is a
+flooring trades price. A structural plate that runs _under_ the walls is a
 different object: draw it manually with `SLAB.ADD` on the building outline
 (the arrangement's outer contour is the deferred automation slot).
 

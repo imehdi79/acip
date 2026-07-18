@@ -37,13 +37,19 @@ export function rotation(angle: number, center?: Point): Matrix3 {
   const sin = Math.sin(angle);
   const m: Matrix3 = { a: cos, b: sin, c: -sin, d: cos, tx: 0, ty: 0 };
   if (!center) return m;
-  return multiply(multiply(translation(center), m), translation({ x: -center.x, y: -center.y }));
+  return multiply(
+    multiply(translation(center), m),
+    translation({ x: -center.x, y: -center.y }),
+  );
 }
 
 export function scaling(s: number, center?: Point): Matrix3 {
   const m: Matrix3 = { a: s, b: 0, c: 0, d: s, tx: 0, ty: 0 };
   if (!center) return m;
-  return multiply(multiply(translation(center), m), translation({ x: -center.x, y: -center.y }));
+  return multiply(
+    multiply(translation(center), m),
+    translation({ x: -center.x, y: -center.y }),
+  );
 }
 
 export function applyToPoint(m: Matrix3, p: Point): Point {

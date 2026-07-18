@@ -27,39 +27,47 @@ AutoCAD's `AcDbEntity` belongs to a database). The rule:
 ```ts
 abstract class Entity {
   readonly id: EntityId;
-  abstract readonly type: string;      // registry key: 'wall', 'window', 'dim'
+  abstract readonly type: string; // registry key: 'wall', 'window', 'dim'
   layerId: LayerId;
-  typeRef?: TypeId;                    // WallType etc. from the type catalog
+  typeRef?: TypeId; // WallType etc. from the type catalog
 
   // ── 2D plan geometry: the source of truth ──
-  abstract getBaseGeometry(): Geometry;       // from own definition data only
-  getEffectiveGeometry(): Geometry;           // default = base; a wall overrides it
-                                              // to subtract hosted openings
-  abstract getBounds(): BBox;                 // feeds the R-tree
+  abstract getBaseGeometry(): Geometry; // from own definition data only
+  getEffectiveGeometry(): Geometry; // default = base; a wall overrides it
+  // to subtract hosted openings
+  abstract getBounds(): BBox; // feeds the R-tree
   abstract getSnapPoints(filter?: SnapKind[]): SnapPoint[];
   abstract hitTest(pt: Point, tolerance: number): boolean;
   abstract transform(m: Matrix3, tx: Transaction): void;
   abstract clone(): Entity;
 
   // ── persistence: plain data in/out, paired with the registry factory ──
-  abstract saveData(): EntityData;            // JSON-safe, versioned
+  abstract saveData(): EntityData; // JSON-safe, versioned
   abstract loadData(data: EntityData): void;
 }
 
 // ── capabilities: implemented selectively ──
-interface IHost   { getAnchors(): Anchor[] }               // wall → centerline, faces
-interface IHosted { hostRef: RelationRef;                  // window → its wall
-                    evalPlacement(anchor: Anchor): Placement }
-interface ILevelAware { baseLevelId: LevelId;
-                        vertical: { height: number } | { topLevelId: LevelId } }
-interface IMeshable   { toMesh(detail: MeshDetail): Mesh3D }   // 2.5D derivation
+interface IHost {
+  getAnchors(): Anchor[];
+} // wall → centerline, faces
+interface IHosted {
+  hostRef: RelationRef; // window → its wall
+  evalPlacement(anchor: Anchor): Placement;
+}
+interface ILevelAware {
+  baseLevelId: LevelId;
+  vertical: { height: number } | { topLevelId: LevelId };
+}
+interface IMeshable {
+  toMesh(detail: MeshDetail): Mesh3D;
+} // 2.5D derivation
 ```
 
 ## Key semantics
 
 - **`getBaseGeometry` vs `getEffectiveGeometry` is the window-on-wall design**: base is
   what was drawn; effective is after relations have their say (openings subtracted). The
-  estimator reads *effective*; the wall's own editing grips use *base*.
+  estimator reads _effective_; the wall's own editing grips use _base_.
 - **The `saveData()` invariant**: anything not in `saveData()` is derived and must be
   recomputable. This single invariant powers snapshot undo, serialization, IFC export,
   and future collaboration. Never cache non-recomputable state outside it.

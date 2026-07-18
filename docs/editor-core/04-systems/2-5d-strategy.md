@@ -13,7 +13,7 @@ multi-year trap, the graveyard of ambitious CAD side projects), and **2.5D** —
   space** (Layer 1 stays 2D — roughly 10× less math than a 3D kernel).
 - The 3D representation is **generated**: extrude the wall footprint, subtract window
   openings, triangulate (`geometry/mesh/`), hand meshes to a viewer.
-- This is substantially what Revit itself does for buildings: a Revit wall *is* a
+- This is substantially what Revit itself does for buildings: a Revit wall _is_ a
   baseline + height + profile; freeform 3D is the exception (roofs, massing), not the
   rule. 2.5D covers walls, windows, doors, floors, columns, rooms — the whole core domain.
 

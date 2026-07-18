@@ -2,14 +2,24 @@ import { describe, expect, test } from 'bun:test';
 import { EditorSession, WallEntity, point } from '../src/index.js';
 import type { EntityId } from '../src/index.js';
 
-function buildSample(session: EditorSession): { wallId: EntityId; winId: EntityId } {
-  const levelId = session.dispatch('LEVEL.ADD', { name: 'Ground', elevation: 0 });
+function buildSample(session: EditorSession): {
+  wallId: EntityId;
+  winId: EntityId;
+} {
+  const levelId = session.dispatch('LEVEL.ADD', {
+    name: 'Ground',
+    elevation: 0,
+  });
   const wallId = session.dispatch<EntityId>('WALL.ADD', {
     a: point(0, 0),
     b: point(8, 0),
     levelId,
   });
-  const winId = session.dispatch<EntityId>('WINDOW.ADD', { wallId, t: 0.5, width: 1.5 });
+  const winId = session.dispatch<EntityId>('WINDOW.ADD', {
+    wallId,
+    t: 0.5,
+    width: 1.5,
+  });
   return { wallId, winId };
 }
 

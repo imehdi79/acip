@@ -27,7 +27,7 @@ packages/
 - Future external packages (`estimator`, `agents/*`, `viewer-3d`) depend on **`editor-sdk`
   interfaces only, never on core internals** — this is what lets core refactor freely
   while agent packages stay compatible. Until `editor-sdk` exists, `editor-core`'s curated
-  `index.ts` *is* the SDK contract; export deliberately, never `export *`.
+  `index.ts` _is_ the SDK contract; export deliberately, never `export *`.
 
 ## Housekeeping
 

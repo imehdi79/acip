@@ -51,12 +51,15 @@ export const AddDimensionCommand: Command<AddDimensionParams, EntityId> = {
       const params: AddDimensionParams = {};
       if (raw['a'] !== undefined) params.a = asPoint(raw['a'], 'a');
       if (raw['b'] !== undefined) params.b = asPoint(raw['b'], 'b');
-      if (raw['wallA'] !== undefined) params.wallA = asId(raw['wallA'], 'wallA') as EntityId;
-      if (raw['wallB'] !== undefined) params.wallB = asId(raw['wallB'], 'wallB') as EntityId;
+      if (raw['wallA'] !== undefined)
+        params.wallA = asId(raw['wallA'], 'wallA') as EntityId;
+      if (raw['wallB'] !== undefined)
+        params.wallB = asId(raw['wallB'], 'wallB') as EntityId;
       params.sideA = asSide(raw['sideA'], 'sideA');
       params.sideB = asSide(raw['sideB'], 'sideB');
       if (raw['t'] !== undefined) params.t = asNumber(raw['t'], 't');
-      if (raw['offset'] !== undefined) params.offset = asNumber(raw['offset'], 'offset');
+      if (raw['offset'] !== undefined)
+        params.offset = asNumber(raw['offset'], 'offset');
       if (raw['levelId'] !== undefined) {
         params.levelId = asId(raw['levelId'], 'levelId') as string as LevelId;
       }
@@ -66,7 +69,9 @@ export const AddDimensionCommand: Command<AddDimensionParams, EntityId> = {
       const points = params.a !== undefined && params.b !== undefined;
       const walls = params.wallA !== undefined && params.wallB !== undefined;
       if (points === walls) {
-        throw new ValidationError('provide either both a and b, or both wallA and wallB');
+        throw new ValidationError(
+          'provide either both a and b, or both wallA and wallB',
+        );
       }
       return params;
     },
@@ -75,11 +80,21 @@ export const AddDimensionCommand: Command<AddDimensionParams, EntityId> = {
         a: S.point('first point (points mode)'),
         b: S.point('second point (points mode)'),
         wallA: S.id('first wall id (walls mode)'),
-        sideA: S.enum(['axis', 'face+', 'face-'], "wall A's measured side (default axis)"),
+        sideA: S.enum(
+          ['axis', 'face+', 'face-'],
+          "wall A's measured side (default axis)",
+        ),
         wallB: S.id('second wall id (walls mode)'),
-        sideB: S.enum(['axis', 'face+', 'face-'], "wall B's measured side (default axis)"),
-        t: S.number("anchor parameter along wall A's baseline, 0..1 (default 0.5)"),
-        offset: S.number('signed dimension-line offset in meters (default 0.5)'),
+        sideB: S.enum(
+          ['axis', 'face+', 'face-'],
+          "wall B's measured side (default axis)",
+        ),
+        t: S.number(
+          "anchor parameter along wall A's baseline, 0..1 (default 0.5)",
+        ),
+        offset: S.number(
+          'signed dimension-line offset in meters (default 0.5)',
+        ),
         levelId: S.id('optional level the dimension belongs to'),
         layerId: S.id('optional layer id; defaults to the active layer'),
       }),
@@ -162,7 +177,9 @@ export const AutoDimensionCommand: Command<
     },
     () =>
       S.object({
-        levelId: S.id('level to dimension (omit for level-unassigned geometry)'),
+        levelId: S.id(
+          'level to dimension (omit for level-unassigned geometry)',
+        ),
         inner: S.boolean('room clear-width dimensions (default true)'),
         outer: S.boolean('overall extent dimensions (default true)'),
       }),
@@ -171,7 +188,11 @@ export const AutoDimensionCommand: Command<
     const levelId = params.levelId ?? null;
     let removed = 0;
     for (const entity of ctx.doc.all()) {
-      if (entity instanceof DimensionEntity && entity.auto && entity.baseLevelId === levelId) {
+      if (
+        entity instanceof DimensionEntity &&
+        entity.auto &&
+        entity.baseLevelId === levelId
+      ) {
         ctx.tx.remove(entity);
         removed += 1;
       }
@@ -193,7 +214,10 @@ export const AutoDimensionCommand: Command<
         const corners = mergeCollinear(space.boundary);
         const n = corners.length;
         // one dimension per boundary direction — the longest edge wins
-        const longestByDirection = new Map<number, { a: Point; b: Point; len: number }>();
+        const longestByDirection = new Map<
+          number,
+          { a: Point; b: Point; len: number }
+        >();
         for (let i = 0; i < n; i++) {
           const a = corners[i];
           const b = corners[(i + 1) % n];
@@ -205,7 +229,8 @@ export const AutoDimensionCommand: Command<
           if (angle >= Math.PI - 1e-6) angle = 0;
           const bucket = Math.round((angle * 180) / Math.PI);
           const known = longestByDirection.get(bucket);
-          if (!known || len > known.len) longestByDirection.set(bucket, { a, b, len });
+          if (!known || len > known.len)
+            longestByDirection.set(bucket, { a, b, len });
         }
         for (const edge of longestByDirection.values()) {
           // net boundaries are counter-clockwise: +offset points into the room
@@ -218,12 +243,22 @@ export const AutoDimensionCommand: Command<
       let bounds: BBox | null = null;
       for (const entity of ctx.doc.all()) {
         if (!(entity instanceof WallEntity)) continue;
-        if (levelId !== null && entity.baseLevelId !== null && entity.baseLevelId !== levelId) {
+        if (
+          levelId !== null &&
+          entity.baseLevelId !== null &&
+          entity.baseLevelId !== levelId
+        ) {
           continue;
         }
-        bounds = bounds ? bboxUnion(bounds, entity.getBounds()) : entity.getBounds();
+        bounds = bounds
+          ? bboxUnion(bounds, entity.getBounds())
+          : entity.getBounds();
       }
-      if (bounds && bounds.maxX - bounds.minX > 1e-6 && bounds.maxY - bounds.minY > 1e-6) {
+      if (
+        bounds &&
+        bounds.maxX - bounds.minX > 1e-6 &&
+        bounds.maxY - bounds.minY > 1e-6
+      ) {
         // overall width below the plan, overall height to its left
         place(
           { x: bounds.minX, y: bounds.minY },

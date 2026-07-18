@@ -124,19 +124,31 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
   let doorCount = 0;
 
   const addMaterial = (materialId: MaterialId, quantity: number): void => {
-    materialQuantities.set(materialId, (materialQuantities.get(materialId) ?? 0) + quantity);
+    materialQuantities.set(
+      materialId,
+      (materialQuantities.get(materialId) ?? 0) + quantity,
+    );
   };
 
   // split an element across its assembly layers, each layer measured in its
   // material's own unit: m³ takes a thickness-proportional volume share, m²
   // the reference area, m the length, count the area over the tile coverage
-  const splitAcrossLayers = (typeRef: TypeId | undefined, refs: LayerRefs): void => {
+  const splitAcrossLayers = (
+    typeRef: TypeId | undefined,
+    refs: LayerRefs,
+  ): void => {
     const typeDef = typeRef ? doc.types.get(typeRef) : null;
     if (!typeDef?.layers || typeDef.layers.length === 0) return;
     const total = typeDef.layers.reduce((s, l) => s + l.thickness, 0);
     for (const layer of typeDef.layers) {
       const material = doc.materials.get(layer.materialId);
-      const q = layerQuantity(material?.unit ?? 'm3', layer.thickness, total, refs, material?.coverage);
+      const q = layerQuantity(
+        material?.unit ?? 'm3',
+        layer.thickness,
+        total,
+        refs,
+        material?.coverage,
+      );
       addMaterial(layer.materialId, q);
     }
   };
@@ -145,12 +157,20 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
     if (entity instanceof WindowEntity) windowCount += 1;
     if (entity instanceof DoorEntity) doorCount += 1;
     if (entity instanceof StairEntity) {
-      stairs.push({ entityId: entity.id, rise: entity.getRise(), riserCount: entity.getRiserCount() });
+      stairs.push({
+        entityId: entity.id,
+        rise: entity.getRise(),
+        riserCount: entity.getRiserCount(),
+      });
       continue;
     }
     if (entity instanceof FinishEntity) {
       const netArea = entity.getNetArea();
-      finishes.push({ entityId: entity.id, materialId: entity.materialId, netArea });
+      finishes.push({
+        entityId: entity.id,
+        materialId: entity.materialId,
+        netArea,
+      });
       if (entity.materialId) {
         const material = doc.materials.get(entity.materialId);
         // a finish is a one-layer assembly on a face
@@ -158,7 +178,11 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
           material?.unit ?? 'm2',
           entity.getThickness(),
           entity.getThickness(),
-          { volume: netArea * entity.getThickness(), area: netArea, length: entity.getCoveredLength() },
+          {
+            volume: netArea * entity.getThickness(),
+            area: netArea,
+            length: entity.getCoveredLength(),
+          },
           material?.coverage,
         );
         addMaterial(entity.materialId, q);
@@ -167,9 +191,17 @@ export function computeQuantities(doc: DrawingDocument): QuantityReport {
     }
     if (entity instanceof SlabEntity) {
       const area = entity.getArea();
-      const q: SlabQuantity = { entityId: entity.id, area, volume: area * entity.getThickness() };
+      const q: SlabQuantity = {
+        entityId: entity.id,
+        area,
+        volume: area * entity.getThickness(),
+      };
       slabs.push(q);
-      splitAcrossLayers(entity.typeRef, { volume: q.volume, area, length: entity.getPerimeter() });
+      splitAcrossLayers(entity.typeRef, {
+        volume: q.volume,
+        area,
+        length: entity.getPerimeter(),
+      });
       continue;
     }
     if (entity instanceof RoofEntity) {

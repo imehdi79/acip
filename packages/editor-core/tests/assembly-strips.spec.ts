@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { EditorSession, WallEntity, point, wallAssemblyStrips } from '../src/index.js';
+import {
+  EditorSession,
+  WallEntity,
+  point,
+  wallAssemblyStrips,
+} from '../src/index.js';
 import type { EntityId, MaterialId, TypeId } from '../src/index.js';
 
 function seedAssembly(session: EditorSession): {
@@ -13,7 +18,9 @@ function seedAssembly(session: EditorSession): {
     name: 'Insulation',
     hatch: 'cross',
   });
-  const plaster = session.dispatch<MaterialId>('MATERIAL.ADD', { name: 'Plaster' });
+  const plaster = session.dispatch<MaterialId>('MATERIAL.ADD', {
+    name: 'Plaster',
+  });
   const typeId = session.dispatch<TypeId>('TYPE.ADD', {
     targetType: 'wall',
     name: 'Ext 27',
@@ -78,7 +85,9 @@ describe('wallAssemblyStrips — per-layer plan strips from the type catalog', (
 
   test('single-layer assemblies yield one strip and no separators', () => {
     const session = new EditorSession();
-    const mat = session.dispatch<MaterialId>('MATERIAL.ADD', { name: 'Concrete' });
+    const mat = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Concrete',
+    });
     const typeId = session.dispatch<TypeId>('TYPE.ADD', {
       targetType: 'wall',
       name: 'RC 200',
@@ -89,15 +98,23 @@ describe('wallAssemblyStrips — per-layer plan strips from the type catalog', (
       b: point(5, 0),
       typeId,
     });
-    const display = wallAssemblyStrips(session.doc, session.doc.get(wallId) as WallEntity)!;
+    const display = wallAssemblyStrips(
+      session.doc,
+      session.doc.get(wallId) as WallEntity,
+    )!;
     expect(display.strips.length).toBe(1);
     expect(display.separators.length).toBe(0);
   });
 
   test('walls without a typed assembly return null', () => {
     const session = new EditorSession();
-    const wallId = session.dispatch<EntityId>('WALL.ADD', { a: point(0, 0), b: point(5, 0) });
-    expect(wallAssemblyStrips(session.doc, session.doc.get(wallId) as WallEntity)).toBeNull();
+    const wallId = session.dispatch<EntityId>('WALL.ADD', {
+      a: point(0, 0),
+      b: point(5, 0),
+    });
+    expect(
+      wallAssemblyStrips(session.doc, session.doc.get(wallId) as WallEntity),
+    ).toBeNull();
   });
 });
 
@@ -108,12 +125,18 @@ describe('MATERIAL color — appearance.color via commands', () => {
       name: 'Brick',
       color: '#b06a4a',
     });
-    expect(session.doc.materials.get(id)?.appearance?.['color']).toBe('#b06a4a');
+    expect(session.doc.materials.get(id)?.appearance?.['color']).toBe(
+      '#b06a4a',
+    );
 
     session.dispatch('MATERIAL.UPDATE', { id, color: '#aabbcc' });
-    expect(session.doc.materials.get(id)?.appearance?.['color']).toBe('#aabbcc');
+    expect(session.doc.materials.get(id)?.appearance?.['color']).toBe(
+      '#aabbcc',
+    );
 
     session.undo();
-    expect(session.doc.materials.get(id)?.appearance?.['color']).toBe('#b06a4a');
+    expect(session.doc.materials.get(id)?.appearance?.['color']).toBe(
+      '#b06a4a',
+    );
   });
 });

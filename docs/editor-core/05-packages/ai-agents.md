@@ -4,7 +4,7 @@ Status: **Decided** (integration model; first agent = drafter, shipped 2026-07-1
 
 Multiple AI agents will be added later as independent packages (`packages/agents/*`,
 e.g. `@acip/agent-drafter`, `@acip/agent-dimension`). This requirement shaped the core
-architecture; this doc records *how* they plug in.
+architecture; this doc records _how_ they plug in.
 
 ## The integration contract
 
@@ -24,7 +24,7 @@ An agent package:
 
 - **Command schemas are LLM tool definitions.** One command registration yields
   validation + command-line parsing + an agent-callable tool. The agent API is not a
-  separate surface to maintain — it *is* the command registry.
+  separate surface to maintain — it _is_ the command registry.
 - **Agent edits are transactions**: atomic, validated, and undoable with a single Ctrl+Z,
   exactly as if a person had done it. Nothing in core knows the agent package exists.
 - **Headless core** means agents can run in Web Workers or server-side (editor-server as
@@ -49,12 +49,12 @@ package. It exercises the whole contract end to end.
 ### The core surface it consumes: `src/llm/` (Layer 3)
 
 - **`toolDefinitions(registry)`** — projects the command registry into an LLM
-  tool catalog (Anthropic Messages shape: name/description/input_schema).
+  tool catalog (Anthropic Messages shape: name/description/input*schema).
   Every command's `describe()` (built with the `S` schema builders in
   `commands/schema.ts`) doubles as its tool schema; `description` on the
   Command doubles as the tool description. Tool names map dots to
   underscores (`WALL.ADD` ⇄ `WALL_ADD`) because tool names must match
-  `^[a-zA-Z0-9_-]+$`; command names never contain underscores, so the
+  `^[a-zA-Z0-9*-]+$`; command names never contain underscores, so the
   mapping is lossless.
 - **`describeDocument(doc)`** — LLM-legible digest: catalogs (levels, layers,
   materials, types), entities as their `saveData()` envelopes (persisted
@@ -67,7 +67,7 @@ package. It exercises the whole contract end to end.
 dispatches into one undo entry (stack entries are groups of commit records).
 The agent wraps its whole run in `runGrouped` — safe across await points,
 released on error, partial work still undoes atomically. Caveat: user
-dispatches issued *during* an open group would join it; the web-editor does
+dispatches issued _during_ an open group would join it; the web-editor does
 not yet run agents concurrently with user editing.
 
 ### The agent loop (in the package, not core)

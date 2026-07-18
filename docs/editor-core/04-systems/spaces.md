@@ -6,7 +6,7 @@ Closed regions bounded by walls are detected automatically and reported as
 spaces (rooms) with net and gross boundaries and areas. Draw four perimeter
 walls and a partition tee'd into them anywhere along their length — the model
 reports two rooms, not one. Delete the partition and they merge back. Spaces
-are what make a drawing *addressable*: "the 14 m² room on Level 1" for agents,
+are what make a drawing _addressable_: "the 14 m² room on Level 1" for agents,
 room areas for the estimator, room boundaries for future slabs and finishes.
 
 ## Golden decision 1: spaces are derived, never stored
@@ -22,7 +22,7 @@ arrangement on the document was tried once and reverted as a Layer-2/Layer-3
 drift — the free-function pattern is the settled convention. Add a cache only
 when profiling demands it, and put it in the consumer, not the document.
 
-When users need to *name* a room or override its function, that becomes a
+When users need to _name_ a room or override its function, that becomes a
 thin stored tag entity pointing at a detected space by location — the tag
 stores data, never geometry. Deferred until needed.
 
@@ -36,7 +36,7 @@ entities):
 
 1. **Tee snapping** — a baseline endpoint within `halfWidth + JOIN_TOLERANCE`
    of another wall's baseline interior snaps onto it and splits it there.
-   The `halfWidth` allowance means walls drawn to a host's *face* (flush,
+   The `halfWidth` allowance means walls drawn to a host's _face_ (flush,
    joins V2 style) connect exactly like walls drawn to its centerline.
    Splits happen at **any** parameter along the host — T at 1/3, T at 0.9,
    wherever the partition lands. Nearest host wins, matching `teeCap`.
@@ -56,7 +56,7 @@ The wall-joins invariant holds throughout: **discovery reads baselines only,
 never derived face geometry**, so detection cannot depend on its own output.
 
 Doors and windows do not leak spaces for free: openings are subtracted from
-*effective* geometry while baselines stay continuous, so a doorway still
+_effective_ geometry while baselines stay continuous, so a doorway still
 bounds the room. This is a consequence of the base/effective split, not a
 special case — and a test asserts it stays true.
 
@@ -114,7 +114,7 @@ widths, the other measures outer overall extents.
 - **Overlapping collinear walls** are deduplicated per node pair, not
   boolean-merged; pathological overlaps can produce sliver faces (filtered
   by a minimum-area threshold of 0.01 m²).
-- **Hole net boundaries** — island holes subtract their *gross* loop area;
+- **Hole net boundaries** — island holes subtract their _gross_ loop area;
   the island's own face offset is not applied to the hole boundary.
 - **Net corner construction is offset-based**, mirroring junction miters. If
   exotic plans accumulate corner cases, the fallback is polygon booleans in

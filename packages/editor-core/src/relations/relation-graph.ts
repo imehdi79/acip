@@ -27,16 +27,25 @@ export class RelationGraph {
       throw new RelationError(`entity ${hostedId} already has a host`);
     }
     if (this.wouldCycle(hostId, hostedId)) {
-      throw new RelationError(`attaching ${hostedId} to ${hostId} would create a cycle`);
+      throw new RelationError(
+        `attaching ${hostedId} to ${hostId} would create a cycle`,
+      );
     }
-    const relation: Relation = { id: newRelationId(), hostId, hostedId, anchorIndex, params };
+    const relation: Relation = {
+      id: newRelationId(),
+      hostId,
+      hostedId,
+      anchorIndex,
+      params,
+    };
     this.store(relation);
     return relation;
   }
 
   detach(relationId: RelationId): Relation {
     const relation = this.relations.get(relationId);
-    if (!relation) throw new RelationError(`relation ${relationId} does not exist`);
+    if (!relation)
+      throw new RelationError(`relation ${relationId} does not exist`);
     this.relations.delete(relationId);
     this.byHost.get(relation.hostId)?.delete(relationId);
     this.byHosted.delete(relation.hostedId);

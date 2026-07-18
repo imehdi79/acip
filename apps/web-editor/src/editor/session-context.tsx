@@ -11,11 +11,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setupAutosave(s);
     return s;
   });
-  return <SessionContext.Provider value={session}>{children}</SessionContext.Provider>;
+  return (
+    <SessionContext.Provider value={session}>
+      {children}
+    </SessionContext.Provider>
+  );
 }
 
 export function useSession(): EditorSession {
   const session = useContext(SessionContext);
-  if (!session) throw new Error('useSession must be used inside <SessionProvider>');
+  if (!session)
+    throw new Error('useSession must be used inside <SessionProvider>');
   return session;
 }

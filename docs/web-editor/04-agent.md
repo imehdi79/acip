@@ -7,7 +7,7 @@ voice 2026-07-18; editor-server proxy + Whisper voice + request log
 The drafter agent surfaces as a floating chat over the viewport — a sparkles
 bubble bottom-right that opens into a conversation. Deliberately still the
 same seam: the command line is the human face of the command bus, the chat
-is the natural-language face of the *same* bus. Both converge on
+is the natural-language face of the _same_ bus. Both converge on
 `session.dispatch`.
 
 ## How it works

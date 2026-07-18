@@ -17,16 +17,27 @@ import {
 } from '../../geometry/primitives/point.js';
 import type { Matrix3 } from '../../geometry/primitives/matrix3.js';
 import { applyToPoint } from '../../geometry/primitives/matrix3.js';
-import { closestPointOnSegment, distanceToSegment } from '../../geometry/curves/segment.js';
+import {
+  closestPointOnSegment,
+  distanceToSegment,
+} from '../../geometry/curves/segment.js';
 import type { Geometry, RegionShape } from '../../geometry/shapes.js';
 import type { Mesh3D, MeshDetail } from '../../geometry/mesh/index.js';
 import { extrudeQuad, mergeMeshes } from '../../geometry/mesh/index.js';
 import type { Interval } from '../../topology/intervals.js';
 import { subtractIntervals } from '../../topology/intervals.js';
 import type { EndCap, WallEnd } from '../../topology/junctions.js';
-import { JOIN_TOLERANCE, resolveJunction, resolveTeeCap } from '../../topology/junctions.js';
+import {
+  JOIN_TOLERANCE,
+  resolveJunction,
+  resolveTeeCap,
+} from '../../topology/junctions.js';
 import type { BBox } from '../../geometry/primitives/bbox.js';
-import { bboxExpand, bboxFromPoints, bboxUnion } from '../../geometry/primitives/bbox.js';
+import {
+  bboxExpand,
+  bboxFromPoints,
+  bboxUnion,
+} from '../../geometry/primitives/bbox.js';
 import type {
   Anchor,
   GripPoint,
@@ -45,7 +56,10 @@ import type { Transaction } from '../../document/history/transaction.js';
  * (windows, doors) on its axis anchor; effective plan geometry is the solid
  * spans between openings; 3D is a straight extrusion with opening bands.
  */
-export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable, IGrippable {
+export class WallEntity
+  extends Entity
+  implements IHost, ILevelAware, IMeshable, IGrippable
+{
   static readonly TYPE = 'wall';
 
   readonly type: string = WallEntity.TYPE;
@@ -110,17 +124,28 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
     const p = which === 'start' ? this.a : this.b;
     const away = which === 'start' ? sub(this.b, this.a) : sub(this.a, this.b);
     const ends: WallEnd[] = [
-      { point: p, direction: normalize(away), halfWidth: this.getThickness() / 2 },
+      {
+        point: p,
+        direction: normalize(away),
+        halfWidth: this.getThickness() / 2,
+      },
     ];
-    for (const other of doc.queryBBox(bboxExpand(bboxFromPoints([p]), JOIN_TOLERANCE))) {
+    for (const other of doc.queryBBox(
+      bboxExpand(bboxFromPoints([p]), JOIN_TOLERANCE),
+    )) {
       if (other === this || !(other instanceof WallEntity)) continue;
       const bl = other.getBaseline();
       if (distance(bl.a, bl.b) < JOIN_TOLERANCE) continue;
       let dir: Vector | null = null;
       if (distance(bl.a, p) <= JOIN_TOLERANCE) dir = normalize(sub(bl.b, bl.a));
-      else if (distance(bl.b, p) <= JOIN_TOLERANCE) dir = normalize(sub(bl.a, bl.b));
+      else if (distance(bl.b, p) <= JOIN_TOLERANCE)
+        dir = normalize(sub(bl.a, bl.b));
       if (!dir) continue;
-      ends.push({ point: p, direction: dir, halfWidth: other.getThickness() / 2 });
+      ends.push({
+        point: p,
+        direction: dir,
+        halfWidth: other.getThickness() / 2,
+      });
     }
     // shared-endpoint junctions win; a lone end may still tee into a wall body
     if (ends.length >= 2) return resolveJunction(ends)[0];
@@ -137,7 +162,9 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
     if (!doc) return null;
     const p = selfEnd.point;
     let best: { cap: EndCap; dist: number } | null = null;
-    for (const other of doc.queryBBox(bboxExpand(bboxFromPoints([p]), JOIN_TOLERANCE))) {
+    for (const other of doc.queryBBox(
+      bboxExpand(bboxFromPoints([p]), JOIN_TOLERANCE),
+    )) {
       if (other === this || !(other instanceof WallEntity)) continue;
       const bl = other.getBaseline();
       if (distance(bl.a, bl.b) < JOIN_TOLERANCE) continue;
@@ -146,7 +173,10 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
       const dist = distance(p, foot);
       if (dist > halfB + JOIN_TOLERANCE) continue;
       // near the host's endpoints this is an L/corner case, not a T
-      if (distance(foot, bl.a) <= JOIN_TOLERANCE || distance(foot, bl.b) <= JOIN_TOLERANCE) {
+      if (
+        distance(foot, bl.a) <= JOIN_TOLERANCE ||
+        distance(foot, bl.b) <= JOIN_TOLERANCE
+      ) {
         continue;
       }
       const u = normalize(sub(bl.b, bl.a));
@@ -237,7 +267,11 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
       boundary: this.spanQuadJoined(s.start, s.end, caps),
       holes: [],
     }));
-    if (regions.length === 1 && spans[0].start === 0 && spans[0].end === this.getLength()) {
+    if (
+      regions.length === 1 &&
+      spans[0].start === 0 &&
+      spans[0].end === this.getLength()
+    ) {
       return regions[0];
     }
     return { kind: 'group', children: regions };
@@ -246,35 +280,55 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
   getAnchors(): Anchor[] {
     const half = scale(this.normal(), this.getThickness() / 2);
     return [
-      { kind: 'curve', geometry: { kind: 'segment', a: this.a, b: this.b }, name: 'axis' },
+      {
+        kind: 'curve',
+        geometry: { kind: 'segment', a: this.a, b: this.b },
+        name: 'axis',
+      },
       {
         kind: 'face',
-        geometry: { kind: 'segment', a: add(this.a, half), b: add(this.b, half) },
+        geometry: {
+          kind: 'segment',
+          a: add(this.a, half),
+          b: add(this.b, half),
+        },
         name: 'face+',
       },
       {
         kind: 'face',
-        geometry: { kind: 'segment', a: sub(this.a, half), b: sub(this.b, half) },
+        geometry: {
+          kind: 'segment',
+          a: sub(this.a, half),
+          b: sub(this.b, half),
+        },
         name: 'face-',
       },
     ];
   }
 
   getSnapPoints(filter?: readonly SnapKind[]): SnapPoint[] {
-    const wanted = (kind: SnapKind): boolean => !filter || filter.includes(kind);
+    const wanted = (kind: SnapKind): boolean =>
+      !filter || filter.includes(kind);
     const result: SnapPoint[] = [];
     if (wanted('endpoint')) {
       result.push({ kind: 'endpoint', point: this.a, entityId: this.id });
       result.push({ kind: 'endpoint', point: this.b, entityId: this.id });
     }
     if (wanted('midpoint')) {
-      result.push({ kind: 'midpoint', point: midpoint(this.a, this.b), entityId: this.id });
+      result.push({
+        kind: 'midpoint',
+        point: midpoint(this.a, this.b),
+        entityId: this.id,
+      });
     }
     return result;
   }
 
   hitTest(pt: Point, tolerance: number): boolean {
-    return distanceToSegment(pt, this.a, this.b) <= this.getThickness() / 2 + tolerance;
+    return (
+      distanceToSegment(pt, this.a, this.b) <=
+      this.getThickness() / 2 + tolerance
+    );
   }
 
   transform(m: Matrix3, tx: Transaction): void {
@@ -316,7 +370,13 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
     const caps = this.capsForEnds();
     const meshes: Mesh3D[] = [];
     for (const span of this.getSolidSpans()) {
-      meshes.push(extrudeQuad(this.spanQuadJoined(span.start, span.end, caps), z0, z0 + height));
+      meshes.push(
+        extrudeQuad(
+          this.spanQuadJoined(span.start, span.end, caps),
+          z0,
+          z0 + height,
+        ),
+      );
     }
     // opening sill/lintel bands keep square ends — a band flush against a
     // mitered corner is a known V1 limitation (see docs wall-joins.md)
@@ -373,7 +433,9 @@ export class WallEntity extends Entity implements IHost, ILevelAware, IMeshable,
     this.thickness = thickness;
     this.vertical = { height };
     this.baseLevelId =
-      typeof props['baseLevelId'] === 'string' ? (props['baseLevelId'] as LevelId) : null;
+      typeof props['baseLevelId'] === 'string'
+        ? (props['baseLevelId'] as LevelId)
+        : null;
   }
 }
 

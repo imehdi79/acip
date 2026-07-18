@@ -16,20 +16,20 @@ export interface Mesh3D {
 export const EMPTY_MESH: Mesh3D = { positions: [], indices: [] };
 
 /** extrude a plan quad (4 corners, in order) from z0 to z1 — a closed box */
-export function extrudeQuad(quad: readonly [Point, Point, Point, Point], z0: number, z1: number): Mesh3D {
+export function extrudeQuad(
+  quad: readonly [Point, Point, Point, Point],
+  z0: number,
+  z1: number,
+): Mesh3D {
   const positions: number[] = [];
   for (const p of quad) positions.push(p.x, p.y, z0);
   for (const p of quad) positions.push(p.x, p.y, z1);
   // bottom ring 0-3, top ring 4-7
   const indices: number[] = [
     // sides
-    0, 1, 5, 0, 5, 4,
-    1, 2, 6, 1, 6, 5,
-    2, 3, 7, 2, 7, 6,
-    3, 0, 4, 3, 4, 7,
+    0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7,
     // bottom + top
-    0, 2, 1, 0, 3, 2,
-    4, 5, 6, 4, 6, 7,
+    0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
   ];
   return { positions, indices };
 }
@@ -121,7 +121,8 @@ export function loftPolygon(
   const caps = triangulateLoop(points);
   if (caps.length === 0) return EMPTY_MESH;
   const positions: number[] = [];
-  for (let i = 0; i < n; i++) positions.push(points[i].x, points[i].y, zBottom[i]);
+  for (let i = 0; i < n; i++)
+    positions.push(points[i].x, points[i].y, zBottom[i]);
   for (let i = 0; i < n; i++) positions.push(points[i].x, points[i].y, zTop[i]);
   const indices: number[] = [];
   // bottom cap faces down (reversed), top cap faces up
@@ -141,7 +142,11 @@ export function loftPolygon(
  * generalization footprint entities (slabs) use — walls keep the cheaper
  * quad path.
  */
-export function extrudePolygon(points: readonly Point[], z0: number, z1: number): Mesh3D {
+export function extrudePolygon(
+  points: readonly Point[],
+  z0: number,
+  z1: number,
+): Mesh3D {
   return loftPolygon(
     points,
     points.map(() => z0),

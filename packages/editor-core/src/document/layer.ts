@@ -19,7 +19,12 @@ export function createDefaultLayer(): Layer {
 
 export class LayerTable extends RecordTable<Layer> {
   add(name: string, id?: LayerId): Layer {
-    const layer: Layer = { id: id ?? newLayerId(), name, visible: true, locked: false };
+    const layer: Layer = {
+      id: id ?? newLayerId(),
+      name,
+      visible: true,
+      locked: false,
+    };
     this.set(layer);
     return layer;
   }

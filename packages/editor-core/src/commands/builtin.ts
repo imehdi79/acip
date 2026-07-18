@@ -18,7 +18,8 @@ export interface AddLineParams {
 
 export const AddLineCommand: Command<AddLineParams, EntityId> = {
   name: 'LINE.ADD',
-  description: 'Draw a straight line segment between two points. Returns the new entity id.',
+  description:
+    'Draw a straight line segment between two points. Returns the new entity id.',
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
@@ -105,7 +106,10 @@ export const EraseCommand: Command<EraseParams, number> = {
       const raw = (input ?? {}) as Record<string, unknown>;
       return { ids: asIdArray(raw['ids'], 'ids') };
     },
-    () => S.object({ ids: S.array(S.id('entity id'), 'entities to erase') }, ['ids']),
+    () =>
+      S.object({ ids: S.array(S.id('entity id'), 'entities to erase') }, [
+        'ids',
+      ]),
   ),
   execute(ctx, params) {
     let erased = 0;
@@ -147,7 +151,9 @@ export const GripMoveCommand: Command<GripMoveParams, void> = {
       S.object(
         {
           id: S.id('entity id'),
-          index: S.number('grip index, as returned by the entity (walls: 0 = start, 1 = end)'),
+          index: S.number(
+            'grip index, as returned by the entity (walls: 0 = start, 1 = end)',
+          ),
           to: S.point('new grip position'),
         },
         ['id', 'index', 'to'],

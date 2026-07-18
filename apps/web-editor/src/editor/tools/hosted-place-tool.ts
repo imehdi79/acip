@@ -41,7 +41,11 @@ export class HostedPlaceTool implements Tool {
     const walls = ctx.doc
       .queryBBox(area)
       .filter((ent): ent is WallEntity => ent instanceof WallEntity)
-      .filter((wall) => isEntityInteractive(ctx.doc, wall) && wall.hitTest(e.point, tolerance));
+      .filter(
+        (wall) =>
+          isEntityInteractive(ctx.doc, wall) &&
+          wall.hitTest(e.point, tolerance),
+      );
     const wall = walls[walls.length - 1];
     if (!wall) {
       this.ui.appendLog('No wall under cursor.', 'error');

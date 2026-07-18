@@ -1,5 +1,12 @@
 import type { MaterialId } from '../common/id.js';
-import { add, lerp, normalize, perpendicular, scale, sub } from '../geometry/primitives/point.js';
+import {
+  add,
+  lerp,
+  normalize,
+  perpendicular,
+  scale,
+  sub,
+} from '../geometry/primitives/point.js';
 import type { RegionShape, SegmentShape } from '../geometry/shapes.js';
 import type { DrawingDocument } from '../document/document.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
@@ -42,7 +49,8 @@ export function wallAssemblyStrips(
 
   const n = perpendicular(normalize(sub(b, a)));
   const total = layers.reduce((sum, layer) => sum + layer.thickness, 0);
-  const at = (s: number, offset: number) => add(lerp(a, b, s / len), scale(n, offset));
+  const at = (s: number, offset: number) =>
+    add(lerp(a, b, s / len), scale(n, offset));
 
   const strips: AssemblyStrip[] = [];
   const separators: SegmentShape[] = [];
@@ -65,7 +73,11 @@ export function wallAssemblyStrips(
     });
     if (i < layers.length - 1) {
       for (const span of spans) {
-        separators.push({ kind: 'segment', a: at(span.start, inner), b: at(span.end, inner) });
+        separators.push({
+          kind: 'segment',
+          a: at(span.start, inner),
+          b: at(span.end, inner),
+        });
       }
     }
     outer = inner;

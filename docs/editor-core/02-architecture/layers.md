@@ -65,7 +65,7 @@ src/
   OO domain (cf. AutoCAD's AcDbLine/AcDbArc hierarchy). Polymorphic `transform()`,
   `getBounds()`, `getSnapPoints()` etc.
 - **Function-based math layer** (geometry, topology): pure/free functions over small
-  immutable value types. **Never put math *between* types as methods**
+  immutable value types. **Never put math _between_ types as methods**
   (`line.intersectWith(arc)` → N×N double-dispatch trap). Type-pair relationships live in
   `geometry/intersect/`'s dispatcher.
 
@@ -73,12 +73,12 @@ src/
 
 The user's original scaffold → where it went and why:
 
-| Original | Now | Why |
-| --- | --- | --- |
-| `geometry/` | `geometry/` | Kept — correct as-is |
-| `topology/` | `topology/` | Kept — the geometry/topology split is what real kernels do |
-| `models/` | `entities/` + `document/` | Entities are things agents create; the document is infrastructure they operate within |
-| `engins/` | `editor/` | (typo fixed) named for what it is; "engine" attracts everything |
-| `computes/` | `measurements/` | Algorithms belong in geometry/topology; derived read-only values earn their own folder |
-| `helpers/` | `common/` | Same idea, scoped to plumbing with named submodules |
-| `attachments/` | `relations/` | The user's instinct was host/attachment relationships (window-on-wall) — promoted to a core system |
+| Original       | Now                       | Why                                                                                                |
+| -------------- | ------------------------- | -------------------------------------------------------------------------------------------------- |
+| `geometry/`    | `geometry/`               | Kept — correct as-is                                                                               |
+| `topology/`    | `topology/`               | Kept — the geometry/topology split is what real kernels do                                         |
+| `models/`      | `entities/` + `document/` | Entities are things agents create; the document is infrastructure they operate within              |
+| `engins/`      | `editor/`                 | (typo fixed) named for what it is; "engine" attracts everything                                    |
+| `computes/`    | `measurements/`           | Algorithms belong in geometry/topology; derived read-only values earn their own folder             |
+| `helpers/`     | `common/`                 | Same idea, scoped to plumbing with named submodules                                                |
+| `attachments/` | `relations/`              | The user's instinct was host/attachment relationships (window-on-wall) — promoted to a core system |

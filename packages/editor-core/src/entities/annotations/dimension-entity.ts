@@ -72,7 +72,10 @@ export class DimensionEntity extends Entity implements ILevelAware {
   vertical: { height: number } = { height: 0 };
 
   /** a wall's measurement line for one side, per the spaces.md convention */
-  private sideLine(wall: WallEntity, side: DimWallSide): { p: Point; d: Vector } {
+  private sideLine(
+    wall: WallEntity,
+    side: DimWallSide,
+  ): { p: Point; d: Vector } {
     const { a, b } = wall.getBaseline();
     const d = normalize(sub(b, a));
     if (side === 'axis') return { p: a, d };
@@ -91,7 +94,8 @@ export class DimensionEntity extends Entity implements ILevelAware {
     if (!doc) return null;
     const wallA = doc.get(this.def.wallA);
     const wallB = doc.get(this.def.wallB);
-    if (!(wallA instanceof WallEntity) || !(wallB instanceof WallEntity)) return null;
+    if (!(wallA instanceof WallEntity) || !(wallB instanceof WallEntity))
+      return null;
     if (wallA.getLength() < 1e-9 || wallB.getLength() < 1e-9) return null;
     const lineA = this.sideLine(wallA, this.def.sideA);
     const baseline = wallA.getBaseline();
@@ -100,7 +104,10 @@ export class DimensionEntity extends Entity implements ILevelAware {
       scale(lineA.d, this.def.t * distance(baseline.a, baseline.b)),
     );
     const lineB = this.sideLine(wallB, this.def.sideB);
-    const foot = add(lineB.p, scale(lineB.d, dot(sub(anchor, lineB.p), lineB.d)));
+    const foot = add(
+      lineB.p,
+      scale(lineB.d, dot(sub(anchor, lineB.p), lineB.d)),
+    );
     return { a: anchor, b: foot };
   }
 
@@ -139,8 +146,16 @@ export class DimensionEntity extends Entity implements ILevelAware {
     return {
       kind: 'group',
       children: [
-        { kind: 'segment', a: add(ends.a, scale(u, EXT_GAP)), b: add(da, scale(u, EXT_OVERRUN)) },
-        { kind: 'segment', a: add(ends.b, scale(u, EXT_GAP)), b: add(db, scale(u, EXT_OVERRUN)) },
+        {
+          kind: 'segment',
+          a: add(ends.a, scale(u, EXT_GAP)),
+          b: add(da, scale(u, EXT_OVERRUN)),
+        },
+        {
+          kind: 'segment',
+          a: add(ends.b, scale(u, EXT_GAP)),
+          b: add(db, scale(u, EXT_OVERRUN)),
+        },
         { kind: 'segment', a: da, b: db },
         { kind: 'segment', a: sub(da, tick), b: add(da, tick) },
         { kind: 'segment', a: sub(db, tick), b: add(db, tick) },
@@ -167,7 +182,9 @@ export class DimensionEntity extends Entity implements ILevelAware {
 
   hitTest(pt: Point, tolerance: number): boolean {
     const line = this.dimLine();
-    return line !== null && distanceToSegment(pt, line.da, line.db) <= tolerance;
+    return (
+      line !== null && distanceToSegment(pt, line.da, line.db) <= tolerance
+    );
   }
 
   /** walls-mode dimensions are bound to their walls — a move is a no-op */
@@ -175,7 +192,11 @@ export class DimensionEntity extends Entity implements ILevelAware {
     if (this.def.kind !== 'points') return;
     tx.update(this, (dim) => {
       const def = dim.def as DimPointsDef;
-      dim.def = { kind: 'points', a: applyToPoint(m, def.a), b: applyToPoint(m, def.b) };
+      dim.def = {
+        kind: 'points',
+        a: applyToPoint(m, def.a),
+        b: applyToPoint(m, def.b),
+      };
     });
   }
 
@@ -192,7 +213,13 @@ export class DimensionEntity extends Entity implements ILevelAware {
   protected saveProps(): JsonObject {
     const def: JsonObject =
       this.def.kind === 'points'
-        ? { kind: 'points', ax: this.def.a.x, ay: this.def.a.y, bx: this.def.b.x, by: this.def.b.y }
+        ? {
+            kind: 'points',
+            ax: this.def.a.x,
+            ay: this.def.a.y,
+            bx: this.def.b.x,
+            by: this.def.b.y,
+          }
         : {
             kind: 'walls',
             wallA: this.def.wallA,
@@ -201,12 +228,21 @@ export class DimensionEntity extends Entity implements ILevelAware {
             sideB: this.def.sideB,
             t: this.def.t,
           };
-    return { def, offset: this.offset, auto: this.auto, baseLevelId: this.baseLevelId };
+    return {
+      def,
+      offset: this.offset,
+      auto: this.auto,
+      baseLevelId: this.baseLevelId,
+    };
   }
 
   protected loadProps(props: JsonObject, _version: number): void {
     const def = props['def'];
-    if (typeof props['offset'] !== 'number' || def === null || typeof def !== 'object') {
+    if (
+      typeof props['offset'] !== 'number' ||
+      def === null ||
+      typeof def !== 'object'
+    ) {
       throw new ValidationError(`dimension ${this.id}: invalid props`);
     }
     const raw = def as JsonObject;
@@ -248,7 +284,9 @@ export class DimensionEntity extends Entity implements ILevelAware {
     this.offset = props['offset'];
     this.auto = props['auto'] === true;
     this.baseLevelId =
-      typeof props['baseLevelId'] === 'string' ? (props['baseLevelId'] as LevelId) : null;
+      typeof props['baseLevelId'] === 'string'
+        ? (props['baseLevelId'] as LevelId)
+        : null;
   }
 }
 

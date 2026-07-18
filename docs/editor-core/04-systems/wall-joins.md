@@ -18,7 +18,7 @@ joins are not state.
 Consequences accepted with the decision:
 
 - No per-corner user overrides in V1 (join opt-out, butt vs miter choice).
-  When those arrive they become *stored* properties on the wall ends — the
+  When those arrive they become _stored_ properties on the wall ends — the
   derived resolver just reads them.
 - Quantities stay **centerline-based**; the miter does not change takeoff.
   This matches common measurement rules and keeps the estimator independent.
@@ -26,7 +26,7 @@ Consequences accepted with the decision:
 ## The wheel algorithm (`topology/junctions.ts`)
 
 Pure math over `WallEnd { point, direction, halfWidth }` descriptors —
-`direction` is a unit vector pointing *away* from the junction into the wall.
+`direction` is a unit vector pointing _away_ from the junction into the wall.
 The resolver never sees entities.
 
 1. Sort ends by arrival angle around the junction.

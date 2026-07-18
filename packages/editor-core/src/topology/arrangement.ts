@@ -1,5 +1,14 @@
 import type { Point } from '../geometry/primitives/point.js';
-import { add, angleOf, cross, distance, dot, lerp, scale, sub } from '../geometry/primitives/point.js';
+import {
+  add,
+  angleOf,
+  cross,
+  distance,
+  dot,
+  lerp,
+  scale,
+  sub,
+} from '../geometry/primitives/point.js';
 import { closestPointOnSegment } from '../geometry/curves/segment.js';
 
 /**
@@ -113,7 +122,13 @@ export function arrangePlan(
   const working: Working[] = [];
   for (const s of segments) {
     if (distance(s.a, s.b) <= tolerance) continue;
-    working.push({ id: s.id, a: s.a, b: s.b, halfWidth: s.halfWidth ?? 0, splits: [] });
+    working.push({
+      id: s.id,
+      a: s.a,
+      b: s.b,
+      halfWidth: s.halfWidth ?? 0,
+      splits: [],
+    });
   }
 
   // tee snapping: an endpoint near a host's body snaps onto it and splits it
@@ -128,7 +143,11 @@ export function arrangePlan(
         const foot = closestPointOnSegment(p, host.a, host.b);
         const d = distance(p, foot);
         if (d > host.halfWidth + tolerance) continue;
-        if (distance(foot, host.a) <= tolerance || distance(foot, host.b) <= tolerance) continue;
+        if (
+          distance(foot, host.a) <= tolerance ||
+          distance(foot, host.b) <= tolerance
+        )
+          continue;
         if (best === null || d < best.dist) best = { host, foot, dist: d };
       }
       if (best) {
@@ -152,7 +171,8 @@ export function arrangePlan(
       const u = cross(qp, r) / denom;
       const tMargin = tolerance / distance(A.a, A.b);
       const uMargin = tolerance / distance(B.a, B.b);
-      if (t <= tMargin || t >= 1 - tMargin || u <= uMargin || u >= 1 - uMargin) continue;
+      if (t <= tMargin || t >= 1 - tMargin || u <= uMargin || u >= 1 - uMargin)
+        continue;
       const pt = add(A.a, scale(r, t));
       A.splits.push(pt);
       B.splits.push(pt);
@@ -237,7 +257,13 @@ export function arrangePlan(
   for (const e of edges) {
     const d = sub(nodes[e.v], nodes[e.u]);
     const i0 = halves.length;
-    halves.push({ from: e.u, to: e.v, segmentId: e.segmentId, twin: i0 + 1, angle: angleOf(d) });
+    halves.push({
+      from: e.u,
+      to: e.v,
+      segmentId: e.segmentId,
+      twin: i0 + 1,
+      angle: angleOf(d),
+    });
     halves.push({
       from: e.v,
       to: e.u,
@@ -276,7 +302,12 @@ export function arrangePlan(
     holes: Point[][];
   }
   const faces: MutableFace[] = [];
-  const outers: { loop: Point[]; edges: FaceEdge[]; area: number; component: number }[] = [];
+  const outers: {
+    loop: Point[];
+    edges: FaceEdge[];
+    area: number;
+    component: number;
+  }[] = [];
   const visited = new Array<boolean>(halves.length).fill(false);
   for (let hi = 0; hi < halves.length; hi++) {
     if (visited[hi]) continue;
@@ -304,7 +335,12 @@ export function arrangePlan(
         holes: [],
       });
     } else if (area < -areaEps) {
-      outers.push({ loop, edges: cycleEdges, area: -area, component: comp[halves[hi].from] });
+      outers.push({
+        loop,
+        edges: cycleEdges,
+        area: -area,
+        component: comp[halves[hi].from],
+      });
     }
     // |area| ≤ eps: a lone stub's out-and-back cycle — not a face
   }

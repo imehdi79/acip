@@ -6,14 +6,14 @@ Status: **Decided** · Last updated: 2026-07-11
 
 Not the AutoCAD way (layers named `FLOOR-01`, separate files). The Revit way: a **Level**
 is a document object — a named horizontal datum with an elevation ("Level 2 @ +3.00m") —
-and entities are *associated* with levels via `ILevelAware`, not drawn on them.
+and entities are _associated_ with levels via `ILevelAware`, not drawn on them.
 
 - A wall stores `baseLevelId + height` **or** `baseLevelId + topLevelId` — raising
   Level 2 makes every wall bound to it grow. This rides the same
   [relations](relations.md) recompute machinery (levels are just another dependency).
 - Copy-floor-to-floor = duplicate entities, re-associate to the target level.
 - Stairs and shafts are **cross-level relations** — levels are not isolated silos.
-- Agents get vertical semantics: *"place the same window layout on floors 2–5"* is only
+- Agents get vertical semantics: _"place the same window layout on floors 2–5"_ is only
   expressible if floors exist as model objects.
 
 Decided early because it is cheap now and brutal to retrofit — it touches the Entity

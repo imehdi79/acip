@@ -17,11 +17,17 @@ export class Viewport2D {
   offsetY = 0;
 
   toWorld(sx: number, sy: number): Point {
-    return { x: (sx - this.offsetX) / this.scale, y: (this.offsetY - sy) / this.scale };
+    return {
+      x: (sx - this.offsetX) / this.scale,
+      y: (this.offsetY - sy) / this.scale,
+    };
   }
 
   toScreen(p: Point): { x: number; y: number } {
-    return { x: this.offsetX + p.x * this.scale, y: this.offsetY - p.y * this.scale };
+    return {
+      x: this.offsetX + p.x * this.scale,
+      y: this.offsetY - p.y * this.scale,
+    };
   }
 
   zoomAt(sx: number, sy: number, factor: number): void {

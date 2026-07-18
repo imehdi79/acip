@@ -34,7 +34,8 @@ export class PolylineEntity extends Entity implements IGrippable {
   }
 
   getSnapPoints(filter?: readonly SnapKind[]): SnapPoint[] {
-    const wanted = (kind: SnapKind): boolean => !filter || filter.includes(kind);
+    const wanted = (kind: SnapKind): boolean =>
+      !filter || filter.includes(kind);
     const result: SnapPoint[] = [];
     if (wanted('endpoint')) {
       for (const p of this.points) {
@@ -72,7 +73,11 @@ export class PolylineEntity extends Entity implements IGrippable {
 
   /** one grip per vertex */
   getGrips(): GripPoint[] {
-    return this.points.map((p, index) => ({ index, point: p, kind: 'endpoint' }));
+    return this.points.map((p, index) => ({
+      index,
+      point: p,
+      kind: 'endpoint',
+    }));
   }
 
   moveGrip(index: number, to: Point, tx: Transaction): void {
@@ -99,7 +104,11 @@ export class PolylineEntity extends Entity implements IGrippable {
 
   protected loadProps(props: JsonObject, _version: number): void {
     const { points: flat, closed } = props;
-    if (!Array.isArray(flat) || flat.length % 2 !== 0 || typeof closed !== 'boolean') {
+    if (
+      !Array.isArray(flat) ||
+      flat.length % 2 !== 0 ||
+      typeof closed !== 'boolean'
+    ) {
       throw new ValidationError(`polyline ${this.id}: invalid props`);
     }
     const points: Point[] = [];

@@ -13,7 +13,11 @@ const table = new Map<string, { fn: IntersectFn; flipped: boolean }>();
 
 const key = (a: string, b: string): string => `${a}|${b}`;
 
-export function registerIntersection(kindA: string, kindB: string, fn: IntersectFn): void {
+export function registerIntersection(
+  kindA: string,
+  kindB: string,
+  fn: IntersectFn,
+): void {
   table.set(key(kindA, kindB), { fn, flipped: false });
   if (kindA !== kindB) table.set(key(kindB, kindA), { fn, flipped: true });
 }
@@ -34,7 +38,8 @@ function segmentSegment(g1: Geometry, g2: Geometry): Point[] {
   const qp = sub(s2.a, s1.a);
   const t = cross(qp, s) / denom;
   const u = cross(qp, r) / denom;
-  if (t < -EPSILON || t > 1 + EPSILON || u < -EPSILON || u > 1 + EPSILON) return [];
+  if (t < -EPSILON || t > 1 + EPSILON || u < -EPSILON || u > 1 + EPSILON)
+    return [];
   return [{ x: s1.a.x + t * r.x, y: s1.a.y + t * r.y }];
 }
 

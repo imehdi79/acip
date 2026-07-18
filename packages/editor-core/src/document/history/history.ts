@@ -61,7 +61,8 @@ export class HistoryStack {
   }
 
   undo(): readonly CommitRecord[] | null {
-    if (this.group) throw new DocumentError('cannot undo while a history group is open');
+    if (this.group)
+      throw new DocumentError('cannot undo while a history group is open');
     const entry = this.undoStack.pop();
     if (!entry) return null;
     for (let i = entry.length - 1; i >= 0; i--) {
@@ -72,7 +73,8 @@ export class HistoryStack {
   }
 
   redo(): readonly CommitRecord[] | null {
-    if (this.group) throw new DocumentError('cannot redo while a history group is open');
+    if (this.group)
+      throw new DocumentError('cannot redo while a history group is open');
     const entry = this.redoStack.pop();
     if (!entry) return null;
     for (const record of entry) {
@@ -95,7 +97,8 @@ export class HistoryStack {
       const change = stores[i];
       const table = this.doc._store(change.store);
       if (change.op === 'add') table.delete(change.item.id);
-      else if (change.op === 'update') table.set(structuredClone(change.before));
+      else if (change.op === 'update')
+        table.set(structuredClone(change.before));
       else table.set(structuredClone(change.item));
     }
 

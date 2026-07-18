@@ -24,22 +24,22 @@ face of the command bus, the app's identity.
 
 ## Component inventory (`apps/web-editor/src/editor/`)
 
-| Component | Role |
-| --- | --- |
-| `editor.tsx` | Shell grid; composes everything below |
-| `session-context.tsx` | Creates ONE `EditorSession`, provides it via context |
-| `viewport/viewport2d-view.tsx` | Imperative island: two canvases + input pipeline |
-| `viewport/viewport2d.ts` | Camera: pan/zoom matrix, screen↔world conversion |
-| `viewport/scene-renderer.ts` | Immediate-mode Canvas2D drawing of the display list |
-| `viewport/viewer3d.tsx` | Isolated Three.js read-only view |
-| `tools/tool-manager.ts` | Active tool switching; forwards abstract input |
-| `tools/select-tool.ts` | Default tool: pick/toggle via core hit-testing |
-| `tools/line-tool.ts` | Reference draw tool: snap, rubber band, chained LINE.ADD |
-| `components/top-bar.tsx` | Undo/redo, view tabs |
-| `components/tool-palette.tsx` | Tool buttons (left rail) |
-| `components/command-line.tsx` | Text input → dispatch; prompt + message log |
-| `components/status-bar.tsx` | Live world coords, OSNAP, level, units |
-| `components/panels.tsx` | Right rail: properties, layers, levels |
+| Component                      | Role                                                     |
+| ------------------------------ | -------------------------------------------------------- |
+| `editor.tsx`                   | Shell grid; composes everything below                    |
+| `session-context.tsx`          | Creates ONE `EditorSession`, provides it via context     |
+| `viewport/viewport2d-view.tsx` | Imperative island: two canvases + input pipeline         |
+| `viewport/viewport2d.ts`       | Camera: pan/zoom matrix, screen↔world conversion        |
+| `viewport/scene-renderer.ts`   | Immediate-mode Canvas2D drawing of the display list      |
+| `viewport/viewer3d.tsx`        | Isolated Three.js read-only view                         |
+| `tools/tool-manager.ts`        | Active tool switching; forwards abstract input           |
+| `tools/select-tool.ts`         | Default tool: pick/toggle via core hit-testing           |
+| `tools/line-tool.ts`           | Reference draw tool: snap, rubber band, chained LINE.ADD |
+| `components/top-bar.tsx`       | Undo/redo, view tabs                                     |
+| `components/tool-palette.tsx`  | Tool buttons (left rail)                                 |
+| `components/command-line.tsx`  | Text input → dispatch; prompt + message log              |
+| `components/status-bar.tsx`    | Live world coords, OSNAP, level, units                   |
+| `components/panels.tsx`        | Right rail: properties, layers, levels                   |
 
 View tabs switch the mounted viewport component (Canvas2D with a
 `ViewDefinition{plan, levelId}` vs `Viewer3D`); both feed from the same

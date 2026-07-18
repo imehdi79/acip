@@ -50,6 +50,6 @@ packages/estimator/src/
 
 ## Agent connection
 
-*"Value-engineer this floor to cut finish costs 10%"* = an agent that reads the
+_"Value-engineer this floor to cut finish costs 10%"_ = an agent that reads the
 estimator's output and dispatches commands. The estimator produces the objective
 function; agents optimize against it.

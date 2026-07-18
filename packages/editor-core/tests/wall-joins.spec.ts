@@ -12,7 +12,11 @@ const H = 0.15; // halfWidth of a 0.3m wall
 
 function end(dx: number, dy: number, halfWidth = H): WallEnd {
   const len = Math.hypot(dx, dy);
-  return { point: point(0, 0), direction: point(dx / len, dy / len), halfWidth };
+  return {
+    point: point(0, 0),
+    direction: point(dx / len, dy / len),
+    halfWidth,
+  };
 }
 
 function expectPoint(actual: Point, x: number, y: number) {
@@ -46,15 +50,26 @@ describe('resolveJunction — pure wheel math', () => {
 
   test('near-collinear spike is clamped to the miter limit', () => {
     const deg5 = (5 * Math.PI) / 180;
-    const caps = resolveJunction([end(1, 0), end(Math.cos(deg5), Math.sin(deg5))]);
+    const caps = resolveJunction([
+      end(1, 0),
+      end(Math.cos(deg5), Math.sin(deg5)),
+    ]);
     for (const cap of caps) {
-      expect(Math.hypot(cap.left.x, cap.left.y)).toBeLessThanOrEqual(8 * H + 1e-9);
-      expect(Math.hypot(cap.right.x, cap.right.y)).toBeLessThanOrEqual(8 * H + 1e-9);
+      expect(Math.hypot(cap.left.x, cap.left.y)).toBeLessThanOrEqual(
+        8 * H + 1e-9,
+      );
+      expect(Math.hypot(cap.right.x, cap.right.y)).toBeLessThanOrEqual(
+        8 * H + 1e-9,
+      );
     }
   });
 
   test('three-wall star: adjacent walls share corners exactly', () => {
-    const caps = resolveJunction([end(1, 0), end(-1, 1.7320508), end(-1, -1.7320508)]);
+    const caps = resolveJunction([
+      end(1, 0),
+      end(-1, 1.7320508),
+      end(-1, -1.7320508),
+    ]);
     // sorted by angle: [0°, 120°, −120°] → CCW ring 0 → 120 → −120
     const [a, b, c] = caps;
     expectPoint(b.right, a.left.x, a.left.y);
@@ -107,16 +122,30 @@ describe('resolveTeeCap — pure butt math', () => {
   test('shallow incidence is clamped to the miter limit', () => {
     const deg5 = (5 * Math.PI) / 180;
     const cap = resolveTeeCap(
-      { point: point(2, 0), direction: point(Math.cos(deg5), Math.sin(deg5)), halfWidth: H },
+      {
+        point: point(2, 0),
+        direction: point(Math.cos(deg5), Math.sin(deg5)),
+        halfWidth: H,
+      },
       facePoint,
       faceDir,
     );
-    expect(Math.hypot(cap!.left.x - 2, cap!.left.y)).toBeLessThanOrEqual(8 * H + 1e-9);
-    expect(Math.hypot(cap!.right.x - 2, cap!.right.y)).toBeLessThanOrEqual(8 * H + 1e-9);
+    expect(Math.hypot(cap!.left.x - 2, cap!.left.y)).toBeLessThanOrEqual(
+      8 * H + 1e-9,
+    );
+    expect(Math.hypot(cap!.right.x - 2, cap!.right.y)).toBeLessThanOrEqual(
+      8 * H + 1e-9,
+    );
   });
 });
 
-function addWall(session: EditorSession, ax: number, ay: number, bx: number, by: number) {
+function addWall(
+  session: EditorSession,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+) {
   return session.dispatch<EntityId>('WALL.ADD', {
     a: point(ax, ay),
     b: point(bx, by),
@@ -129,13 +158,17 @@ function boundaryOf(session: EditorSession, id: EntityId): readonly Point[] {
   const geom = session.doc.get(id)!.getEffectiveGeometry();
   if (geom.kind === 'region') return geom.boundary;
   if (geom.kind === 'group' && geom.children[0]?.kind === 'region') {
-    return geom.children.flatMap((c) => (c.kind === 'region' ? c.boundary : []));
+    return geom.children.flatMap((c) =>
+      c.kind === 'region' ? c.boundary : [],
+    );
   }
   throw new Error(`expected region geometry, got ${geom.kind}`);
 }
 
 function hasCorner(boundary: readonly Point[], x: number, y: number): boolean {
-  return boundary.some((p) => Math.abs(p.x - x) < 1e-9 && Math.abs(p.y - y) < 1e-9);
+  return boundary.some(
+    (p) => Math.abs(p.x - x) < 1e-9 && Math.abs(p.y - y) < 1e-9,
+  );
 }
 
 describe('WallEntity — derived auto-joins', () => {
@@ -265,7 +298,11 @@ describe('WallEntity — derived auto-joins', () => {
   test('a window keeps its placement when its wall joins another', () => {
     const session = new EditorSession();
     const wallA = addWall(session, 0, 0, 6, 0);
-    const winId = session.dispatch<EntityId>('WINDOW.ADD', { wallId: wallA, t: 0.5, width: 1.2 });
+    const winId = session.dispatch<EntityId>('WINDOW.ADD', {
+      wallId: wallA,
+      t: 0.5,
+      width: 1.2,
+    });
     const before = session.doc.get(winId)!.getBounds();
     addWall(session, 0, 0, 0, 5);
     const after = session.doc.get(winId)!.getBounds();

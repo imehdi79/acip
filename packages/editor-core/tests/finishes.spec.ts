@@ -1,8 +1,20 @@
 import { describe, expect, test } from 'bun:test';
-import { EditorSession, FinishEntity, computeQuantities, detectSpaces, point } from '../src/index.js';
+import {
+  EditorSession,
+  FinishEntity,
+  computeQuantities,
+  detectSpaces,
+  point,
+} from '../src/index.js';
 import type { EntityId, MaterialId, Point } from '../src/index.js';
 
-function addWall(session: EditorSession, ax: number, ay: number, bx: number, by: number): EntityId {
+function addWall(
+  session: EditorSession,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): EntityId {
   return session.dispatch<EntityId>('WALL.ADD', {
     a: point(ax, ay),
     b: point(bx, by),
@@ -71,7 +83,13 @@ describe('FinishEntity — a material on a wall face', () => {
     session.dispatch('DOOR.ADD', { wallId, t: 0.5, width: 0.9, height: 2.1 });
     expect(finish.getNetArea()).toBeCloseTo(12 - 0.9 * 1.2, 9);
     // a window at sill 1.5 is entirely ABOVE the band — no subtraction
-    session.dispatch('WINDOW.ADD', { wallId, t: 0.2, width: 1, sill: 1.5, height: 1 });
+    session.dispatch('WINDOW.ADD', {
+      wallId,
+      t: 0.2,
+      width: 1,
+      sill: 1.5,
+      height: 1,
+    });
     expect(finish.getNetArea()).toBeCloseTo(12 - 0.9 * 1.2, 9);
   });
 
@@ -79,8 +97,14 @@ describe('FinishEntity — a material on a wall face', () => {
     const session = new EditorSession();
     const wallId = addWall(session, 0, 0, 10, 0);
     const tile = tileMaterial(session);
-    const id = session.dispatch<EntityId>('FINISH.ADD', { wallId, side: 'face-', materialId: tile });
-    const material = computeQuantities(session.doc).materials.find((m) => m.name === 'Wall tile')!;
+    const id = session.dispatch<EntityId>('FINISH.ADD', {
+      wallId,
+      side: 'face-',
+      materialId: tile,
+    });
+    const material = computeQuantities(session.doc).materials.find(
+      (m) => m.name === 'Wall tile',
+    )!;
     expect(material.unit).toBe('count');
     expect(material.quantity).toBeCloseTo(30 / 0.09, 6);
 
@@ -93,14 +117,29 @@ describe('FinishEntity — a material on a wall face', () => {
     const wallId = addWall(session, 0, 0, 6, 0);
     const tile = tileMaterial(session);
     expect(() =>
-      session.dispatch('FINISH.ADD', { wallId, side: 'left', materialId: tile }),
+      session.dispatch('FINISH.ADD', {
+        wallId,
+        side: 'left',
+        materialId: tile,
+      }),
     ).toThrow();
     expect(() =>
-      session.dispatch('FINISH.ADD', { wallId, side: 'face+', materialId: 'ghost' }),
+      session.dispatch('FINISH.ADD', {
+        wallId,
+        side: 'face+',
+        materialId: 'ghost',
+      }),
     ).toThrow();
-    session.dispatch('FINISH.ADD', { wallId, side: 'face+', materialId: tile, topHeight: 1.2 });
+    session.dispatch('FINISH.ADD', {
+      wallId,
+      side: 'face+',
+      materialId: tile,
+      topHeight: 1.2,
+    });
     session.open(session.save());
-    const finishes = session.doc.all().filter((e): e is FinishEntity => e instanceof FinishEntity);
+    const finishes = session.doc
+      .all()
+      .filter((e): e is FinishEntity => e instanceof FinishEntity);
     expect(finishes.length).toBe(1);
     expect(finishes[0].topHeight).toBe(1.2);
     expect(finishes[0].getNetArea()).toBeCloseTo(6 * 1.2, 9);
@@ -119,11 +158,16 @@ describe('FinishEntity — floor/ceiling finish on a slab', () => {
       costCode: 'floor-tile',
       coverage: 0.09,
     });
-    const id = session.dispatch<EntityId>('FLOORFINISH.ADD', { slabId, materialId: tile });
+    const id = session.dispatch<EntityId>('FLOORFINISH.ADD', {
+      slabId,
+      materialId: tile,
+    });
     const finish = session.doc.get(id) as FinishEntity;
     expect(finish.getSide()).toBe('top');
     expect(finish.getNetArea()).toBeCloseTo(20, 9); // 5 × 4 footprint
-    const material = computeQuantities(session.doc).materials.find((m) => m.name === 'Floor tile')!;
+    const material = computeQuantities(session.doc).materials.find(
+      (m) => m.name === 'Floor tile',
+    )!;
     expect(material.quantity).toBeCloseTo(20 / 0.09, 6);
   });
 
@@ -146,7 +190,10 @@ describe('FinishEntity — floor/ceiling finish on a slab', () => {
     // a wall is not a valid floor-finish target
     const wallId = addWall(session, 0, 0, 6, 0);
     expect(() =>
-      session.dispatch('FLOORFINISH.ADD', { slabId: wallId, materialId: paint }),
+      session.dispatch('FLOORFINISH.ADD', {
+        slabId: wallId,
+        materialId: paint,
+      }),
     ).toThrow();
     // erasing the slab cascades its finish
     session.dispatch('ENTITY.ERASE', { ids: [slabId] });
@@ -169,10 +216,11 @@ describe('FLOORFINISH.AUTO — floor every slab', () => {
     const wallTile = tileMaterial(session);
     session.dispatch('FINISH.AUTO', { materialId: wallTile, topHeight: 1.2 }); // 8 wall faces
 
-    const floors = session.dispatch<{ removed: number; created: number; totalArea: number }>(
-      'FLOORFINISH.AUTO',
-      { materialId: floorTile },
-    );
+    const floors = session.dispatch<{
+      removed: number;
+      created: number;
+      totalArea: number;
+    }>('FLOORFINISH.AUTO', { materialId: floorTile });
     expect(floors.created).toBe(2); // one per slab
     expect(floors.removed).toBe(0);
     expect(floors.totalArea).toBeGreaterThan(0);
@@ -180,14 +228,23 @@ describe('FLOORFINISH.AUTO — floor every slab', () => {
     // re-running FLOORFINISH.AUTO replaces only floor finishes, not wall ones
     const wallFinishesBefore = session.doc
       .all()
-      .filter((e): e is FinishEntity => e instanceof FinishEntity && e.getSide() === 'face+').length;
-    const second = session.dispatch<{ removed: number; created: number }>('FLOORFINISH.AUTO', {
-      materialId: floorTile,
-    });
+      .filter(
+        (e): e is FinishEntity =>
+          e instanceof FinishEntity && e.getSide() === 'face+',
+      ).length;
+    const second = session.dispatch<{ removed: number; created: number }>(
+      'FLOORFINISH.AUTO',
+      {
+        materialId: floorTile,
+      },
+    );
     expect(second.removed).toBe(2);
     const wallFinishesAfter = session.doc
       .all()
-      .filter((e): e is FinishEntity => e instanceof FinishEntity && e.getSide() === 'face+').length;
+      .filter(
+        (e): e is FinishEntity =>
+          e instanceof FinishEntity && e.getSide() === 'face+',
+      ).length;
     expect(wallFinishesAfter).toBe(wallFinishesBefore);
   });
 });
@@ -201,7 +258,11 @@ describe('detectSpaces — room-facing boundary faces', () => {
     // verify each reported face actually points toward the room centroid
     for (const bf of space.boundaryFaces) {
       const wall = session.doc.get(bf.wallId)!;
-      const anchor = (wall as unknown as { getAnchors(): { name?: string; geometry: { a: Point; b: Point } }[] })
+      const anchor = (
+        wall as unknown as {
+          getAnchors(): { name?: string; geometry: { a: Point; b: Point } }[];
+        }
+      )
         .getAnchors()
         .find((a) => a.name === bf.side)!;
       const mid = {
@@ -223,10 +284,11 @@ describe('FINISH.AUTO — tile every room', () => {
     const partitionId = addWall(session, 3, 0, 3, 4); // partition splits into two rooms
     const tile = tileMaterial(session);
 
-    const first = session.dispatch<{ removed: number; created: number; totalArea: number }>(
-      'FINISH.AUTO',
-      { materialId: tile, topHeight: 1.2 },
-    );
+    const first = session.dispatch<{
+      removed: number;
+      created: number;
+      totalArea: number;
+    }>('FINISH.AUTO', { materialId: tile, topHeight: 1.2 });
     expect(first.removed).toBe(0);
     // 2 rooms × 4 faces = 8 (the partition contributes a face to each room)
     expect(first.created).toBe(8);
@@ -236,9 +298,14 @@ describe('FINISH.AUTO — tile every room', () => {
     const onPartition = session.doc
       .all()
       .filter((e): e is FinishEntity => e instanceof FinishEntity)
-      .filter((f) => session.doc.relations.relationOfHosted(f.id)?.hostId === partitionId);
+      .filter(
+        (f) =>
+          session.doc.relations.relationOfHosted(f.id)?.hostId === partitionId,
+      );
     expect(onPartition.length).toBe(2);
-    expect(new Set(onPartition.map((f) => f.getSide()))).toEqual(new Set(['face+', 'face-']));
+    expect(new Set(onPartition.map((f) => f.getSide()))).toEqual(
+      new Set(['face+', 'face-']),
+    );
 
     // hand-placed finish survives regeneration
     const manual = session.dispatch<EntityId>('FINISH.ADD', {
@@ -247,9 +314,12 @@ describe('FINISH.AUTO — tile every room', () => {
       materialId: tile,
       topHeight: 2,
     });
-    const second = session.dispatch<{ removed: number; created: number }>('FINISH.AUTO', {
-      materialId: tile,
-    });
+    const second = session.dispatch<{ removed: number; created: number }>(
+      'FINISH.AUTO',
+      {
+        materialId: tile,
+      },
+    );
     expect(second.removed).toBe(8);
     expect(session.doc.has(manual)).toBe(true);
   });

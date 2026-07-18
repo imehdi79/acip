@@ -1,10 +1,22 @@
 import type { EntityId, LevelId } from '../common/id.js';
 import type { Point } from '../geometry/primitives/point.js';
-import { add, distance, normalize, perpendicular, scale, sub } from '../geometry/primitives/point.js';
+import {
+  add,
+  distance,
+  normalize,
+  perpendicular,
+  scale,
+  sub,
+} from '../geometry/primitives/point.js';
 import type { DrawingDocument } from '../document/document.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
 import type { ArrangementSegment, FaceEdge } from '../topology/arrangement.js';
-import { arrangePlan, arrangeSegments, loopSignedArea, pointInLoop } from '../topology/arrangement.js';
+import {
+  arrangePlan,
+  arrangeSegments,
+  loopSignedArea,
+  pointInLoop,
+} from '../topology/arrangement.js';
 import { JOIN_TOLERANCE, intersectLines } from '../topology/junctions.js';
 
 /**
@@ -25,7 +37,10 @@ export interface SpaceInfo {
   readonly grossArea: number;
   readonly boundaryWallIds: readonly EntityId[];
   /** which wall face looks INTO the room — what FINISH.AUTO tiles */
-  readonly boundaryFaces: readonly { readonly wallId: EntityId; readonly side: 'face+' | 'face-' }[];
+  readonly boundaryFaces: readonly {
+    readonly wallId: EntityId;
+    readonly side: 'face+' | 'face-';
+  }[];
   /** contours of detached wall islands inside the room (gross, centerline) */
   readonly holes: readonly (readonly Point[])[];
   /** a point inside the net boundary — where a label belongs */
@@ -65,7 +80,8 @@ export function offsetBoundary(
     const corner = intersectLines(add(e.a, offE), de, add(f.a, offF), df);
     if (
       corner &&
-      distance(corner, node) <= MITER_LIMIT * Math.max(Math.abs(distE), Math.abs(distF))
+      distance(corner, node) <=
+        MITER_LIMIT * Math.max(Math.abs(distE), Math.abs(distF))
     ) {
       points.push(corner);
       continue;
@@ -100,7 +116,10 @@ function loopCentroid(points: readonly Point[]): Point {
  * inside — an L-shaped room's centroid can fall outside, then the widest gap
  * of a horizontal scanline through the centroid wins.
  */
-function interiorPoint(loop: readonly Point[], holes: readonly (readonly Point[])[]): Point {
+function interiorPoint(
+  loop: readonly Point[],
+  holes: readonly (readonly Point[])[],
+): Point {
   const c = loopCentroid(loop);
   const isInside = (p: Point): boolean =>
     pointInLoop(p, loop) && !holes.some((hole) => pointInLoop(p, hole));
@@ -142,15 +161,28 @@ function collectWallSegments(
   const segments: ArrangementSegment[] = [];
   for (const entity of doc.all()) {
     if (!(entity instanceof WallEntity)) continue;
-    if (levelId !== null && entity.baseLevelId !== null && entity.baseLevelId !== levelId) continue;
+    if (
+      levelId !== null &&
+      entity.baseLevelId !== null &&
+      entity.baseLevelId !== levelId
+    )
+      continue;
     const { a, b } = entity.getBaseline();
     walls.set(entity.id as string, entity);
-    segments.push({ id: entity.id as string, a, b, halfWidth: entity.getThickness() / 2 });
+    segments.push({
+      id: entity.id as string,
+      a,
+      b,
+      halfWidth: entity.getThickness() / 2,
+    });
   }
   return { walls, segments };
 }
 
-export function detectSpaces(doc: DrawingDocument, levelId: LevelId | null): SpaceInfo[] {
+export function detectSpaces(
+  doc: DrawingDocument,
+  levelId: LevelId | null,
+): SpaceInfo[] {
   const { walls, segments } = collectWallSegments(doc, levelId);
 
   const halfWidthOf = (id: string): number => {
@@ -162,7 +194,10 @@ export function detectSpaces(doc: DrawingDocument, levelId: LevelId | null): Spa
   for (const face of arrangeSegments(segments, JOIN_TOLERANCE)) {
     if (face.area < MIN_SPACE_AREA) continue;
     const net = offsetBoundary(face.edges, halfWidthOf);
-    const holeArea = face.holes.reduce((sum, hole) => sum + Math.abs(loopSignedArea(hole)), 0);
+    const holeArea = face.holes.reduce(
+      (sum, hole) => sum + Math.abs(loopSignedArea(hole)),
+      0,
+    );
     const netArea = Math.max(0, Math.abs(loopSignedArea(net)) - holeArea);
     const wallIds: EntityId[] = [];
     const boundaryFaces: { wallId: EntityId; side: 'face+' | 'face-' }[] = [];
@@ -214,7 +249,10 @@ export interface OutlineInfo {
  * arrangement's outer contours, derived on read like everything else here.
  * ROOF.AUTO and outer dimension chains consume these.
  */
-export function detectOutlines(doc: DrawingDocument, levelId: LevelId | null): OutlineInfo[] {
+export function detectOutlines(
+  doc: DrawingDocument,
+  levelId: LevelId | null,
+): OutlineInfo[] {
   const { walls, segments } = collectWallSegments(doc, levelId);
   const halfWidthOf = (id: string): number => {
     const wall = walls.get(id);

@@ -44,7 +44,9 @@ export function bboxContainsPoint(b: BBox, p: Point): boolean {
 }
 
 export function bboxIntersects(a: BBox, b: BBox): boolean {
-  return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+  return (
+    a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY
+  );
 }
 
 export function bboxCenter(b: BBox): Point {

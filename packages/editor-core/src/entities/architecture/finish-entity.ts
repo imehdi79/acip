@@ -9,7 +9,12 @@ import { distanceToPolyline } from '../../geometry/curves/polyline.js';
 import { pointInLoop } from '../../topology/arrangement.js';
 import type { Matrix3 } from '../../geometry/primitives/matrix3.js';
 import type { SegmentShape, Geometry } from '../../geometry/shapes.js';
-import type { Anchor, IHosted, Placement, PlacementParams } from '../base/capabilities.js';
+import type {
+  Anchor,
+  IHosted,
+  Placement,
+  PlacementParams,
+} from '../base/capabilities.js';
 import { isHost } from '../base/capabilities.js';
 import { WallEntity } from './wall-entity.js';
 import { SlabEntity } from './slab-entity.js';
@@ -66,7 +71,9 @@ export class FinishEntity extends Entity implements IHosted {
     const host = this.host();
     if (!(host instanceof WallEntity) || !isHost(host)) return null;
     const anchor = host.getAnchors()[this.anchorIndex()];
-    return anchor && anchor.geometry.kind === 'segment' ? anchor.geometry : null;
+    return anchor && anchor.geometry.kind === 'segment'
+      ? anchor.geometry
+      : null;
   }
 
   /** 'face+' | 'face-' (wall) or 'top' | 'bottom' (slab); null if unresolved */
@@ -88,7 +95,8 @@ export class FinishEntity extends Entity implements IHosted {
   /** reference length for m materials: wall band length, or slab perimeter */
   getCoveredLength(): number {
     const host = this.host();
-    if (host instanceof WallEntity) return Math.max(0, (this.t1 - this.t0) * host.getLength());
+    if (host instanceof WallEntity)
+      return Math.max(0, (this.t1 - this.t0) * host.getLength());
     if (host instanceof SlabEntity) return host.getPerimeter();
     return 0;
   }
@@ -108,9 +116,15 @@ export class FinishEntity extends Entity implements IHosted {
     for (const spec of host.getOpeningSpecs()) {
       const openLen0 = spec.t * length - spec.width / 2;
       const openLen1 = spec.t * length + spec.width / 2;
-      const overlapLen = Math.max(0, Math.min(along1, openLen1) - Math.max(along0, openLen0));
+      const overlapLen = Math.max(
+        0,
+        Math.min(along1, openLen1) - Math.max(along0, openLen0),
+      );
       const openTop = spec.sill + spec.height;
-      const overlapH = Math.max(0, Math.min(top, openTop) - Math.max(this.sillHeight, spec.sill));
+      const overlapH = Math.max(
+        0,
+        Math.min(top, openTop) - Math.max(this.sillHeight, spec.sill),
+      );
       area -= overlapLen * overlapH;
     }
     return Math.max(0, area);
@@ -120,7 +134,11 @@ export class FinishEntity extends Entity implements IHosted {
   getBaseGeometry(): Geometry {
     const host = this.host();
     if (host instanceof SlabEntity) {
-      return { kind: 'polyline', points: [...host.getFootprint()], closed: true };
+      return {
+        kind: 'polyline',
+        points: [...host.getFootprint()],
+        closed: true,
+      };
     }
     const face = this.faceAnchor();
     if (!face) return { kind: 'group', children: [] };
@@ -134,7 +152,10 @@ export class FinishEntity extends Entity implements IHosted {
   evalPlacement(anchor: Anchor, _params: PlacementParams): Placement {
     if (anchor.geometry.kind === 'segment') {
       const seg = anchor.geometry;
-      return { position: lerp(seg.a, seg.b, (this.t0 + this.t1) / 2), rotation: 0 };
+      return {
+        position: lerp(seg.a, seg.b, (this.t0 + this.t1) / 2),
+        rotation: 0,
+      };
     }
     return { position: { x: 0, y: 0 }, rotation: 0 };
   }
@@ -143,13 +164,23 @@ export class FinishEntity extends Entity implements IHosted {
     if (filter && !filter.includes('endpoint')) return [];
     const host = this.host();
     if (host instanceof SlabEntity) {
-      return host.getFootprint().map((point) => ({ kind: 'endpoint', point, entityId: this.id }));
+      return host
+        .getFootprint()
+        .map((point) => ({ kind: 'endpoint', point, entityId: this.id }));
     }
     const face = this.faceAnchor();
     if (!face) return [];
     return [
-      { kind: 'endpoint', point: lerp(face.a, face.b, this.t0), entityId: this.id },
-      { kind: 'endpoint', point: lerp(face.a, face.b, this.t1), entityId: this.id },
+      {
+        kind: 'endpoint',
+        point: lerp(face.a, face.b, this.t0),
+        entityId: this.id,
+      },
+      {
+        kind: 'endpoint',
+        point: lerp(face.a, face.b, this.t1),
+        entityId: this.id,
+      },
     ];
   }
 
@@ -157,13 +188,19 @@ export class FinishEntity extends Entity implements IHosted {
     const host = this.host();
     if (host instanceof SlabEntity) {
       const footprint = host.getFootprint();
-      return pointInLoop(pt, footprint) || distanceToPolyline(pt, footprint, true) <= tolerance;
+      return (
+        pointInLoop(pt, footprint) ||
+        distanceToPolyline(pt, footprint, true) <= tolerance
+      );
     }
     const face = this.faceAnchor();
     if (!face) return false;
     return (
-      distanceToSegment(pt, lerp(face.a, face.b, this.t0), lerp(face.a, face.b, this.t1)) <=
-      tolerance
+      distanceToSegment(
+        pt,
+        lerp(face.a, face.b, this.t0),
+        lerp(face.a, face.b, this.t1),
+      ) <= tolerance
     );
   }
 
@@ -206,9 +243,12 @@ export class FinishEntity extends Entity implements IHosted {
       throw new ValidationError(`finish ${this.id}: invalid props`);
     }
     this.materialId =
-      typeof props['materialId'] === 'string' ? (props['materialId'] as MaterialId) : null;
+      typeof props['materialId'] === 'string'
+        ? (props['materialId'] as MaterialId)
+        : null;
     this.sillHeight = sillHeight;
-    this.topHeight = typeof props['topHeight'] === 'number' ? props['topHeight'] : null;
+    this.topHeight =
+      typeof props['topHeight'] === 'number' ? props['topHeight'] : null;
     this.t0 = t0;
     this.t1 = t1;
     this.thickness = thickness;

@@ -13,7 +13,11 @@ export const S = {
     required: readonly string[] = [],
     description?: string,
   ): JsonObject {
-    const schema: MutableJson = { type: 'object', properties, required: [...required] };
+    const schema: MutableJson = {
+      type: 'object',
+      properties,
+      required: [...required],
+    };
     if (description) schema['description'] = description;
     return schema;
   },

@@ -1,4 +1,9 @@
-import type { Point, Tool, ToolContext, ToolInputEvent } from '@acip/editor-core';
+import type {
+  Point,
+  Tool,
+  ToolContext,
+  ToolInputEvent,
+} from '@acip/editor-core';
 import { distance } from '@acip/editor-core';
 import type { EditorUi } from '../ui-state';
 

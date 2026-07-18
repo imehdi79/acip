@@ -92,7 +92,9 @@ export function CommandLine() {
         }
         case 'FINISHAUTO': {
           const levelId = ui.activeLevelId.get();
-          const tile = session.doc.materials.list().find((m) => m.costCode === 'wall-tile');
+          const tile = session.doc.materials
+            .list()
+            .find((m) => m.costCode === 'wall-tile');
           if (!tile) {
             ui.appendLog('No tile material in the catalog.', 'error');
             break;
@@ -114,7 +116,9 @@ export function CommandLine() {
         }
         case 'FLOORAUTO': {
           const levelId = ui.activeLevelId.get();
-          const floorTile = session.doc.materials.list().find((m) => m.costCode === 'floor-tile');
+          const floorTile = session.doc.materials
+            .list()
+            .find((m) => m.costCode === 'floor-tile');
           if (!floorTile) {
             ui.appendLog('No floor material in the catalog.', 'error');
             break;
@@ -140,9 +144,12 @@ export function CommandLine() {
           break;
         case 'DIMAUTO': {
           const levelId = ui.activeLevelId.get();
-          const result = session.dispatch<{ removed: number; created: number }>('DIM.AUTO', {
-            ...(levelId ? { levelId } : {}),
-          });
+          const result = session.dispatch<{ removed: number; created: number }>(
+            'DIM.AUTO',
+            {
+              ...(levelId ? { levelId } : {}),
+            },
+          );
           ui.appendLog(
             `Dimensions: ${result.created} placed` +
               (result.removed > 0 ? `, ${result.removed} replaced.` : '.'),

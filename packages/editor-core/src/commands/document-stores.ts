@@ -1,5 +1,16 @@
-import type { EntityId, LayerId, LevelId, MaterialId, TypeId } from '../common/id.js';
-import { newLayerId, newLevelId, newMaterialId, newTypeId } from '../common/id.js';
+import type {
+  EntityId,
+  LayerId,
+  LevelId,
+  MaterialId,
+  TypeId,
+} from '../common/id.js';
+import {
+  newLayerId,
+  newLevelId,
+  newMaterialId,
+  newTypeId,
+} from '../common/id.js';
 import { ValidationError } from '../common/errors.js';
 import { isLevelAware } from '../entities/base/capabilities.js';
 import { FinishEntity } from '../entities/architecture/finish-entity.js';
@@ -30,7 +41,8 @@ export interface AddLevelParams {
 
 export const AddLevelCommand: Command<AddLevelParams, LevelId> = {
   name: 'LEVEL.ADD',
-  description: 'Create a level (floor datum) at an elevation. Returns the new level id.',
+  description:
+    'Create a level (floor datum) at an elevation. Returns the new level id.',
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
@@ -49,7 +61,11 @@ export const AddLevelCommand: Command<AddLevelParams, LevelId> = {
       ),
   ),
   execute(ctx, params) {
-    const level: Level = { id: newLevelId(), name: params.name, elevation: params.elevation };
+    const level: Level = {
+      id: newLevelId(),
+      name: params.name,
+      elevation: params.elevation,
+    };
     ctx.tx.storeAdd('levels', level);
     return level.id;
   },
@@ -68,9 +84,12 @@ export const UpdateLevelCommand: Command<UpdateLevelParams, void> = {
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
-      const params: UpdateLevelParams = { id: asId(raw['id'], 'id') as string as LevelId };
+      const params: UpdateLevelParams = {
+        id: asId(raw['id'], 'id') as string as LevelId,
+      };
       if (raw['name'] !== undefined) params.name = asName(raw['name'], 'name');
-      if (raw['elevation'] !== undefined) params.elevation = asNumber(raw['elevation'], 'elevation');
+      if (raw['elevation'] !== undefined)
+        params.elevation = asNumber(raw['elevation'], 'elevation');
       if (params.name === undefined && params.elevation === undefined) {
         throw new ValidationError('provide name and/or elevation');
       }
@@ -137,7 +156,10 @@ export const DuplicateLevelCommand: Command<DuplicateLevelParams, LevelId> = {
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
       return {
-        sourceLevelId: asId(raw['sourceLevelId'], 'sourceLevelId') as string as LevelId,
+        sourceLevelId: asId(
+          raw['sourceLevelId'],
+          'sourceLevelId',
+        ) as string as LevelId,
         name: asName(raw['name'], 'name'),
         elevation: asNumber(raw['elevation'], 'elevation'),
       };
@@ -156,11 +178,16 @@ export const DuplicateLevelCommand: Command<DuplicateLevelParams, LevelId> = {
     if (!ctx.doc.levels.has(params.sourceLevelId)) {
       throw new ValidationError(`level ${params.sourceLevelId} does not exist`);
     }
-    const level: Level = { id: newLevelId(), name: params.name, elevation: params.elevation };
+    const level: Level = {
+      id: newLevelId(),
+      name: params.name,
+      elevation: params.elevation,
+    };
     ctx.tx.storeAdd('levels', level);
 
     for (const entity of ctx.doc.all()) {
-      if (!isLevelAware(entity) || entity.baseLevelId !== params.sourceLevelId) continue;
+      if (!isLevelAware(entity) || entity.baseLevelId !== params.sourceLevelId)
+        continue;
       const copy = entity.clone();
       if (isLevelAware(copy)) copy.baseLevelId = level.id;
       ctx.tx.create(copy);
@@ -170,7 +197,9 @@ export const DuplicateLevelCommand: Command<DuplicateLevelParams, LevelId> = {
         if (!hosted) continue;
         const hostedCopy = hosted.clone();
         ctx.tx.create(hostedCopy);
-        ctx.tx.attach(copy.id, hostedCopy.id, relation.anchorIndex, { ...relation.params });
+        ctx.tx.attach(copy.id, hostedCopy.id, relation.anchorIndex, {
+          ...relation.params,
+        });
       }
     }
     return level.id;
@@ -189,7 +218,8 @@ export const AddLayerCommand: Command<AddLayerParams, LayerId> = {
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
       const params: AddLayerParams = { name: asName(raw['name'], 'name') };
-      if (raw['color'] !== undefined) params.color = asName(raw['color'], 'color');
+      if (raw['color'] !== undefined)
+        params.color = asName(raw['color'], 'color');
       return params;
     },
     () =>
@@ -202,7 +232,12 @@ export const AddLayerCommand: Command<AddLayerParams, LayerId> = {
       ),
   ),
   execute(ctx, params) {
-    const layer: Layer = { id: newLayerId(), name: params.name, visible: true, locked: false };
+    const layer: Layer = {
+      id: newLayerId(),
+      name: params.name,
+      visible: true,
+      locked: false,
+    };
     if (params.color !== undefined) layer.color = params.color;
     ctx.tx.storeAdd('layers', layer);
     return layer.id;
@@ -224,24 +259,31 @@ export const UpdateLayerCommand: Command<UpdateLayerParams, void> = {
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
-      const params: UpdateLayerParams = { id: asId(raw['id'], 'id') as string as LayerId };
+      const params: UpdateLayerParams = {
+        id: asId(raw['id'], 'id') as string as LayerId,
+      };
       if (raw['name'] !== undefined) params.name = asName(raw['name'], 'name');
       if (raw['visible'] !== undefined) {
-        if (typeof raw['visible'] !== 'boolean') throw new ValidationError('visible must be boolean');
+        if (typeof raw['visible'] !== 'boolean')
+          throw new ValidationError('visible must be boolean');
         params.visible = raw['visible'];
       }
       if (raw['locked'] !== undefined) {
-        if (typeof raw['locked'] !== 'boolean') throw new ValidationError('locked must be boolean');
+        if (typeof raw['locked'] !== 'boolean')
+          throw new ValidationError('locked must be boolean');
         params.locked = raw['locked'];
       }
-      if (raw['color'] !== undefined) params.color = asName(raw['color'], 'color');
+      if (raw['color'] !== undefined)
+        params.color = asName(raw['color'], 'color');
       if (
         params.name === undefined &&
         params.visible === undefined &&
         params.locked === undefined &&
         params.color === undefined
       ) {
-        throw new ValidationError('provide name, visible, locked, and/or color');
+        throw new ValidationError(
+          'provide name, visible, locked, and/or color',
+        );
       }
       return params;
     },
@@ -273,7 +315,8 @@ export interface RemoveLayerParams {
 
 export const RemoveLayerCommand: Command<RemoveLayerParams, void> = {
   name: 'LAYER.REMOVE',
-  description: 'Delete a layer. Fails for the default layer or while entities still use it.',
+  description:
+    'Delete a layer. Fails for the default layer or while entities still use it.',
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
@@ -311,14 +354,20 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
       const params: AddMaterialParams = { name: asName(raw['name'], 'name') };
       if (raw['unit'] !== undefined) {
         if (!MATERIAL_UNITS.includes(raw['unit'] as MaterialUnit)) {
-          throw new ValidationError(`unit must be one of ${MATERIAL_UNITS.join(', ')}`);
+          throw new ValidationError(
+            `unit must be one of ${MATERIAL_UNITS.join(', ')}`,
+          );
         }
         params.unit = raw['unit'] as MaterialUnit;
       }
-      if (raw['hatch'] !== undefined) params.hatch = asName(raw['hatch'], 'hatch');
-      if (raw['color'] !== undefined) params.color = asName(raw['color'], 'color');
-      if (raw['costCode'] !== undefined) params.costCode = asName(raw['costCode'], 'costCode');
-      if (raw['coverage'] !== undefined) params.coverage = asPositive(raw['coverage'], 'coverage');
+      if (raw['hatch'] !== undefined)
+        params.hatch = asName(raw['hatch'], 'hatch');
+      if (raw['color'] !== undefined)
+        params.color = asName(raw['color'], 'color');
+      if (raw['costCode'] !== undefined)
+        params.costCode = asName(raw['costCode'], 'costCode');
+      if (raw['coverage'] !== undefined)
+        params.coverage = asPositive(raw['coverage'], 'coverage');
       return params;
     },
     () =>
@@ -326,10 +375,18 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
         {
           name: S.string('material name, e.g. "Concrete block"'),
           unit: S.enum(MATERIAL_UNITS, 'measurement unit (default m3)'),
-          hatch: S.string('optional 2D hatch pattern name: diagonal, cross, or dots'),
-          color: S.string('optional CSS display color for 3D and swatches, e.g. "#b06a4a"'),
-          costCode: S.string('optional cost-item key for estimator rate tables'),
-          coverage: S.number('m² covered by one count unit, e.g. tile face area 0.09'),
+          hatch: S.string(
+            'optional 2D hatch pattern name: diagonal, cross, or dots',
+          ),
+          color: S.string(
+            'optional CSS display color for 3D and swatches, e.g. "#b06a4a"',
+          ),
+          costCode: S.string(
+            'optional cost-item key for estimator rate tables',
+          ),
+          coverage: S.number(
+            'm² covered by one count unit, e.g. tile face area 0.09',
+          ),
         },
         ['name'],
       ),
@@ -341,7 +398,8 @@ export const AddMaterialCommand: Command<AddMaterialParams, MaterialId> = {
       unit: params.unit ?? 'm3',
     };
     if (params.hatch !== undefined) material.hatch = params.hatch;
-    if (params.color !== undefined) material.appearance = { color: params.color };
+    if (params.color !== undefined)
+      material.appearance = { color: params.color };
     if (params.costCode !== undefined) material.costCode = params.costCode;
     if (params.coverage !== undefined) material.coverage = params.coverage;
     ctx.tx.storeAdd('materials', material);
@@ -373,7 +431,10 @@ export const AddTypeCommand: Command<AddTypeParams, TypeId> = {
         params.layers = raw['layers'].map((layer, i) => {
           const l = layer as Record<string, unknown>;
           return {
-            materialId: asId(l['materialId'], `layers[${i}].materialId`) as string as MaterialId,
+            materialId: asId(
+              l['materialId'],
+              `layers[${i}].materialId`,
+            ) as string as MaterialId,
             thickness: asPositive(l['thickness'], `layers[${i}].thickness`),
           };
         });
@@ -403,7 +464,9 @@ export const AddTypeCommand: Command<AddTypeParams, TypeId> = {
     if (params.layers) {
       for (const layer of params.layers) {
         if (!ctx.doc.materials.has(layer.materialId)) {
-          throw new ValidationError(`material ${layer.materialId} does not exist`);
+          throw new ValidationError(
+            `material ${layer.materialId} does not exist`,
+          );
         }
       }
     }
@@ -437,18 +500,26 @@ export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
-      const params: UpdateMaterialParams = { id: asId(raw['id'], 'id') as string as MaterialId };
+      const params: UpdateMaterialParams = {
+        id: asId(raw['id'], 'id') as string as MaterialId,
+      };
       if (raw['name'] !== undefined) params.name = asName(raw['name'], 'name');
       if (raw['unit'] !== undefined) {
         if (!MATERIAL_UNITS.includes(raw['unit'] as MaterialUnit)) {
-          throw new ValidationError(`unit must be one of ${MATERIAL_UNITS.join(', ')}`);
+          throw new ValidationError(
+            `unit must be one of ${MATERIAL_UNITS.join(', ')}`,
+          );
         }
         params.unit = raw['unit'] as MaterialUnit;
       }
-      if (raw['hatch'] !== undefined) params.hatch = asName(raw['hatch'], 'hatch');
-      if (raw['color'] !== undefined) params.color = asName(raw['color'], 'color');
-      if (raw['costCode'] !== undefined) params.costCode = asName(raw['costCode'], 'costCode');
-      if (raw['coverage'] !== undefined) params.coverage = asPositive(raw['coverage'], 'coverage');
+      if (raw['hatch'] !== undefined)
+        params.hatch = asName(raw['hatch'], 'hatch');
+      if (raw['color'] !== undefined)
+        params.color = asName(raw['color'], 'color');
+      if (raw['costCode'] !== undefined)
+        params.costCode = asName(raw['costCode'], 'costCode');
+      if (raw['coverage'] !== undefined)
+        params.coverage = asPositive(raw['coverage'], 'coverage');
       if (
         params.name === undefined &&
         params.unit === undefined &&
@@ -457,7 +528,9 @@ export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
         params.costCode === undefined &&
         params.coverage === undefined
       ) {
-        throw new ValidationError('provide name, unit, hatch, color, costCode, and/or coverage');
+        throw new ValidationError(
+          'provide name, unit, hatch, color, costCode, and/or coverage',
+        );
       }
       return params;
     },
@@ -467,8 +540,12 @@ export const UpdateMaterialCommand: Command<UpdateMaterialParams, void> = {
           id: S.id('material id'),
           name: S.string('new name'),
           unit: S.enum(MATERIAL_UNITS, 'new measurement unit'),
-          hatch: S.string('new 2D hatch pattern name: diagonal, cross, or dots'),
-          color: S.string('new CSS display color for 3D and swatches, e.g. "#b06a4a"'),
+          hatch: S.string(
+            'new 2D hatch pattern name: diagonal, cross, or dots',
+          ),
+          color: S.string(
+            'new CSS display color for 3D and swatches, e.g. "#b06a4a"',
+          ),
           costCode: S.string('new cost-item key for estimator rate tables'),
           coverage: S.number('m² covered by one count unit (tile face area)'),
         },
@@ -495,7 +572,8 @@ export interface RemoveMaterialParams {
 
 export const RemoveMaterialCommand: Command<RemoveMaterialParams, void> = {
   name: 'MATERIAL.REMOVE',
-  description: 'Delete a material. Fails while any type-catalog assembly layer references it.',
+  description:
+    'Delete a material. Fails while any type-catalog assembly layer references it.',
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
@@ -506,9 +584,13 @@ export const RemoveMaterialCommand: Command<RemoveMaterialParams, void> = {
   execute(ctx, params) {
     const inTypes = ctx.doc.types
       .list()
-      .some((def) => (def.layers ?? []).some((layer) => layer.materialId === params.id));
+      .some((def) =>
+        (def.layers ?? []).some((layer) => layer.materialId === params.id),
+      );
     if (inTypes) {
-      throw new ValidationError(`material ${params.id} is in use by type assembly layers`);
+      throw new ValidationError(
+        `material ${params.id} is in use by type assembly layers`,
+      );
     }
     const inFinishes = ctx.doc
       .all()
@@ -536,7 +618,9 @@ export const UpdateTypeCommand: Command<UpdateTypeParams, void> = {
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
-      const params: UpdateTypeParams = { id: asId(raw['id'], 'id') as string as TypeId };
+      const params: UpdateTypeParams = {
+        id: asId(raw['id'], 'id') as string as TypeId,
+      };
       if (raw['name'] !== undefined) params.name = asName(raw['name'], 'name');
       if (raw['layers'] !== undefined) {
         if (!Array.isArray(raw['layers'])) {
@@ -545,7 +629,10 @@ export const UpdateTypeCommand: Command<UpdateTypeParams, void> = {
         params.layers = raw['layers'].map((layer, i) => {
           const l = layer as Record<string, unknown>;
           return {
-            materialId: asId(l['materialId'], `layers[${i}].materialId`) as string as MaterialId,
+            materialId: asId(
+              l['materialId'],
+              `layers[${i}].materialId`,
+            ) as string as MaterialId,
             thickness: asPositive(l['thickness'], `layers[${i}].thickness`),
           };
         });
@@ -578,7 +665,9 @@ export const UpdateTypeCommand: Command<UpdateTypeParams, void> = {
     if (params.layers) {
       for (const layer of params.layers) {
         if (!ctx.doc.materials.has(layer.materialId)) {
-          throw new ValidationError(`material ${layer.materialId} does not exist`);
+          throw new ValidationError(
+            `material ${layer.materialId} does not exist`,
+          );
         }
       }
     }
@@ -595,7 +684,8 @@ export interface RemoveTypeParams {
 
 export const RemoveTypeCommand: Command<RemoveTypeParams, void> = {
   name: 'TYPE.REMOVE',
-  description: 'Delete a catalog type. Fails while any entity still references it.',
+  description:
+    'Delete a catalog type. Fails while any entity still references it.',
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
@@ -641,13 +731,16 @@ export const SetTypeCommand: Command<SetTypeParams, number> = {
       S.object(
         {
           ids: S.array(S.id('entity id'), 'entities to retype'),
-          typeId: S.id('catalog type to assign; omit to clear back to local props'),
+          typeId: S.id(
+            'catalog type to assign; omit to clear back to local props',
+          ),
         },
         ['ids'],
       ),
   ),
   execute(ctx, params) {
-    const def = params.typeId !== undefined ? ctx.doc.types.get(params.typeId) : null;
+    const def =
+      params.typeId !== undefined ? ctx.doc.types.get(params.typeId) : null;
     if (params.typeId !== undefined && !def) {
       throw new ValidationError(`type ${params.typeId} does not exist`);
     }

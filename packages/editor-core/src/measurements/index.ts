@@ -6,8 +6,10 @@ import type { DrawingDocument } from '../document/document.js';
 
 function polylineLength(points: readonly Point[], closed: boolean): number {
   let total = 0;
-  for (let i = 1; i < points.length; i++) total += distance(points[i - 1], points[i]);
-  if (closed && points.length > 1) total += distance(points[points.length - 1], points[0]);
+  for (let i = 1; i < points.length; i++)
+    total += distance(points[i - 1], points[i]);
+  if (closed && points.length > 1)
+    total += distance(points[points.length - 1], points[0]);
   return total;
 }
 

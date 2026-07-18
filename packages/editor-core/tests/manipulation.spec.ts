@@ -12,7 +12,13 @@ import {
 } from '../src/index.js';
 import type { EntityId, GroupShape, SegmentShape } from '../src/index.js';
 
-function addWall(session: EditorSession, ax: number, ay: number, bx: number, by: number) {
+function addWall(
+  session: EditorSession,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+) {
   return session.dispatch<EntityId>('WALL.ADD', {
     a: point(ax, ay),
     b: point(bx, by),
@@ -24,7 +30,10 @@ function addWall(session: EditorSession, ax: number, ay: number, bx: number, by:
 describe('grips', () => {
   test('line endpoint grip stretches the line, undo restores', () => {
     const session = new EditorSession();
-    const id = session.dispatch<EntityId>('LINE.ADD', { a: point(0, 0), b: point(10, 0) });
+    const id = session.dispatch<EntityId>('LINE.ADD', {
+      a: point(0, 0),
+      b: point(10, 0),
+    });
     const line = session.doc.get(id) as LineEntity;
     expect(hasGrips(line)).toBe(true);
     expect(line.getGrips()).toHaveLength(2);
@@ -76,7 +85,11 @@ describe('DoorEntity', () => {
   test('DOOR.ADD cuts the wall to the floor and draws a swing symbol', () => {
     const session = new EditorSession();
     const wallId = addWall(session, 0, 0, 10, 0);
-    const doorId = session.dispatch<EntityId>('DOOR.ADD', { wallId, t: 0.3, width: 1 });
+    const doorId = session.dispatch<EntityId>('DOOR.ADD', {
+      wallId,
+      t: 0.3,
+      width: 1,
+    });
 
     const door = session.doc.get(doorId) as DoorEntity;
     expect(door.getOpeningSpec().sill).toBe(0);
@@ -100,9 +113,13 @@ describe('DoorEntity', () => {
     withWindow.dispatch('WINDOW.ADD', { wallId: wallB, t: 0.5, width: 1 });
 
     const doorMesh = (withDoor.doc.get(wallA) as WallEntity).toMesh('medium');
-    const windowMesh = (withWindow.doc.get(wallB) as WallEntity).toMesh('medium');
+    const windowMesh = (withWindow.doc.get(wallB) as WallEntity).toMesh(
+      'medium',
+    );
     // window wall has an extra sill band → more vertices than the door wall
-    expect(windowMesh.positions.length).toBeGreaterThan(doorMesh.positions.length);
+    expect(windowMesh.positions.length).toBeGreaterThan(
+      doorMesh.positions.length,
+    );
   });
 
   test('doors round-trip through save/load', () => {

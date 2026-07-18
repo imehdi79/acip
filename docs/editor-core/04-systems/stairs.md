@@ -2,8 +2,8 @@
 
 Status: **Decided** (V1 straight flight shipped 2026-07-18)
 
-levels-and-views.md promised it: *"Stairs and shafts are cross-level relations
-— levels are not isolated silos."* A stair is the first entity whose vertical
+levels-and-views.md promised it: _"Stairs and shafts are cross-level relations
+— levels are not isolated silos."_ A stair is the first entity whose vertical
 extent spans **two levels**, and the first real user of the `{topLevelId}`
 variant of `ILevelAware` that was typed on day one and unused ever since.
 
@@ -53,11 +53,11 @@ flights today.
 ## Integration
 
 - `entities/architecture/stair-entity.ts` — `ILevelAware` (`vertical:
-  {height} | {topLevelId}`), `IMeshable`, `IGrippable` (origin + direction
+{height} | {topLevelId}`), `IMeshable`, `IGrippable` (origin + direction
   grips). `getRise()` / `getRiserCount()` / `getRunLength()` are the derived
   readouts.
 - `commands/stairs.ts` — `STAIR.ADD {origin, direction?, width?, baseLevelId?,
-  topLevelId?, height?}`. No AUTO macro: stairs are placed deliberately, not
+topLevelId?, height?}`. No AUTO macro: stairs are placed deliberately, not
   derived from other geometry (there is no "one stair per room").
 - **document** — `_emitChange` and `LEVEL.REMOVE` generalized to base-or-top
   (above).

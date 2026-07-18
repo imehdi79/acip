@@ -1,4 +1,10 @@
-import type { Geometry, LayerId, LevelId, Point, SnapPoint } from '@acip/editor-core';
+import type {
+  Geometry,
+  LayerId,
+  LevelId,
+  Point,
+  SnapPoint,
+} from '@acip/editor-core';
 import { ValueStore } from './store';
 
 export type ViewTab = 'plan' | '3d';
@@ -30,7 +36,12 @@ export interface OverlayState {
   readonly box: SelectionBox | null;
 }
 
-const EMPTY_OVERLAY: OverlayState = { snap: null, rubber: null, ghost: null, box: null };
+const EMPTY_OVERLAY: OverlayState = {
+  snap: null,
+  rubber: null,
+  ghost: null,
+  box: null,
+};
 
 /** Chrome-facing UI state; the viewport and tools write, React chrome subscribes. */
 export class EditorUi {

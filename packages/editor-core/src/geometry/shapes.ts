@@ -114,7 +114,11 @@ export function geometryBBox(g: Geometry): BBox {
 export function transformGeometry(g: Geometry, m: Matrix3): Geometry {
   switch (g.kind) {
     case 'segment':
-      return { kind: 'segment', a: applyToPoint(m, g.a), b: applyToPoint(m, g.b) };
+      return {
+        kind: 'segment',
+        a: applyToPoint(m, g.a),
+        b: applyToPoint(m, g.b),
+      };
     case 'polyline':
       return {
         kind: 'polyline',
@@ -152,6 +156,9 @@ export function transformGeometry(g: Geometry, m: Matrix3): Geometry {
         rotation: g.rotation + angleOf(applyToVector(m, { x: 1, y: 0 })),
       };
     case 'group':
-      return { kind: 'group', children: g.children.map((c) => transformGeometry(c, m)) };
+      return {
+        kind: 'group',
+        children: g.children.map((c) => transformGeometry(c, m)),
+      };
   }
 }

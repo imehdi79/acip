@@ -31,7 +31,10 @@ function EditorShell() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
         return;
       }
       if (e.ctrlKey && e.key.toLowerCase() === 'z') {
@@ -52,7 +55,10 @@ function EditorShell() {
             session.dispatch('ENTITY.ERASE', { ids });
             session.selection.clear();
           } catch (err) {
-            runtime.ui.appendLog(err instanceof Error ? err.message : String(err), 'error');
+            runtime.ui.appendLog(
+              err instanceof Error ? err.message : String(err),
+              'error',
+            );
           }
         }
         return;

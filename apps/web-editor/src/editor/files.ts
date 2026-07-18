@@ -25,7 +25,9 @@ export function openFromFile(session: EditorSession, ui: EditorUi): void {
     try {
       const data = JSON.parse(await file.text()) as DocumentData;
       if (data.formatVersion !== 1) {
-        throw new Error(`unsupported format version ${String(data.formatVersion)}`);
+        throw new Error(
+          `unsupported format version ${String(data.formatVersion)}`,
+        );
       }
       session.open(data);
       ui.activeLevelId.set(null); // the old active level does not exist here

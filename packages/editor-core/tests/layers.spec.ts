@@ -11,7 +11,10 @@ import type { EntityId, LayerId } from '../src/index.js';
 
 function setup() {
   const session = new EditorSession();
-  const layerId = session.dispatch<LayerId>('LAYER.ADD', { name: 'walls', color: '#e0b34d' });
+  const layerId = session.dispatch<LayerId>('LAYER.ADD', {
+    name: 'walls',
+    color: '#e0b34d',
+  });
   const wallId = session.dispatch<EntityId>('WALL.ADD', {
     a: point(0, 0),
     b: point(5, 0),
@@ -23,7 +26,11 @@ function setup() {
 describe('layer commands', () => {
   test('LAYER.UPDATE toggles flags and is undoable', () => {
     const { session, layerId } = setup();
-    session.dispatch('LAYER.UPDATE', { id: layerId, visible: false, color: '#ff0000' });
+    session.dispatch('LAYER.UPDATE', {
+      id: layerId,
+      visible: false,
+      color: '#ff0000',
+    });
     expect(session.doc.getLayer(layerId)!.visible).toBe(false);
     expect(session.doc.getLayer(layerId)!.color).toBe('#ff0000');
     session.undo();
@@ -33,10 +40,12 @@ describe('layer commands', () => {
 
   test('LAYER.REMOVE blocked for default layer and layers in use', () => {
     const { session, layerId } = setup();
-    expect(() => session.dispatch('LAYER.REMOVE', { id: DEFAULT_LAYER_ID })).toThrow(
-      'default layer',
+    expect(() =>
+      session.dispatch('LAYER.REMOVE', { id: DEFAULT_LAYER_ID }),
+    ).toThrow('default layer');
+    expect(() => session.dispatch('LAYER.REMOVE', { id: layerId })).toThrow(
+      'in use',
     );
-    expect(() => session.dispatch('LAYER.REMOVE', { id: layerId })).toThrow('in use');
     const empty = session.dispatch<LayerId>('LAYER.ADD', { name: 'temp' });
     session.dispatch('LAYER.REMOVE', { id: empty });
     expect(session.doc.getLayer(empty)).toBeNull();
@@ -46,11 +55,15 @@ describe('layer commands', () => {
 describe('layer visibility and lock flow through the read paths', () => {
   test('hidden layer drops entities from display list and snapping', () => {
     const { session, layerId, wallId } = setup();
-    expect(buildDisplayList(session.doc, { kind: 'plan', levelId: null }).length).toBe(1);
+    expect(
+      buildDisplayList(session.doc, { kind: 'plan', levelId: null }).length,
+    ).toBe(1);
     expect(session.snap.snap(point(0, 0), 0.5)).not.toBeNull();
 
     session.dispatch('LAYER.UPDATE', { id: layerId, visible: false });
-    expect(buildDisplayList(session.doc, { kind: 'plan', levelId: null }).length).toBe(0);
+    expect(
+      buildDisplayList(session.doc, { kind: 'plan', levelId: null }).length,
+    ).toBe(0);
     expect(session.snap.snap(point(0, 0), 0.5)).toBeNull();
     expect(isEntityVisible(session.doc, session.doc.get(wallId)!)).toBe(false);
   });
@@ -66,7 +79,10 @@ describe('layer visibility and lock flow through the read paths', () => {
 
   test('ByLayer color reaches the display list style', () => {
     const { session } = setup();
-    const items = buildDisplayList(session.doc, { kind: 'plan', levelId: null });
+    const items = buildDisplayList(session.doc, {
+      kind: 'plan',
+      levelId: null,
+    });
     expect(items[0].style.stroke).toBe('#e0b34d');
   });
 });

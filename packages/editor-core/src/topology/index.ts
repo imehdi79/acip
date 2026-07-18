@@ -17,11 +17,21 @@ export interface BoundaryWithHoles {
 export type { Interval } from './intervals.js';
 export { mergeIntervals, subtractIntervals } from './intervals.js';
 export type { WallEnd, EndCap } from './junctions.js';
-export { resolveJunction, resolveTeeCap, intersectLines, JOIN_TOLERANCE } from './junctions.js';
+export {
+  resolveJunction,
+  resolveTeeCap,
+  intersectLines,
+  JOIN_TOLERANCE,
+} from './junctions.js';
 export type {
   ArrangementSegment,
   FaceEdge,
   ArrangementFace,
   ArrangementResult,
 } from './arrangement.js';
-export { arrangeSegments, arrangePlan, loopSignedArea, pointInLoop } from './arrangement.js';
+export {
+  arrangeSegments,
+  arrangePlan,
+  loopSignedArea,
+  pointInLoop,
+} from './arrangement.js';

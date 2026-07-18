@@ -77,7 +77,8 @@ export abstract class HostedOpeningEntity
     const host = this.host();
     if (!relation || !host || !isHost(host)) return null;
     const anchors = host.getAnchors();
-    const anchor = anchors[relation.anchorIndex] ?? anchors.find((a) => a.kind === 'curve');
+    const anchor =
+      anchors[relation.anchorIndex] ?? anchors.find((a) => a.kind === 'curve');
     return anchor && anchor.geometry.kind === 'segment' ? anchor : null;
   }
 
@@ -118,21 +119,35 @@ export abstract class HostedOpeningEntity
   }
 
   getOpeningSpec(): OpeningSpec {
-    return { t: this.t, width: this.width, sill: this.getSillHeight(), height: this.height };
+    return {
+      t: this.t,
+      width: this.width,
+      sill: this.getSillHeight(),
+      height: this.height,
+    };
   }
 
   getSnapPoints(filter?: readonly SnapKind[]): SnapPoint[] {
     const frame = this.frame();
     if (!frame) return [];
-    const wanted = (kind: SnapKind): boolean => !filter || filter.includes(kind);
+    const wanted = (kind: SnapKind): boolean =>
+      !filter || filter.includes(kind);
     const du = scale(frame.u, frame.halfWidth);
     const result: SnapPoint[] = [];
     if (wanted('node')) {
       result.push({ kind: 'node', point: frame.center, entityId: this.id });
     }
     if (wanted('endpoint')) {
-      result.push({ kind: 'endpoint', point: sub(frame.center, du), entityId: this.id });
-      result.push({ kind: 'endpoint', point: add(frame.center, du), entityId: this.id });
+      result.push({
+        kind: 'endpoint',
+        point: sub(frame.center, du),
+        entityId: this.id,
+      });
+      result.push({
+        kind: 'endpoint',
+        point: add(frame.center, du),
+        entityId: this.id,
+      });
     }
     return result;
   }
@@ -154,7 +169,8 @@ export abstract class HostedOpeningEntity
     const seg = anchor.geometry as SegmentShape;
     const ab = sub(seg.b, seg.a);
     const lenSq = dot(ab, ab);
-    const nextT = lenSq === 0 ? this.t : clamp01(dot(sub(target, seg.a), ab) / lenSq);
+    const nextT =
+      lenSq === 0 ? this.t : clamp01(dot(sub(target, seg.a), ab) / lenSq);
     tx.update(this, (entity) => {
       (entity as HostedOpeningEntity).t = nextT;
     });

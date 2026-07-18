@@ -1,9 +1,20 @@
 import { describe, expect, test } from 'bun:test';
-import { EditorSession, WallEntity, computeQuantities, point } from '../src/index.js';
+import {
+  EditorSession,
+  WallEntity,
+  computeQuantities,
+  point,
+} from '../src/index.js';
 import type { EntityId, LevelId } from '../src/index.js';
 
-function buildFloor(session: EditorSession): { levelId: LevelId; wallId: EntityId } {
-  const levelId = session.dispatch<LevelId>('LEVEL.ADD', { name: 'Ground', elevation: 0 });
+function buildFloor(session: EditorSession): {
+  levelId: LevelId;
+  wallId: EntityId;
+} {
+  const levelId = session.dispatch<LevelId>('LEVEL.ADD', {
+    name: 'Ground',
+    elevation: 0,
+  });
   const wallId = session.dispatch<EntityId>('WALL.ADD', {
     a: point(0, 0),
     b: point(8, 0),
@@ -32,11 +43,16 @@ describe('LEVEL.DUPLICATE — copy floor to floor', () => {
 
     const upperWalls = session.doc
       .all()
-      .filter((e): e is WallEntity => e instanceof WallEntity && e.baseLevelId === upper);
+      .filter(
+        (e): e is WallEntity =>
+          e instanceof WallEntity && e.baseLevelId === upper,
+      );
     expect(upperWalls).toHaveLength(2);
 
     // the cloned host carries its own cloned openings with placements intact
-    const hostedIds = upperWalls.flatMap((w) => session.doc.relations.dependentsOf(w.id));
+    const hostedIds = upperWalls.flatMap((w) =>
+      session.doc.relations.dependentsOf(w.id),
+    );
     expect(hostedIds).toHaveLength(2);
     const types = hostedIds.map((id) => session.doc.get(id)!.type).sort();
     expect(types).toEqual(['door', 'window']);
@@ -44,7 +60,8 @@ describe('LEVEL.DUPLICATE — copy floor to floor', () => {
     // 3D actually sits at the new elevation
     const mesh = upperWalls[0].toMesh('medium');
     let minZ = Infinity;
-    for (let i = 2; i < mesh.positions.length; i += 3) minZ = Math.min(minZ, mesh.positions[i]);
+    for (let i = 2; i < mesh.positions.length; i += 3)
+      minZ = Math.min(minZ, mesh.positions[i]);
     expect(minZ).toBeCloseTo(3);
 
     // quantities double
@@ -57,7 +74,11 @@ describe('LEVEL.DUPLICATE — copy floor to floor', () => {
   test('one undo removes the whole duplicated floor', () => {
     const session = new EditorSession();
     const { levelId } = buildFloor(session);
-    session.dispatch('LEVEL.DUPLICATE', { sourceLevelId: levelId, name: 'First', elevation: 3 });
+    session.dispatch('LEVEL.DUPLICATE', {
+      sourceLevelId: levelId,
+      name: 'First',
+      elevation: 3,
+    });
 
     session.undo();
     expect(session.doc.count).toBe(4);

@@ -12,7 +12,9 @@ export function useDocRevision(session: EditorSession): number {
 }
 
 export function useSelectionIds(session: EditorSession): readonly EntityId[] {
-  const [ids, setIds] = useState<readonly EntityId[]>(() => session.selection.list());
+  const [ids, setIds] = useState<readonly EntityId[]>(() =>
+    session.selection.list(),
+  );
   useEffect(
     () => session.selection.events.on('changed', (list) => setIds(list)),
     [session],

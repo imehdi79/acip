@@ -1,4 +1,9 @@
-import type { Point, Tool, ToolContext, ToolInputEvent } from '@acip/editor-core';
+import type {
+  Point,
+  Tool,
+  ToolContext,
+  ToolInputEvent,
+} from '@acip/editor-core';
 import { distance } from '@acip/editor-core';
 import type { EditorUi } from '../ui-state';
 
@@ -34,7 +39,10 @@ export class SlabTool implements Tool {
 
   onPointerDown(e: ToolInputEvent): void {
     if (!this.ctx) return;
-    if (this.points.length >= 3 && distance(e.point, this.points[0]) <= this.getTolerance()) {
+    if (
+      this.points.length >= 3 &&
+      distance(e.point, this.points[0]) <= this.getTolerance()
+    ) {
       this.commit();
       return;
     }
@@ -50,7 +58,9 @@ export class SlabTool implements Tool {
     if (this.points.length === 0) return;
     this.ui.setRubber({ a: this.points[this.points.length - 1], b: e.point });
     if (this.points.length >= 2) {
-      this.ui.setGhost([{ kind: 'polyline', points: [...this.points, e.point], closed: true }]);
+      this.ui.setGhost([
+        { kind: 'polyline', points: [...this.points, e.point], closed: true },
+      ]);
     }
   }
 
@@ -76,7 +86,10 @@ export class SlabTool implements Tool {
     const ctx = this.ctx;
     if (!ctx) return;
     if (this.points.length >= 3) {
-      ctx.dispatch('SLAB.ADD', { points: this.points, ...this.extraParams?.() });
+      ctx.dispatch('SLAB.ADD', {
+        points: this.points,
+        ...this.extraParams?.(),
+      });
     }
     this.points = [];
     this.ui.setGhost(null);

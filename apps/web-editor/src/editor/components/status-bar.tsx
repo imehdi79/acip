@@ -29,7 +29,9 @@ export function StatusBar() {
         Level
         <select
           value={activeLevelId ?? ''}
-          onChange={(e) => ui.activeLevelId.set((e.target.value || null) as LevelId | null)}
+          onChange={(e) =>
+            ui.activeLevelId.set((e.target.value || null) as LevelId | null)
+          }
         >
           <option value="">All</option>
           {levels.map((level) => (

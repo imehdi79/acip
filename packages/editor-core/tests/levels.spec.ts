@@ -22,7 +22,10 @@ function addWall(session: EditorSession, levelId?: LevelId) {
 describe('transactional document stores', () => {
   test('LEVEL.ADD is undoable and redoable', () => {
     const session = new EditorSession();
-    const levelId = session.dispatch<LevelId>('LEVEL.ADD', { name: 'Level 2', elevation: 3 });
+    const levelId = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'Level 2',
+      elevation: 3,
+    });
     expect(session.doc.levels.get(levelId)?.name).toBe('Level 2');
 
     session.undo();
@@ -34,7 +37,10 @@ describe('transactional document stores', () => {
 
   test('LEVEL.UPDATE snapshots before/after; undo restores the old elevation', () => {
     const session = new EditorSession();
-    const levelId = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L2', elevation: 3 });
+    const levelId = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L2',
+      elevation: 3,
+    });
     session.dispatch('LEVEL.UPDATE', { id: levelId, elevation: 3.5 });
     expect(session.doc.levels.get(levelId)?.elevation).toBe(3.5);
 
@@ -65,18 +71,25 @@ describe('transactional document stores', () => {
 describe('levels in the model', () => {
   test('a wall on a level extrudes at that elevation', () => {
     const session = new EditorSession();
-    const levelId = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L2', elevation: 3 });
+    const levelId = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L2',
+      elevation: 3,
+    });
     const wallId = addWall(session, levelId);
     const mesh = (session.doc.get(wallId) as WallEntity).toMesh('medium');
     const zs: number[] = [];
-    for (let i = 2; i < mesh.positions.length; i += 3) zs.push(mesh.positions[i]);
+    for (let i = 2; i < mesh.positions.length; i += 3)
+      zs.push(mesh.positions[i]);
     expect(Math.min(...zs)).toBeCloseTo(3);
     expect(Math.max(...zs)).toBeCloseTo(6);
   });
 
   test('raising a level marks its walls dirty (3D moves with the datum)', () => {
     const session = new EditorSession();
-    const levelId = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L2', elevation: 3 });
+    const levelId = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L2',
+      elevation: 3,
+    });
     const wallId = addWall(session, levelId);
 
     const events: DocumentChangeEvent[] = [];
@@ -88,16 +101,22 @@ describe('levels in the model', () => {
     expect(record.changes.stores).toHaveLength(1);
     const mesh = (session.doc.get(wallId) as WallEntity).toMesh('medium');
     const zs: number[] = [];
-    for (let i = 2; i < mesh.positions.length; i += 3) zs.push(mesh.positions[i]);
+    for (let i = 2; i < mesh.positions.length; i += 3)
+      zs.push(mesh.positions[i]);
     expect(Math.min(...zs)).toBeCloseTo(4);
   });
 
   test('LEVEL.REMOVE is blocked while entities reference it', () => {
     const session = new EditorSession();
-    const levelId = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L2', elevation: 3 });
+    const levelId = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L2',
+      elevation: 3,
+    });
     const wallId = addWall(session, levelId);
 
-    expect(() => session.dispatch('LEVEL.REMOVE', { id: levelId })).toThrow(ValidationError);
+    expect(() => session.dispatch('LEVEL.REMOVE', { id: levelId })).toThrow(
+      ValidationError,
+    );
     expect(session.doc.levels.get(levelId)).not.toBeNull();
 
     session.dispatch('ENTITY.ERASE', { ids: [wallId] });
@@ -107,7 +126,10 @@ describe('levels in the model', () => {
 
   test('levels round-trip through save/load', () => {
     const session = new EditorSession();
-    const levelId = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L2', elevation: 3 });
+    const levelId = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L2',
+      elevation: 3,
+    });
     addWall(session, levelId);
 
     const data = JSON.parse(JSON.stringify(saveDocument(session.doc)));

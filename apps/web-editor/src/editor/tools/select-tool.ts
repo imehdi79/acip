@@ -1,4 +1,10 @@
-import type { Entity, Point, Tool, ToolContext, ToolInputEvent } from '@acip/editor-core';
+import type {
+  Entity,
+  Point,
+  Tool,
+  ToolContext,
+  ToolInputEvent,
+} from '@acip/editor-core';
 import {
   bboxExpand,
   bboxFromPoints,
@@ -38,7 +44,9 @@ export class SelectTool implements Tool {
   activate(ctx: ToolContext): void {
     this.ctx = ctx;
     this.mode = { kind: 'idle' };
-    this.ui.prompt.set('Select (Shift = toggle, drag = move/box, grips = stretch)');
+    this.ui.prompt.set(
+      'Select (Shift = toggle, drag = move/box, grips = stretch)',
+    );
   }
 
   deactivate(): void {
@@ -71,7 +79,8 @@ export class SelectTool implements Tool {
         ctx.selection.add(hit.id);
       }
       const ids = ctx.selection.list();
-      if (ids.length > 0) this.mode = { kind: 'maybe-drag', start: e.point, ids: [...ids] };
+      if (ids.length > 0)
+        this.mode = { kind: 'maybe-drag', start: e.point, ids: [...ids] };
       return;
     }
 
@@ -85,7 +94,11 @@ export class SelectTool implements Tool {
     switch (this.mode.kind) {
       case 'maybe-drag': {
         if (distance(e.point, this.mode.start) > this.getTolerance()) {
-          this.mode = { kind: 'drag', start: this.mode.start, ids: this.mode.ids };
+          this.mode = {
+            kind: 'drag',
+            start: this.mode.start,
+            ids: this.mode.ids,
+          };
           this.updateGhost(e.point);
         }
         break;
@@ -126,8 +139,14 @@ export class SelectTool implements Tool {
         break;
       }
       case 'grip':
-        ctx.dispatch('GRIP.MOVE', { id: mode.entityId, index: mode.index, to: e.point });
-        this.ui.prompt.set('Select (Shift = toggle, drag = move/box, grips = stretch)');
+        ctx.dispatch('GRIP.MOVE', {
+          id: mode.entityId,
+          index: mode.index,
+          to: e.point,
+        });
+        this.ui.prompt.set(
+          'Select (Shift = toggle, drag = move/box, grips = stretch)',
+        );
         break;
       case 'box':
         this.applyBoxSelection(mode, e.point);
@@ -152,7 +171,10 @@ export class SelectTool implements Tool {
     const area = bboxExpand(bboxFromPoints([point]), tolerance);
     const hits = ctx.doc
       .queryBBox(area)
-      .filter((ent) => isEntityInteractive(ctx.doc, ent) && ent.hitTest(point, tolerance));
+      .filter(
+        (ent) =>
+          isEntityInteractive(ctx.doc, ent) && ent.hitTest(point, tolerance),
+      );
     return hits[hits.length - 1] ?? null;
   }
 
@@ -185,7 +207,10 @@ export class SelectTool implements Tool {
     this.ui.setGhost(ghost);
   }
 
-  private applyBoxSelection(mode: Extract<Mode, { kind: 'box' }>, end: Point): void {
+  private applyBoxSelection(
+    mode: Extract<Mode, { kind: 'box' }>,
+    end: Point,
+  ): void {
     const ctx = this.ctx;
     if (!ctx) return;
     const tiny = distance(end, mode.start) <= this.getTolerance();
@@ -200,7 +225,12 @@ export class SelectTool implements Tool {
       if (!isEntityInteractive(ctx.doc, ent)) return false;
       if (crossing) return true; // bbox intersection is enough for crossing
       const b = ent.getBounds();
-      return b.minX >= box.minX && b.maxX <= box.maxX && b.minY >= box.minY && b.maxY <= box.maxY;
+      return (
+        b.minX >= box.minX &&
+        b.maxX <= box.maxX &&
+        b.minY >= box.minY &&
+        b.maxY <= box.maxY
+      );
     });
     if (!mode.additive) ctx.selection.clear();
     for (const ent of candidates) ctx.selection.add(ent.id);

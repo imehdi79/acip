@@ -1,4 +1,9 @@
-import type { Point, Tool, ToolContext, ToolInputEvent } from '@acip/editor-core';
+import type {
+  Point,
+  Tool,
+  ToolContext,
+  ToolInputEvent,
+} from '@acip/editor-core';
 import type { EditorUi } from '../ui-state';
 
 /**
@@ -40,7 +45,11 @@ export class ChainedDrawTool implements Tool {
       this.ui.prompt.set('Specify next point (Esc to finish)');
       return;
     }
-    ctx.dispatch(this.commandName, { a: this.last, b: e.point, ...this.extraParams?.() });
+    ctx.dispatch(this.commandName, {
+      a: this.last,
+      b: e.point,
+      ...this.extraParams?.(),
+    });
     this.last = e.point;
     this.ui.setRubber(null);
   }

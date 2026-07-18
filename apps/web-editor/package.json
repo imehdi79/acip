@@ -16,7 +16,9 @@
     "targets": {
       "typecheck": {
         "executor": "nx:run-commands",
-        "dependsOn": ["^build"],
+        "dependsOn": [
+          "^build"
+        ],
         "options": {
           "command": "bun x tsc -p apps/web-editor/tsconfig.app.json --noEmit",
           "cwd": "{workspaceRoot}"

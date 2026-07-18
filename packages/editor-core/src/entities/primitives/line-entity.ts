@@ -36,14 +36,19 @@ export class LineEntity extends Entity implements IGrippable {
   }
 
   getSnapPoints(filter?: readonly SnapKind[]): SnapPoint[] {
-    const wanted = (kind: SnapKind): boolean => !filter || filter.includes(kind);
+    const wanted = (kind: SnapKind): boolean =>
+      !filter || filter.includes(kind);
     const result: SnapPoint[] = [];
     if (wanted('endpoint')) {
       result.push({ kind: 'endpoint', point: this.a, entityId: this.id });
       result.push({ kind: 'endpoint', point: this.b, entityId: this.id });
     }
     if (wanted('midpoint')) {
-      result.push({ kind: 'midpoint', point: midpoint(this.a, this.b), entityId: this.id });
+      result.push({
+        kind: 'midpoint',
+        point: midpoint(this.a, this.b),
+        entityId: this.id,
+      });
     }
     return result;
   }

@@ -17,8 +17,17 @@ import type {
   SegmentShape,
 } from '../src/index.js';
 
-function addLine(session: EditorSession, ax: number, ay: number, bx: number, by: number) {
-  return session.dispatch<EntityId>('LINE.ADD', { a: point(ax, ay), b: point(bx, by) });
+function addLine(
+  session: EditorSession,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+) {
+  return session.dispatch<EntityId>('LINE.ADD', {
+    a: point(ax, ay),
+    b: point(bx, by),
+  });
 }
 
 function segmentOf(session: EditorSession, id: EntityId): SegmentShape {
@@ -39,9 +48,9 @@ describe('command bus + entities', () => {
 
   test('invalid params throw ValidationError and leave the document untouched', () => {
     const session = new EditorSession();
-    expect(() => session.dispatch('LINE.ADD', { a: { x: 'no' }, b: point(1, 1) })).toThrow(
-      ValidationError,
-    );
+    expect(() =>
+      session.dispatch('LINE.ADD', { a: { x: 'no' }, b: point(1, 1) }),
+    ).toThrow(ValidationError);
     expect(session.doc.count).toBe(0);
     expect(session.history.canUndo).toBe(false);
   });
@@ -166,7 +175,9 @@ describe('relations (host / attachment)', () => {
     const a = addLine(session, 0, 0, 1, 0);
     const b = addLine(session, 0, 1, 1, 1);
     session.dispatch('TEST.ATTACH', { host: a, hosted: b });
-    expect(() => session.dispatch('TEST.ATTACH', { host: b, hosted: a })).toThrow(RelationError);
+    expect(() =>
+      session.dispatch('TEST.ATTACH', { host: b, hosted: a }),
+    ).toThrow(RelationError);
     expect(session.doc.relations.all()).toHaveLength(1);
   });
 
@@ -206,7 +217,10 @@ describe('services + io', () => {
     session.doc.relations.attach(a, b, 0, { t: 0.4 });
 
     const data = saveDocument(session.doc);
-    const restored = loadDocument(JSON.parse(JSON.stringify(data)), session.entityTypes);
+    const restored = loadDocument(
+      JSON.parse(JSON.stringify(data)),
+      session.entityTypes,
+    );
 
     expect(restored.count).toBe(2);
     expect(restored.relations.all()).toHaveLength(1);

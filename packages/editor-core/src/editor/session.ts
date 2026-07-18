@@ -14,17 +14,50 @@ import { registerRoofCommands } from '../commands/roofs.js';
 import { registerFinishCommands } from '../commands/finishes.js';
 import { registerStairCommands } from '../commands/stairs.js';
 import { registerRequestCommands } from '../commands/requests.js';
-import { LineEntity, createLineEntity } from '../entities/primitives/line-entity.js';
-import { CircleEntity, createCircleEntity } from '../entities/primitives/circle-entity.js';
-import { ArcEntity, createArcEntity } from '../entities/primitives/arc-entity.js';
-import { PolylineEntity, createPolylineEntity } from '../entities/primitives/polyline-entity.js';
-import { WallEntity, createWallEntity } from '../entities/architecture/wall-entity.js';
-import { WindowEntity, createWindowEntity } from '../entities/architecture/window-entity.js';
-import { DoorEntity, createDoorEntity } from '../entities/architecture/door-entity.js';
-import { SlabEntity, createSlabEntity } from '../entities/architecture/slab-entity.js';
-import { RoofEntity, createRoofEntity } from '../entities/architecture/roof-entity.js';
-import { FinishEntity, createFinishEntity } from '../entities/architecture/finish-entity.js';
-import { StairEntity, createStairEntity } from '../entities/architecture/stair-entity.js';
+import {
+  LineEntity,
+  createLineEntity,
+} from '../entities/primitives/line-entity.js';
+import {
+  CircleEntity,
+  createCircleEntity,
+} from '../entities/primitives/circle-entity.js';
+import {
+  ArcEntity,
+  createArcEntity,
+} from '../entities/primitives/arc-entity.js';
+import {
+  PolylineEntity,
+  createPolylineEntity,
+} from '../entities/primitives/polyline-entity.js';
+import {
+  WallEntity,
+  createWallEntity,
+} from '../entities/architecture/wall-entity.js';
+import {
+  WindowEntity,
+  createWindowEntity,
+} from '../entities/architecture/window-entity.js';
+import {
+  DoorEntity,
+  createDoorEntity,
+} from '../entities/architecture/door-entity.js';
+import {
+  SlabEntity,
+  createSlabEntity,
+} from '../entities/architecture/slab-entity.js';
+import {
+  RoofEntity,
+  createRoofEntity,
+} from '../entities/architecture/roof-entity.js';
+import {
+  FinishEntity,
+  createFinishEntity,
+} from '../entities/architecture/finish-entity.js';
+import {
+  StairEntity,
+  createStairEntity,
+} from '../entities/architecture/stair-entity.js';
 import {
   DimensionEntity,
   createDimensionEntity,
@@ -65,18 +98,54 @@ export class EditorSession {
     this.measure = new MeasurementService(this.doc);
 
     if (options.registerBuiltins !== false) {
-      this.entityTypes.register({ type: LineEntity.TYPE, create: createLineEntity });
-      this.entityTypes.register({ type: CircleEntity.TYPE, create: createCircleEntity });
-      this.entityTypes.register({ type: ArcEntity.TYPE, create: createArcEntity });
-      this.entityTypes.register({ type: PolylineEntity.TYPE, create: createPolylineEntity });
-      this.entityTypes.register({ type: WallEntity.TYPE, create: createWallEntity });
-      this.entityTypes.register({ type: WindowEntity.TYPE, create: createWindowEntity });
-      this.entityTypes.register({ type: DoorEntity.TYPE, create: createDoorEntity });
-      this.entityTypes.register({ type: SlabEntity.TYPE, create: createSlabEntity });
-      this.entityTypes.register({ type: RoofEntity.TYPE, create: createRoofEntity });
-      this.entityTypes.register({ type: FinishEntity.TYPE, create: createFinishEntity });
-      this.entityTypes.register({ type: StairEntity.TYPE, create: createStairEntity });
-      this.entityTypes.register({ type: DimensionEntity.TYPE, create: createDimensionEntity });
+      this.entityTypes.register({
+        type: LineEntity.TYPE,
+        create: createLineEntity,
+      });
+      this.entityTypes.register({
+        type: CircleEntity.TYPE,
+        create: createCircleEntity,
+      });
+      this.entityTypes.register({
+        type: ArcEntity.TYPE,
+        create: createArcEntity,
+      });
+      this.entityTypes.register({
+        type: PolylineEntity.TYPE,
+        create: createPolylineEntity,
+      });
+      this.entityTypes.register({
+        type: WallEntity.TYPE,
+        create: createWallEntity,
+      });
+      this.entityTypes.register({
+        type: WindowEntity.TYPE,
+        create: createWindowEntity,
+      });
+      this.entityTypes.register({
+        type: DoorEntity.TYPE,
+        create: createDoorEntity,
+      });
+      this.entityTypes.register({
+        type: SlabEntity.TYPE,
+        create: createSlabEntity,
+      });
+      this.entityTypes.register({
+        type: RoofEntity.TYPE,
+        create: createRoofEntity,
+      });
+      this.entityTypes.register({
+        type: FinishEntity.TYPE,
+        create: createFinishEntity,
+      });
+      this.entityTypes.register({
+        type: StairEntity.TYPE,
+        create: createStairEntity,
+      });
+      this.entityTypes.register({
+        type: DimensionEntity.TYPE,
+        create: createDimensionEntity,
+      });
       registerBuiltinCommands(this.commands);
       registerPrimitiveCommands(this.commands);
       registerArchitectureCommands(this.commands);

@@ -17,7 +17,8 @@ const DEFAULT_OVERHANG = 0.3;
 
 function asSlope(value: unknown): number {
   const slope = asNumber(value, 'slope');
-  if (slope < 0 || slope > 85) throw new ValidationError('slope must be within 0..85 degrees');
+  if (slope < 0 || slope > 85)
+    throw new ValidationError('slope must be within 0..85 degrees');
   return slope;
 }
 
@@ -43,13 +44,16 @@ export const AddRoofCommand: Command<AddRoofParams, EntityId> = {
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
       if (!Array.isArray(raw['points']) || raw['points'].length < 3) {
-        throw new ValidationError('points must be an array of at least 3 points');
+        throw new ValidationError(
+          'points must be an array of at least 3 points',
+        );
       }
       const params: AddRoofParams = {
         points: raw['points'].map((p, i) => asPoint(p, `points[${i}]`)),
       };
       if (raw['slope'] !== undefined) params.slope = asSlope(raw['slope']);
-      if (raw['direction'] !== undefined) params.direction = asPoint(raw['direction'], 'direction');
+      if (raw['direction'] !== undefined)
+        params.direction = asPoint(raw['direction'], 'direction');
       if (raw['thickness'] !== undefined) {
         params.thickness = asPositive(raw['thickness'], 'thickness');
       }
@@ -70,14 +74,23 @@ export const AddRoofCommand: Command<AddRoofParams, EntityId> = {
     () =>
       S.object(
         {
-          points: S.array(S.point('footprint vertex'), 'closed roof footprint, in order'),
+          points: S.array(
+            S.point('footprint vertex'),
+            'closed roof footprint, in order',
+          ),
           slope: S.number('pitch in degrees, 0 = flat (default 15)'),
-          direction: S.point('downhill fall direction in plan (default {x:0,y:-1})'),
+          direction: S.point(
+            'downhill fall direction in plan (default {x:0,y:-1})',
+          ),
           thickness: S.number(
             'roof thickness in meters, measured vertically (default 0.25; ignored when typeId has assembly layers)',
           ),
-          eavesHeight: S.number('eaves height above the level elevation (default 3)'),
-          typeId: S.id('optional roof type id; thickness then derives from its assembly layers'),
+          eavesHeight: S.number(
+            'eaves height above the level elevation (default 3)',
+          ),
+          typeId: S.id(
+            'optional roof type id; thickness then derives from its assembly layers',
+          ),
           levelId: S.id('optional level (floor) id the roof covers'),
           layerId: S.id('optional layer id; defaults to the active layer'),
         },
@@ -139,7 +152,8 @@ export const AutoRoofCommand: Command<
       if (raw['slope'] !== undefined) params.slope = asSlope(raw['slope']);
       if (raw['overhang'] !== undefined) {
         params.overhang = asNumber(raw['overhang'], 'overhang');
-        if (params.overhang < 0) throw new ValidationError('overhang must be ≥ 0');
+        if (params.overhang < 0)
+          throw new ValidationError('overhang must be ≥ 0');
       }
       if (raw['typeId'] !== undefined) {
         params.typeId = asId(raw['typeId'], 'typeId') as string as TypeId;
@@ -150,7 +164,9 @@ export const AutoRoofCommand: Command<
       S.object({
         levelId: S.id('level to roof (omit for level-unassigned geometry)'),
         slope: S.number('pitch in degrees (default 15)'),
-        overhang: S.number('eaves overhang beyond the outer wall faces in meters (default 0.3)'),
+        overhang: S.number(
+          'eaves overhang beyond the outer wall faces in meters (default 0.3)',
+        ),
         typeId: S.id('optional roof type applied to every created roof'),
       }),
   ),
@@ -162,7 +178,11 @@ export const AutoRoofCommand: Command<
     const overhang = params.overhang ?? DEFAULT_OVERHANG;
     let removed = 0;
     for (const entity of ctx.doc.all()) {
-      if (entity instanceof RoofEntity && entity.auto && entity.baseLevelId === levelId) {
+      if (
+        entity instanceof RoofEntity &&
+        entity.auto &&
+        entity.baseLevelId === levelId
+      ) {
         ctx.tx.remove(entity);
         removed += 1;
       }
@@ -174,7 +194,10 @@ export const AutoRoofCommand: Command<
         const wall = ctx.doc.get(id as EntityId);
         return wall instanceof WallEntity ? wall.getThickness() / 2 : 0;
       };
-      const footprint = offsetBoundary(outline.edges, (id) => -(halfWidthOf(id) + overhang));
+      const footprint = offsetBoundary(
+        outline.edges,
+        (id) => -(halfWidthOf(id) + overhang),
+      );
       if (Math.abs(loopSignedArea(footprint)) < 1e-9) continue;
 
       const roof = new RoofEntity();
@@ -183,12 +206,15 @@ export const AutoRoofCommand: Command<
       // sheds fall across the narrow span
       const bounds = bboxFromPoints(footprint);
       roof.direction =
-        bounds.maxX - bounds.minX >= bounds.maxY - bounds.minY ? { x: 0, y: -1 } : { x: -1, y: 0 };
+        bounds.maxX - bounds.minX >= bounds.maxY - bounds.minY
+          ? { x: 0, y: -1 }
+          : { x: -1, y: 0 };
       // eaves land on the tallest wall of this outline
       let eaves = 0;
       for (const wallId of outline.boundaryWallIds) {
         const wall = ctx.doc.get(wallId);
-        if (wall instanceof WallEntity) eaves = Math.max(eaves, wall.getHeight());
+        if (wall instanceof WallEntity)
+          eaves = Math.max(eaves, wall.getHeight());
       }
       roof.eavesHeight = eaves > 0 ? eaves : roof.eavesHeight;
       roof.auto = true;

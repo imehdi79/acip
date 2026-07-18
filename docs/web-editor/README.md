@@ -5,12 +5,12 @@ Companion to [docs/editor-core](../editor-core/README.md) — read that first; t
 core's golden rules (headless core, command-bus-only mutation, views not raw
 document) bind everything here.
 
-| File | Contents |
-| --- | --- |
-| [01-rendering-stack.md](01-rendering-stack.md) | Canvas 2D (not Konva), Three.js (not R3F) — decisions + rationale |
-| [02-layout.md](02-layout.md) | The editor shell layout and component inventory |
-| [03-architecture.md](03-architecture.md) | Session ownership, imperative viewport island, input pipeline, state sync |
-| [04-agent.md](04-agent.md) | Drafter prompt box, API key handling, browser-direct caveat |
+| File                                           | Contents                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------- |
+| [01-rendering-stack.md](01-rendering-stack.md) | Canvas 2D (not Konva), Three.js (not R3F) — decisions + rationale         |
+| [02-layout.md](02-layout.md)                   | The editor shell layout and component inventory                           |
+| [03-architecture.md](03-architecture.md)       | Session ownership, imperative viewport island, input pipeline, state sync |
+| [04-agent.md](04-agent.md)                     | Drafter prompt box, API key handling, browser-direct caveat               |
 
 ## The golden rules of the app layer
 

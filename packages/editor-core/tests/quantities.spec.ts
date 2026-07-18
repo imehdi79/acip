@@ -22,7 +22,13 @@ describe('quantity takeoff', () => {
   test('net face area and volume deduct openings', () => {
     const session = new EditorSession();
     const wallId = addWall(session);
-    session.dispatch('WINDOW.ADD', { wallId, t: 0.5, width: 2, sill: 0.9, height: 1.2 });
+    session.dispatch('WINDOW.ADD', {
+      wallId,
+      t: 0.5,
+      width: 2,
+      sill: 0.9,
+      height: 1.2,
+    });
 
     const report = computeQuantities(session.doc);
     expect(report.walls).toHaveLength(1);
@@ -37,8 +43,14 @@ describe('quantity takeoff', () => {
 
   test('assembly layers split the net volume per material', () => {
     const session = new EditorSession();
-    const block = session.dispatch<MaterialId>('MATERIAL.ADD', { name: 'Block', unit: 'm3' });
-    const plaster = session.dispatch<MaterialId>('MATERIAL.ADD', { name: 'Plaster', unit: 'm3' });
+    const block = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Block',
+      unit: 'm3',
+    });
+    const plaster = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Plaster',
+      unit: 'm3',
+    });
     const typeId = session.dispatch<TypeId>('TYPE.ADD', {
       targetType: 'wall',
       name: 'Block 300',
@@ -50,7 +62,9 @@ describe('quantity takeoff', () => {
     const wallId = addWall(session, { typeId });
 
     // thickness comes from the catalog: 0.2 + 0.1 = 0.3
-    expect((session.doc.get(wallId) as WallEntity).getThickness()).toBeCloseTo(0.3);
+    expect((session.doc.get(wallId) as WallEntity).getThickness()).toBeCloseTo(
+      0.3,
+    );
 
     const report = computeQuantities(session.doc);
     const netVolume = report.walls[0].netVolume; // 10×0.3×3 = 9
@@ -67,7 +81,9 @@ describe('quantity takeoff', () => {
     expect(computeQuantities(session.doc).totals.wallNetVolume).toBeCloseTo(9);
 
     session.dispatch('DOOR.ADD', { wallId, t: 0.3, width: 1, height: 2.1 });
-    expect(computeQuantities(session.doc).totals.wallNetVolume).toBeCloseTo(9 - 1 * 0.3 * 2.1);
+    expect(computeQuantities(session.doc).totals.wallNetVolume).toBeCloseTo(
+      9 - 1 * 0.3 * 2.1,
+    );
     expect(computeQuantities(session.doc).totals.doorCount).toBe(1);
 
     session.undo();
@@ -85,7 +101,9 @@ describe('quantity takeoff', () => {
     ).toThrow(ValidationError);
     expect(session.doc.types.list()).toHaveLength(0);
 
-    const materialId = session.dispatch<MaterialId>('MATERIAL.ADD', { name: 'Brick' });
+    const materialId = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Brick',
+    });
     expect(session.doc.materials.get(materialId)?.name).toBe('Brick');
     session.undo();
     expect(session.doc.materials.get(materialId)).toBeNull();
@@ -93,7 +111,9 @@ describe('quantity takeoff', () => {
 
   test('WALL.ADD rejects a missing typeId', () => {
     const session = new EditorSession();
-    expect(() => addWall(session, { typeId: 'missing' })).toThrow(ValidationError);
+    expect(() => addWall(session, { typeId: 'missing' })).toThrow(
+      ValidationError,
+    );
     expect(session.doc.count).toBe(0);
   });
 });

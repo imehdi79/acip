@@ -3,10 +3,18 @@ import type { EntityId } from '../../common/id.js';
 import type { JsonObject } from '../../common/json.js';
 import { ValidationError } from '../../common/errors.js';
 import type { Point } from '../../geometry/primitives/point.js';
-import { angleOf, distance, point, sub } from '../../geometry/primitives/point.js';
+import {
+  angleOf,
+  distance,
+  point,
+  sub,
+} from '../../geometry/primitives/point.js';
 import { length } from '../../geometry/primitives/point.js';
 import type { Matrix3 } from '../../geometry/primitives/matrix3.js';
-import { applyToPoint, applyToVector } from '../../geometry/primitives/matrix3.js';
+import {
+  applyToPoint,
+  applyToVector,
+} from '../../geometry/primitives/matrix3.js';
 import { distanceToArc, pointOnCircle } from '../../geometry/curves/circle.js';
 import type { Geometry } from '../../geometry/shapes.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
@@ -44,7 +52,8 @@ export class ArcEntity extends Entity implements IGrippable {
   }
 
   getMidPoint(): Point {
-    const sweep = ((this.endAngle - this.startAngle) % TWO_PI + TWO_PI) % TWO_PI;
+    const sweep =
+      (((this.endAngle - this.startAngle) % TWO_PI) + TWO_PI) % TWO_PI;
     return pointOnCircle(this.center, this.radius, this.startAngle + sweep / 2);
   }
 
@@ -59,14 +68,27 @@ export class ArcEntity extends Entity implements IGrippable {
   }
 
   getSnapPoints(filter?: readonly SnapKind[]): SnapPoint[] {
-    const wanted = (kind: SnapKind): boolean => !filter || filter.includes(kind);
+    const wanted = (kind: SnapKind): boolean =>
+      !filter || filter.includes(kind);
     const result: SnapPoint[] = [];
     if (wanted('endpoint')) {
-      result.push({ kind: 'endpoint', point: this.getStartPoint(), entityId: this.id });
-      result.push({ kind: 'endpoint', point: this.getEndPoint(), entityId: this.id });
+      result.push({
+        kind: 'endpoint',
+        point: this.getStartPoint(),
+        entityId: this.id,
+      });
+      result.push({
+        kind: 'endpoint',
+        point: this.getEndPoint(),
+        entityId: this.id,
+      });
     }
     if (wanted('midpoint')) {
-      result.push({ kind: 'midpoint', point: this.getMidPoint(), entityId: this.id });
+      result.push({
+        kind: 'midpoint',
+        point: this.getMidPoint(),
+        entityId: this.id,
+      });
     }
     if (wanted('center')) {
       result.push({ kind: 'center', point: this.center, entityId: this.id });
@@ -76,7 +98,13 @@ export class ArcEntity extends Entity implements IGrippable {
 
   hitTest(pt: Point, tolerance: number): boolean {
     return (
-      distanceToArc(pt, this.center, this.radius, this.startAngle, this.endAngle) <= tolerance
+      distanceToArc(
+        pt,
+        this.center,
+        this.radius,
+        this.startAngle,
+        this.endAngle,
+      ) <= tolerance
     );
   }
 

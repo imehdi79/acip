@@ -17,12 +17,18 @@ export function isEntityVisible(doc: DrawingDocument, entity: Entity): boolean {
 }
 
 /** pickable/editable: visible AND the layer is not locked */
-export function isEntityInteractive(doc: DrawingDocument, entity: Entity): boolean {
+export function isEntityInteractive(
+  doc: DrawingDocument,
+  entity: Entity,
+): boolean {
   const layer = doc.getLayer(entity.layerId);
   return layer?.visible !== false && layer?.locked !== true;
 }
 
-export function entitiesInView(doc: DrawingDocument, view: ViewDefinition): Entity[] {
+export function entitiesInView(
+  doc: DrawingDocument,
+  view: ViewDefinition,
+): Entity[] {
   if (view.kind === '3d') {
     return doc.all().filter((e) => isMeshable(e));
   }

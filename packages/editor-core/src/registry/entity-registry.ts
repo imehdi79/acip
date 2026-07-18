@@ -17,7 +17,9 @@ export class EntityTypeRegistry {
 
   register(registration: EntityTypeRegistration): void {
     if (this.registrations.has(registration.type)) {
-      throw new RegistryError(`entity type '${registration.type}' already registered`);
+      throw new RegistryError(
+        `entity type '${registration.type}' already registered`,
+      );
     }
     this.registrations.set(registration.type, registration);
   }
@@ -28,7 +30,8 @@ export class EntityTypeRegistry {
 
   get(type: string): EntityTypeRegistration {
     const reg = this.registrations.get(type);
-    if (!reg) throw new RegistryError(`entity type '${type}' is not registered`);
+    if (!reg)
+      throw new RegistryError(`entity type '${type}' is not registered`);
     return reg;
   }
 

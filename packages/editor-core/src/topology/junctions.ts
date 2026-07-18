@@ -40,7 +40,12 @@ export const JOIN_TOLERANCE = 1e-4;
 const MITER_LIMIT = 8;
 
 /** infinite line × infinite line; null when parallel */
-export function intersectLines(p1: Point, d1: Vector, p2: Point, d2: Vector): Point | null {
+export function intersectLines(
+  p1: Point,
+  d1: Vector,
+  p2: Point,
+  d2: Vector,
+): Point | null {
   const denom = cross(d1, d2);
   if (Math.abs(denom) < 1e-9) return null;
   const t = cross(sub(p2, p1), d2) / denom;
@@ -68,7 +73,11 @@ function cornerBetween(a: WallEnd, b: WallEnd, junction: Point): Point | null {
   const pb = sub(b.point, scale(perpendicular(b.direction), b.halfWidth));
   const pt = intersectLines(pa, a.direction, pb, b.direction);
   if (!pt) return null;
-  return clampToLimit(pt, junction, MITER_LIMIT * Math.max(a.halfWidth, b.halfWidth));
+  return clampToLimit(
+    pt,
+    junction,
+    MITER_LIMIT * Math.max(a.halfWidth, b.halfWidth),
+  );
 }
 
 /**
@@ -78,10 +87,24 @@ function cornerBetween(a: WallEnd, b: WallEnd, junction: Point): Point | null {
  * incidence the corners are clamped to the miter limit. Null when the ending
  * wall runs parallel to the face (no clean butt exists).
  */
-export function resolveTeeCap(end: WallEnd, facePoint: Point, faceDir: Vector): EndCap | null {
+export function resolveTeeCap(
+  end: WallEnd,
+  facePoint: Point,
+  faceDir: Vector,
+): EndCap | null {
   const n = scale(perpendicular(end.direction), end.halfWidth);
-  const left = intersectLines(add(end.point, n), end.direction, facePoint, faceDir);
-  const right = intersectLines(sub(end.point, n), end.direction, facePoint, faceDir);
+  const left = intersectLines(
+    add(end.point, n),
+    end.direction,
+    facePoint,
+    faceDir,
+  );
+  const right = intersectLines(
+    sub(end.point, n),
+    end.direction,
+    facePoint,
+    faceDir,
+  );
   if (!left || !right) return null;
   const limit = MITER_LIMIT * end.halfWidth;
   return {
@@ -107,7 +130,9 @@ export function resolveJunction(ends: readonly WallEnd[]): EndCap[] {
   // corner i sits in the CCW gap between sorted wall i and sorted wall i+1
   const corners: (Point | null)[] = [];
   for (let i = 0; i < k; i++) {
-    corners.push(cornerBetween(sorted[i].end, sorted[(i + 1) % k].end, junction));
+    corners.push(
+      cornerBetween(sorted[i].end, sorted[(i + 1) % k].end, junction),
+    );
   }
   const caps: EndCap[] = new Array(ends.length);
   for (let i = 0; i < k; i++) {

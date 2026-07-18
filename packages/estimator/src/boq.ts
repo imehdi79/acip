@@ -49,12 +49,23 @@ const GENERIC_FINISH_CODE = 'finish-area';
  * 3. aggregate by cost code, apply factor rules (waste),
  * 4. price against the rate table.
  */
-export function assembleBoq(doc: DrawingDocument, options: BoqOptions = {}): Boq {
+export function assembleBoq(
+  doc: DrawingDocument,
+  options: BoqOptions = {},
+): Boq {
   const rules = options.rules ?? [];
   const rates = options.rates ?? null;
 
-  const byCode = new Map<string, { description: string; unit: string; quantity: number }>();
-  const accumulate = (code: string, description: string, unit: string, quantity: number) => {
+  const byCode = new Map<
+    string,
+    { description: string; unit: string; quantity: number }
+  >();
+  const accumulate = (
+    code: string,
+    description: string,
+    unit: string,
+    quantity: number,
+  ) => {
     const entry = byCode.get(code);
     if (entry) entry.quantity += quantity;
     else byCode.set(code, { description, unit, quantity });
@@ -71,7 +82,13 @@ export function assembleBoq(doc: DrawingDocument, options: BoqOptions = {}): Boq
     const total = layers.reduce((sum, layer) => sum + layer.thickness, 0);
     if (total > 0) {
       for (const layer of layers) {
-        const quantity = layerQuantity(layer.unit, layer.thickness, total, refs, layer.coverage);
+        const quantity = layerQuantity(
+          layer.unit,
+          layer.thickness,
+          total,
+          refs,
+          layer.coverage,
+        );
         accumulate(layer.costCode, layer.name, layer.unit, quantity);
       }
     } else if (refs.volume > 0) {
@@ -91,7 +108,11 @@ export function assembleBoq(doc: DrawingDocument, options: BoqOptions = {}): Boq
     }
     accumulateLayers(
       wall.layers,
-      { volume: Math.max(0, netVolume), area: Math.max(0, netFaceArea), length: wall.length },
+      {
+        volume: Math.max(0, netVolume),
+        area: Math.max(0, netFaceArea),
+        length: wall.length,
+      },
       GENERIC_WALL_CODE,
       'Wall (no assembly)',
     );
@@ -135,9 +156,19 @@ export function assembleBoq(doc: DrawingDocument, options: BoqOptions = {}): Boq
         refs,
         finish.layer.coverage,
       );
-      accumulate(finish.layer.costCode, finish.layer.name, finish.layer.unit, quantity);
+      accumulate(
+        finish.layer.costCode,
+        finish.layer.name,
+        finish.layer.unit,
+        quantity,
+      );
     } else if (finish.area > 0) {
-      accumulate(GENERIC_FINISH_CODE, 'Finish (no material)', 'm2', finish.area);
+      accumulate(
+        GENERIC_FINISH_CODE,
+        'Finish (no material)',
+        'm2',
+        finish.area,
+      );
     }
   }
 
@@ -164,7 +195,9 @@ export function assembleBoq(doc: DrawingDocument, options: BoqOptions = {}): Boq
     else total += amount ?? 0;
     lines.push(line);
   }
-  lines.sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0) || b.quantity - a.quantity);
+  lines.sort(
+    (a, b) => (b.amount ?? 0) - (a.amount ?? 0) || b.quantity - a.quantity,
+  );
 
   return { lines, currency: rates?.currency ?? null, total, missingRates };
 }

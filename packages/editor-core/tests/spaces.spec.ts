@@ -8,16 +8,35 @@ import {
   point,
   pointInLoop,
 } from '../src/index.js';
-import type { ArrangementSegment, EntityId, JsonObject, LevelId, Point } from '../src/index.js';
+import type {
+  ArrangementSegment,
+  EntityId,
+  JsonObject,
+  LevelId,
+  Point,
+} from '../src/index.js';
 
 const TOL = 1e-4;
 
-function seg(id: string, ax: number, ay: number, bx: number, by: number, halfWidth = 0): ArrangementSegment {
+function seg(
+  id: string,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  halfWidth = 0,
+): ArrangementSegment {
   return { id, a: point(ax, ay), b: point(bx, by), halfWidth };
 }
 
 /** 6×4 rectangle of baselines, counter-clockwise */
-function rect(x0: number, y0: number, x1: number, y1: number, prefix = 'w'): ArrangementSegment[] {
+function rect(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  prefix = 'w',
+): ArrangementSegment[] {
   return [
     seg(`${prefix}-bottom`, x0, y0, x1, y0),
     seg(`${prefix}-right`, x1, y0, x1, y1),
@@ -37,7 +56,10 @@ describe('arrangeSegments — planar arrangement', () => {
 
   test('partition tee`d mid-span splits one room into two — at any parameter', () => {
     // partition at x = 2 (1/3 along the 6 m walls, NOT the midpoint)
-    const faces = arrangeSegments([...rect(0, 0, 6, 4), seg('partition', 2, 0, 2, 4)], TOL);
+    const faces = arrangeSegments(
+      [...rect(0, 0, 6, 4), seg('partition', 2, 0, 2, 4)],
+      TOL,
+    );
     const areas = faces.map((f) => f.area).sort((a, b) => a - b);
     expect(faces.length).toBe(2);
     expect(areas[0]).toBeCloseTo(8, 9);
@@ -47,7 +69,10 @@ describe('arrangeSegments — planar arrangement', () => {
   test('partition drawn flush to host FACES still connects (halfWidth allowance)', () => {
     // hosts are 0.3 m walls; partition endpoints stop at their faces (y 0.15 / 3.85)
     const walls = rect(0, 0, 6, 4).map((s) => ({ ...s, halfWidth: 0.15 }));
-    const faces = arrangeSegments([...walls, seg('partition', 2, 0.15, 2, 3.85, 0.15)], TOL);
+    const faces = arrangeSegments(
+      [...walls, seg('partition', 2, 0.15, 2, 3.85, 0.15)],
+      TOL,
+    );
     const areas = faces.map((f) => f.area).sort((a, b) => a - b);
     expect(faces.length).toBe(2);
     expect(areas[0]).toBeCloseTo(8, 6);
@@ -64,17 +89,25 @@ describe('arrangeSegments — planar arrangement', () => {
   });
 
   test('dangling stub traverses as a spike without changing the area', () => {
-    const faces = arrangeSegments([...rect(0, 0, 6, 4), seg('stub', 0, 2, 1, 2)], TOL);
+    const faces = arrangeSegments(
+      [...rect(0, 0, 6, 4), seg('stub', 0, 2, 1, 2)],
+      TOL,
+    );
     expect(faces.length).toBe(1);
     expect(faces[0].area).toBeCloseTo(24, 9);
     // the walk visits the stub tip (out and back)
-    expect(faces[0].loop.some((p) => Math.abs(p.x - 1) < TOL && Math.abs(p.y - 2) < TOL)).toBe(
-      true,
-    );
+    expect(
+      faces[0].loop.some(
+        (p) => Math.abs(p.x - 1) < TOL && Math.abs(p.y - 2) < TOL,
+      ),
+    ).toBe(true);
   });
 
   test('detached island becomes a hole of the containing face', () => {
-    const faces = arrangeSegments([...rect(0, 0, 10, 10), ...rect(4, 4, 6, 6, 'island')], TOL);
+    const faces = arrangeSegments(
+      [...rect(0, 0, 10, 10), ...rect(4, 4, 6, 6, 'island')],
+      TOL,
+    );
     const byArea = [...faces].sort((a, b) => a.area - b.area);
     expect(faces.length).toBe(2);
     // island interior is itself a bounded face
@@ -96,7 +129,12 @@ describe('arrangeSegments — planar arrangement', () => {
   });
 
   test('loopSignedArea and pointInLoop agree on orientation and containment', () => {
-    const square: Point[] = [point(0, 0), point(2, 0), point(2, 2), point(0, 2)];
+    const square: Point[] = [
+      point(0, 0),
+      point(2, 0),
+      point(2, 2),
+      point(0, 2),
+    ];
     expect(loopSignedArea(square)).toBeCloseTo(4, 12);
     expect(pointInLoop(point(1, 1), square)).toBe(true);
     expect(pointInLoop(point(3, 1), square)).toBe(false);
@@ -196,15 +234,24 @@ describe('detectSpaces — derived rooms', () => {
 
   test('spaces are detected per level, the way plan views query', () => {
     const session = new EditorSession();
-    const l1 = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L1', elevation: 0 });
-    const l2 = session.dispatch<LevelId>('LEVEL.ADD', { name: 'L2', elevation: 3 });
+    const l1 = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L1',
+      elevation: 0,
+    });
+    const l2 = session.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L2',
+      elevation: 3,
+    });
     drawRoom(session, l1);
     expect(detectSpaces(session.doc, l1).length).toBe(1);
     expect(detectSpaces(session.doc, l2).length).toBe(0);
     // level-unassigned walls bound rooms on every level
     const unassigned = new EditorSession();
     drawRoom(unassigned);
-    const ul1 = unassigned.dispatch<LevelId>('LEVEL.ADD', { name: 'L1', elevation: 0 });
+    const ul1 = unassigned.dispatch<LevelId>('LEVEL.ADD', {
+      name: 'L1',
+      elevation: 0,
+    });
     expect(detectSpaces(unassigned.doc, ul1).length).toBe(1);
   });
 

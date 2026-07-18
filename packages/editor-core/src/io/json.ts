@@ -57,7 +57,10 @@ export function loadDocumentInto(
   }
 }
 
-export function loadDocument(data: DocumentData, registry: EntityTypeRegistry): DrawingDocument {
+export function loadDocument(
+  data: DocumentData,
+  registry: EntityTypeRegistry,
+): DrawingDocument {
   const doc = new DrawingDocument();
   loadDocumentInto(doc, data, registry);
   return doc;

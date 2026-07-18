@@ -13,7 +13,11 @@ import { isEntityVisible } from '../views/index.js';
 export class SnapEngine {
   constructor(private doc: DrawingDocument) {}
 
-  snap(cursor: Point, tolerance: number, filter?: readonly SnapKind[]): SnapPoint | null {
+  snap(
+    cursor: Point,
+    tolerance: number,
+    filter?: readonly SnapKind[],
+  ): SnapPoint | null {
     const area = bboxExpand(bboxFromPoints([cursor]), tolerance);
     let best: SnapPoint | null = null;
     let bestDist = Infinity;

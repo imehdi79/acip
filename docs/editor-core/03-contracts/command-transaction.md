@@ -32,34 +32,35 @@ of**. Memory cost is trivial for 2D building models. Redo re-applies after-snaps
 
 ```ts
 interface Command<P, R> {
-  name: string;                        // 'WALL.ADD', 'ENTITY.MOVE', 'FINISH.APPLY'
-  params: Schema<P>;                   // ONE schema → runtime validation,
-                                       // command-line parsing, LLM tool definition
+  name: string; // 'WALL.ADD', 'ENTITY.MOVE', 'FINISH.APPLY'
+  params: Schema<P>; // ONE schema → runtime validation,
+  // command-line parsing, LLM tool definition
   execute(ctx: CommandContext, params: P): R;
 }
 
 interface CommandContext {
   doc: DrawingDocument;
-  tx: Transaction;                     // opened by the bus — commands never
-                                       // commit or roll back themselves
-  measure: MeasurementService;         // read services injected, not imported
+  tx: Transaction; // opened by the bus — commands never
+  // commit or roll back themselves
+  measure: MeasurementService; // read services injected, not imported
 }
 
 interface Transaction {
   create(e: Entity): void;
   update<E extends Entity>(e: E, mutate: (e: E) => void): void;
-    // captures before-snapshot on first touch, after-snapshot at commit
+  // captures before-snapshot on first touch, after-snapshot at commit
   remove(e: Entity): void;
   attach(host: EntityId, hosted: EntityId, placement: PlacementParams): void;
   detach(rel: RelationRef): void;
-    // relation-graph edits are transactional too — undo restores the
-    // RELATIONSHIP, not just the shapes
+  // relation-graph edits are transactional too — undo restores the
+  // RELATIONSHIP, not just the shapes
 }
 ```
 
 ## Bus lifecycle
 
 `dispatch('WALL.ADD', rawParams)` →
+
 1. validate params against the schema,
 2. open a transaction,
 3. `execute`,
@@ -77,9 +78,10 @@ Commit produces one immutable record:
 ```
 
 Consumers:
+
 - **history stack** — undo/redo by replaying snapshots
 - **change event** — drives dirty propagation ([relations](../04-systems/relations.md)),
   spatial-index updates, rendering invalidation, and the estimator's incremental recompute
-- **future editor-server** — a stream of these records *is* the sync/collaboration
+- **future editor-server** — a stream of these records _is_ the sync/collaboration
   protocol. We are not designing collaboration now, but this contract means we will not
   have to redesign for it.

@@ -52,12 +52,14 @@ const MIN_ASSEMBLY_PX = 6;
 
 function collectRegions(g: Geometry, out: RegionShape[]): void {
   if (g.kind === 'region') out.push(g);
-  else if (g.kind === 'group') for (const child of g.children) collectRegions(child, out);
+  else if (g.kind === 'group')
+    for (const child of g.children) collectRegions(child, out);
 }
 
 function collectTexts(g: Geometry, out: TextShape[]): void {
   if (g.kind === 'text') out.push(g);
-  else if (g.kind === 'group') for (const child of g.children) collectTexts(child, out);
+  else if (g.kind === 'group')
+    for (const child of g.children) collectTexts(child, out);
 }
 
 function pathGeometry(ctx: CanvasRenderingContext2D, g: Geometry): void {
@@ -69,7 +71,8 @@ function pathGeometry(ctx: CanvasRenderingContext2D, g: Geometry): void {
     case 'polyline': {
       if (g.points.length === 0) break;
       ctx.moveTo(g.points[0].x, g.points[0].y);
-      for (let i = 1; i < g.points.length; i++) ctx.lineTo(g.points[i].x, g.points[i].y);
+      for (let i = 1; i < g.points.length; i++)
+        ctx.lineTo(g.points[i].x, g.points[i].y);
       if (g.closed) ctx.closePath();
       break;
     }
@@ -154,7 +157,8 @@ function hatchRegions(
     ctx.lineWidth = 0.5 / scale;
     ctx.beginPath();
     hatchLines(ctx, minX, minY, maxX, maxY, 1, spacing);
-    if (pattern === 'cross') hatchLines(ctx, minX, minY, maxX, maxY, -1, spacing);
+    if (pattern === 'cross')
+      hatchLines(ctx, minX, minY, maxX, maxY, -1, spacing);
     ctx.stroke();
   }
   ctx.restore();
@@ -202,12 +206,20 @@ function drawGrid(
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let x = Math.ceil(worldMin.x / spacing) * spacing; x <= worldMax.x; x += spacing) {
+    for (
+      let x = Math.ceil(worldMin.x / spacing) * spacing;
+      x <= worldMax.x;
+      x += spacing
+    ) {
       const s = viewport.toScreen({ x, y: 0 });
       ctx.moveTo(s.x, 0);
       ctx.lineTo(s.x, height);
     }
-    for (let y = Math.ceil(worldMin.y / spacing) * spacing; y <= worldMax.y; y += spacing) {
+    for (
+      let y = Math.ceil(worldMin.y / spacing) * spacing;
+      y <= worldMax.y;
+      y += spacing
+    ) {
       const s = viewport.toScreen({ x: 0, y });
       ctx.moveTo(0, s.y);
       ctx.lineTo(width, s.y);
@@ -262,12 +274,17 @@ export function drawScene(
   ctx.lineJoin = 'round';
 
   // detected rooms (derived on read): soft net-boundary fill under the walls
-  const spaces: SpaceInfo[] = view.kind === 'plan' ? detectSpaces(doc, view.levelId) : [];
+  const spaces: SpaceInfo[] =
+    view.kind === 'plan' ? detectSpaces(doc, view.levelId) : [];
   if (spaces.length > 0) {
     ctx.fillStyle = COLORS.spaceFill;
     ctx.beginPath();
     for (const space of spaces) {
-      pathGeometry(ctx, { kind: 'polyline', points: space.boundary, closed: true });
+      pathGeometry(ctx, {
+        kind: 'polyline',
+        points: space.boundary,
+        closed: true,
+      });
       for (const hole of space.holes) {
         pathGeometry(ctx, { kind: 'polyline', points: hole, closed: true });
       }
@@ -282,14 +299,19 @@ export function drawScene(
     const regions: RegionShape[] = [];
     collectRegions(item.geometry, regions);
     if (regions.length > 0) {
-      ctx.fillStyle = isSelected ? COLORS.regionFillSelected : COLORS.regionFill;
+      ctx.fillStyle = isSelected
+        ? COLORS.regionFillSelected
+        : COLORS.regionFill;
       ctx.beginPath();
       for (const region of regions) pathGeometry(ctx, region);
       ctx.fill('evenodd');
     }
     const entity = doc.get(item.entityId as EntityId);
     // typed walls expose their assembly build-up once zoomed in enough to read
-    if (entity instanceof WallEntity && entity.getThickness() * viewport.scale >= MIN_ASSEMBLY_PX) {
+    if (
+      entity instanceof WallEntity &&
+      entity.getThickness() * viewport.scale >= MIN_ASSEMBLY_PX
+    ) {
       const assembly = wallAssemblyStrips(doc, entity);
       if (assembly) drawAssemblyStrips(ctx, doc, assembly, viewport.scale);
     }
@@ -303,7 +325,9 @@ export function drawScene(
         : (item.style.stroke ?? '#e0e0e0');
     ctx.strokeStyle = color;
     // divide by scale so line weights stay zoom-independent
-    ctx.lineWidth = ((item.style.width ?? 1) * (isSelected ? 2.5 : isFinish ? 2 : 1.5)) / viewport.scale;
+    ctx.lineWidth =
+      ((item.style.width ?? 1) * (isSelected ? 2.5 : isFinish ? 2 : 1.5)) /
+      viewport.scale;
     if (isFinish) ctx.setLineDash([0.15, 0.1]);
     ctx.beginPath();
     pathGeometry(ctx, item.geometry);
@@ -341,8 +365,18 @@ export function drawScene(
       ctx.fillStyle = COLORS.grip;
       ctx.strokeStyle = COLORS.gripBorder;
       ctx.lineWidth = 1;
-      ctx.fillRect(s.x - GRIP_PIXELS, s.y - GRIP_PIXELS, GRIP_PIXELS * 2, GRIP_PIXELS * 2);
-      ctx.strokeRect(s.x - GRIP_PIXELS, s.y - GRIP_PIXELS, GRIP_PIXELS * 2, GRIP_PIXELS * 2);
+      ctx.fillRect(
+        s.x - GRIP_PIXELS,
+        s.y - GRIP_PIXELS,
+        GRIP_PIXELS * 2,
+        GRIP_PIXELS * 2,
+      );
+      ctx.strokeRect(
+        s.x - GRIP_PIXELS,
+        s.y - GRIP_PIXELS,
+        GRIP_PIXELS * 2,
+        GRIP_PIXELS * 2,
+      );
     }
   }
 
@@ -399,8 +433,12 @@ export function drawOverlay(
     const y = Math.min(a.y, b.y);
     const w = Math.abs(b.x - a.x);
     const h = Math.abs(b.y - a.y);
-    ctx.fillStyle = overlay.box.crossing ? COLORS.boxCrossing : COLORS.boxWindow;
-    ctx.strokeStyle = overlay.box.crossing ? COLORS.boxCrossingBorder : COLORS.boxWindowBorder;
+    ctx.fillStyle = overlay.box.crossing
+      ? COLORS.boxCrossing
+      : COLORS.boxWindow;
+    ctx.strokeStyle = overlay.box.crossing
+      ? COLORS.boxCrossingBorder
+      : COLORS.boxWindowBorder;
     ctx.lineWidth = 1;
     if (overlay.box.crossing) ctx.setLineDash([5, 3]);
     ctx.fillRect(x, y, w, h);
@@ -432,7 +470,11 @@ export function drawOverlay(
       ctx.font = '11px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(worldLen.toFixed(2), (a.x + b.x) / 2 + nx * 12, (a.y + b.y) / 2 + ny * 12);
+      ctx.fillText(
+        worldLen.toFixed(2),
+        (a.x + b.x) / 2 + nx * 12,
+        (a.y + b.y) / 2 + ny * 12,
+      );
     }
   }
 

@@ -34,7 +34,9 @@ export abstract class Entity {
 
   protected requireDoc(): DrawingDocument {
     if (!this._doc) {
-      throw new DocumentError(`entity ${this.id} (${this.type}) is not in a document`);
+      throw new DocumentError(
+        `entity ${this.id} (${this.type}) is not in a document`,
+      );
     }
     return this._doc;
   }

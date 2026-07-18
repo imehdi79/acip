@@ -3,7 +3,7 @@
 Status: **Decided** (wall-face + floor/ceiling finishes shipped 2026-07-18)
 
 The instance-level half of [materials-and-types.md](materials-and-types.md):
-*"tile THIS wall up to 1.2 m"* and *"tile the kitchen floor."* A finish is a
+_"tile THIS wall up to 1.2 m"_ and _"tile the kitchen floor."_ A finish is a
 material applied to a surface of a host — a **wall face** (a band) or a
 **slab** (its footprint: `top` = floor, `bottom` = ceiling) — authored
 content, hosted the way a window is, priced by the unit-aware layer machinery.
@@ -47,7 +47,7 @@ line).
 ## Golden decision 3: a finish is a one-layer, instance-level assembly
 
 A finish references a **material directly** (not a type — types are
-multi-layer build-ups). Its quantity flows through the *same* `layerQuantity`
+multi-layer build-ups). Its quantity flows through the _same_ `layerQuantity`
 helper as assembly layers, so a `count` tile finish yields tile counts, an
 `m²` paint finish yields area, `m` a trim length, `m³` a screed volume
 (area × the finish's thickness, default 10 mm). The estimator prices it as

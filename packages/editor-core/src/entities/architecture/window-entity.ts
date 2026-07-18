@@ -89,7 +89,12 @@ export class WindowEntity extends HostedOpeningEntity implements IMeshable {
   }
 
   protected saveProps(): JsonObject {
-    return { t: this.t, width: this.width, sill: this.sill, height: this.height };
+    return {
+      t: this.t,
+      width: this.width,
+      sill: this.sill,
+      height: this.height,
+    };
   }
 
   protected loadProps(props: JsonObject, _version: number): void {

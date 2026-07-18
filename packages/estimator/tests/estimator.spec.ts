@@ -44,7 +44,13 @@ function buildDoc() {
     b: point(10, 0),
     typeId,
   });
-  session.dispatch('WINDOW.ADD', { wallId, t: 0.5, width: 2, height: 1.2, sill: 0.9 });
+  session.dispatch('WINDOW.ADD', {
+    wallId,
+    t: 0.5,
+    width: 2,
+    height: 1.2,
+    sill: 0.9,
+  });
   return { session, wallId };
 }
 
@@ -69,7 +75,9 @@ describe('assembleBoq — facts through policy to money', () => {
     const plaster = boq.lines.find((l) => l.costCode === 'plaster')!;
     expect(block.quantity).toBeCloseTo(net * (0.2 / 0.25));
     expect(plaster.quantity).toBeCloseTo(net * (0.05 / 0.25));
-    expect(boq.total).toBeCloseTo(block.quantity * 120 + plaster.quantity * 300);
+    expect(boq.total).toBeCloseTo(
+      block.quantity * 120 + plaster.quantity * 300,
+    );
     expect(boq.currency).toBe('EUR');
     expect(boq.missingRates).toEqual([]);
   });
@@ -99,7 +107,10 @@ describe('assembleBoq — facts through policy to money', () => {
 
     const rates: RateTable = {
       currency: 'EUR',
-      rates: { membrane: { unit: 'm2', unitCost: 12 }, tile: { unit: 'count', unitCost: 3 } },
+      rates: {
+        membrane: { unit: 'm2', unitCost: 12 },
+        tile: { unit: 'count', unitCost: 3 },
+      },
     };
     const boq = assembleBoq(session.doc, { rates });
     const membraneLine = boq.lines.find((l) => l.costCode === 'membrane')!;
@@ -114,7 +125,13 @@ describe('assembleBoq — facts through policy to money', () => {
   test('small-opening rule keeps sub-threshold openings undeducted', () => {
     const { session, wallId } = buildDoc();
     // add a tiny 0.4 m² window that a 0.5 m² threshold ignores
-    session.dispatch('WINDOW.ADD', { wallId, t: 0.2, width: 0.5, height: 0.8, sill: 1.0 });
+    session.dispatch('WINDOW.ADD', {
+      wallId,
+      t: 0.2,
+      width: 0.5,
+      height: 0.8,
+      sill: 1.0,
+    });
 
     const strict = assembleBoq(session.doc); // deducts both
     const ruled = assembleBoq(session.doc, { rules: [smallOpeningRule(0.5)] });
@@ -174,7 +191,10 @@ describe('slabs — the second trade in the BOQ', () => {
     const [typed, untyped] = computeSlabTakeoff(session.doc);
     expect(typed.volume).toBeCloseTo(20 * 0.2); // 5×4 at the 0.2 assembly
     expect(untyped.volume).toBeCloseTo(4 * 0.1);
-    expect(typed.layers.map((l) => l.costCode)).toEqual(['concrete-slab', 'screed']);
+    expect(typed.layers.map((l) => l.costCode)).toEqual([
+      'concrete-slab',
+      'screed',
+    ]);
 
     const boq = assembleBoq(session.doc);
     const byCode = new Map(boq.lines.map((l) => [l.costCode, l]));
@@ -198,7 +218,12 @@ describe('finishes — priced by the material unit', () => {
       costCode: 'wall-tile',
       coverage: 0.09,
     });
-    session.dispatch('FINISH.ADD', { wallId, side: 'face+', materialId: tile, topHeight: 1.2 });
+    session.dispatch('FINISH.ADD', {
+      wallId,
+      side: 'face+',
+      materialId: tile,
+      topHeight: 1.2,
+    });
 
     const rates: RateTable = {
       currency: 'EUR',
@@ -222,7 +247,10 @@ describe('finishes — priced by the material unit', () => {
       costCode: 'vinyl',
     });
     session.dispatch('FLOORFINISH.ADD', { slabId, materialId: flooring });
-    const rates: RateTable = { currency: 'EUR', rates: { vinyl: { unit: 'm2', unitCost: 40 } } };
+    const rates: RateTable = {
+      currency: 'EUR',
+      rates: { vinyl: { unit: 'm2', unitCost: 40 } },
+    };
     const boq = assembleBoq(session.doc, { rates });
     const line = boq.lines.find((l) => l.costCode === 'vinyl')!;
     expect(line.unit).toBe('m2');
@@ -236,7 +264,10 @@ describe('stairs — one billed unit per flight', () => {
     const session = new EditorSession();
     session.dispatch('STAIR.ADD', { origin: point(0, 0), height: 3 });
     session.dispatch('STAIR.ADD', { origin: point(5, 0), height: 3 });
-    const rates: RateTable = { currency: 'EUR', rates: { stair: { unit: 'count', unitCost: 1500 } } };
+    const rates: RateTable = {
+      currency: 'EUR',
+      rates: { stair: { unit: 'count', unitCost: 1500 } },
+    };
     const boq = assembleBoq(session.doc, { rates });
     const line = boq.lines.find((l) => l.costCode === 'stair')!;
     expect(line.unit).toBe('count');
@@ -288,8 +319,12 @@ describe('catalog editing — the estimate follows the catalog', () => {
 
     // thicker block layer (plaster kept) → more volume → higher total
     const typeId = session.doc.types.list('wall')[0].id;
-    const blockId = session.doc.materials.list().find((m) => m.costCode === 'block')!.id;
-    const plasterId = session.doc.materials.list().find((m) => m.costCode === 'plaster')!.id;
+    const blockId = session.doc.materials
+      .list()
+      .find((m) => m.costCode === 'block')!.id;
+    const plasterId = session.doc.materials
+      .list()
+      .find((m) => m.costCode === 'plaster')!.id;
     session.dispatch('TYPE.UPDATE', {
       id: typeId,
       layers: [

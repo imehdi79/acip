@@ -11,7 +11,12 @@ import type { Geometry } from '../../geometry/shapes.js';
 import type { Mesh3D, MeshDetail } from '../../geometry/mesh/index.js';
 import { extrudePolygon } from '../../geometry/mesh/index.js';
 import { loopSignedArea, pointInLoop } from '../../topology/arrangement.js';
-import type { GripPoint, IGrippable, ILevelAware, IMeshable } from '../base/capabilities.js';
+import type {
+  GripPoint,
+  IGrippable,
+  ILevelAware,
+  IMeshable,
+} from '../base/capabilities.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
 import type { Transaction } from '../../document/history/transaction.js';
 
@@ -22,7 +27,10 @@ import type { Transaction } from '../../document/history/transaction.js';
  * slab underside is the storey below's ceiling.
  * See docs/editor-core/04-systems/slabs.md.
  */
-export class SlabEntity extends Entity implements ILevelAware, IMeshable, IGrippable {
+export class SlabEntity
+  extends Entity
+  implements ILevelAware, IMeshable, IGrippable
+{
   static readonly TYPE = 'slab';
 
   readonly type: string = SlabEntity.TYPE;
@@ -62,7 +70,10 @@ export class SlabEntity extends Entity implements ILevelAware, IMeshable, IGripp
   getPerimeter(): number {
     let total = 0;
     for (let i = 0; i < this.footprint.length; i++) {
-      total += distance(this.footprint[i], this.footprint[(i + 1) % this.footprint.length]);
+      total += distance(
+        this.footprint[i],
+        this.footprint[(i + 1) % this.footprint.length],
+      );
     }
     return total;
   }
@@ -72,16 +83,24 @@ export class SlabEntity extends Entity implements ILevelAware, IMeshable, IGripp
   }
 
   getSnapPoints(filter?: readonly SnapKind[]): SnapPoint[] {
-    const wanted = (kind: SnapKind): boolean => !filter || filter.includes(kind);
+    const wanted = (kind: SnapKind): boolean =>
+      !filter || filter.includes(kind);
     const result: SnapPoint[] = [];
     for (let i = 0; i < this.footprint.length; i++) {
       if (wanted('endpoint')) {
-        result.push({ kind: 'endpoint', point: this.footprint[i], entityId: this.id });
+        result.push({
+          kind: 'endpoint',
+          point: this.footprint[i],
+          entityId: this.id,
+        });
       }
       if (wanted('midpoint')) {
         result.push({
           kind: 'midpoint',
-          point: midpoint(this.footprint[i], this.footprint[(i + 1) % this.footprint.length]),
+          point: midpoint(
+            this.footprint[i],
+            this.footprint[(i + 1) % this.footprint.length],
+          ),
           entityId: this.id,
         });
       }
@@ -103,7 +122,11 @@ export class SlabEntity extends Entity implements ILevelAware, IMeshable, IGripp
   }
 
   getGrips(): GripPoint[] {
-    return this.footprint.map((p, index) => ({ index, point: p, kind: 'endpoint' }));
+    return this.footprint.map((p, index) => ({
+      index,
+      point: p,
+      kind: 'endpoint',
+    }));
   }
 
   moveGrip(index: number, to: Point, tx: Transaction): void {
@@ -165,7 +188,9 @@ export class SlabEntity extends Entity implements ILevelAware, IMeshable, IGripp
     this.thickness = thickness;
     this.auto = props['auto'] === true;
     this.baseLevelId =
-      typeof props['baseLevelId'] === 'string' ? (props['baseLevelId'] as LevelId) : null;
+      typeof props['baseLevelId'] === 'string'
+        ? (props['baseLevelId'] as LevelId)
+        : null;
   }
 }
 

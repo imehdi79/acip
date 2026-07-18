@@ -66,7 +66,10 @@ export class DrafterAgent {
     private readonly llm: LlmClient,
   ) {}
 
-  async run(prompt: string, options: DrafterRunOptions = {}): Promise<DrafterRunResult> {
+  async run(
+    prompt: string,
+    options: DrafterRunOptions = {},
+  ): Promise<DrafterRunResult> {
     const maxTurns = options.maxTurns ?? 8;
     const tools = toolDefinitions(this.session.commands);
     const digest = describeDocument(this.session.doc);
@@ -86,15 +89,28 @@ export class DrafterAgent {
 
     return this.session.history.runGrouped(async () => {
       for (let turn = 1; turn <= maxTurns; turn++) {
-        const reply = await this.llm.complete({ system: SYSTEM_PROMPT, messages, tools });
+        const reply = await this.llm.complete({
+          system: SYSTEM_PROMPT,
+          messages,
+          tools,
+        });
         messages.push({ role: 'assistant', content: reply.content });
 
-        const texts = reply.content.filter((b): b is TextBlock => b.type === 'text');
+        const texts = reply.content.filter(
+          (b): b is TextBlock => b.type === 'text',
+        );
         if (texts.length > 0) summary = texts.map((t) => t.text).join('\n');
 
-        const toolUses = reply.content.filter((b): b is ToolUseBlock => b.type === 'tool_use');
+        const toolUses = reply.content.filter(
+          (b): b is ToolUseBlock => b.type === 'tool_use',
+        );
         if (toolUses.length === 0) {
-          return { summary, dispatched, turns: turn, stopped: 'completed' as const };
+          return {
+            summary,
+            dispatched,
+            turns: turn,
+            stopped: 'completed' as const,
+          };
         }
 
         const results: ToolResultBlock[] = toolUses.map((use) =>
@@ -102,7 +118,12 @@ export class DrafterAgent {
         );
         messages.push({ role: 'user', content: results });
       }
-      return { summary, dispatched, turns: maxTurns, stopped: 'max-turns' as const };
+      return {
+        summary,
+        dispatched,
+        turns: maxTurns,
+        stopped: 'max-turns' as const,
+      };
     });
   }
 
@@ -125,7 +146,12 @@ export class DrafterAgent {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       entry = { command, params: use.input, ok: false, error: message };
-      result = { type: 'tool_result', tool_use_id: use.id, content: message, is_error: true };
+      result = {
+        type: 'tool_result',
+        tool_use_id: use.id,
+        content: message,
+        is_error: true,
+      };
     }
     log.push(entry);
     onDispatch?.(entry);

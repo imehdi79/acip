@@ -1,5 +1,16 @@
-import type { Point, Tool, ToolContext, ToolInputEvent } from '@acip/editor-core';
-import { DimensionEntity, cross, distance, normalize, sub } from '@acip/editor-core';
+import type {
+  Point,
+  Tool,
+  ToolContext,
+  ToolInputEvent,
+} from '@acip/editor-core';
+import {
+  DimensionEntity,
+  cross,
+  distance,
+  normalize,
+  sub,
+} from '@acip/editor-core';
 import type { EditorUi } from '../ui-state';
 
 /**

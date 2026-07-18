@@ -46,13 +46,19 @@ export const AddFinishCommand: Command<AddFinishParams, EntityId> = {
       const params: AddFinishParams = {
         wallId: asId(raw['wallId'], 'wallId'),
         side: asSide(raw['side'], 'side'),
-        materialId: asId(raw['materialId'], 'materialId') as string as MaterialId,
+        materialId: asId(
+          raw['materialId'],
+          'materialId',
+        ) as string as MaterialId,
       };
-      if (raw['sillHeight'] !== undefined) params.sillHeight = asNumber(raw['sillHeight'], 'sillHeight');
-      if (raw['topHeight'] !== undefined) params.topHeight = asNumber(raw['topHeight'], 'topHeight');
+      if (raw['sillHeight'] !== undefined)
+        params.sillHeight = asNumber(raw['sillHeight'], 'sillHeight');
+      if (raw['topHeight'] !== undefined)
+        params.topHeight = asNumber(raw['topHeight'], 'topHeight');
       if (raw['t0'] !== undefined) params.t0 = asNumber(raw['t0'], 't0');
       if (raw['t1'] !== undefined) params.t1 = asNumber(raw['t1'], 't1');
-      if (raw['thickness'] !== undefined) params.thickness = asNumber(raw['thickness'], 'thickness');
+      if (raw['thickness'] !== undefined)
+        params.thickness = asNumber(raw['thickness'], 'thickness');
       return params;
     },
     () =>
@@ -61,11 +67,15 @@ export const AddFinishCommand: Command<AddFinishParams, EntityId> = {
           wallId: S.id('id of the host wall'),
           side: S.enum(['face+', 'face-'], 'which wall face to finish'),
           materialId: S.id('material to apply (its unit drives pricing)'),
-          sillHeight: S.number('band bottom above the wall base in meters (default 0)'),
+          sillHeight: S.number(
+            'band bottom above the wall base in meters (default 0)',
+          ),
           topHeight: S.number('band top in meters (default: full wall height)'),
           t0: S.number('band start along the wall, 0..1 (default 0)'),
           t1: S.number('band end along the wall, 0..1 (default 1)'),
-          thickness: S.number('finish build-up thickness in meters (default 0.01; only m³ uses it)'),
+          thickness: S.number(
+            'finish build-up thickness in meters (default 0.01; only m³ uses it)',
+          ),
         },
         ['wallId', 'side', 'materialId'],
       ),
@@ -73,7 +83,9 @@ export const AddFinishCommand: Command<AddFinishParams, EntityId> = {
   execute(ctx, params) {
     const wall = ctx.doc.get(params.wallId);
     if (!(wall instanceof WallEntity)) {
-      throw new ValidationError(`wallId ${params.wallId} does not reference a wall`);
+      throw new ValidationError(
+        `wallId ${params.wallId} does not reference a wall`,
+      );
     }
     if (!ctx.doc.materials.has(params.materialId)) {
       throw new ValidationError(`material ${params.materialId} does not exist`);
@@ -82,8 +94,10 @@ export const AddFinishCommand: Command<AddFinishParams, EntityId> = {
     finish.materialId = params.materialId;
     if (params.sillHeight !== undefined) finish.sillHeight = params.sillHeight;
     if (params.topHeight !== undefined) finish.topHeight = params.topHeight;
-    if (params.t0 !== undefined) finish.t0 = Math.min(1, Math.max(0, params.t0));
-    if (params.t1 !== undefined) finish.t1 = Math.min(1, Math.max(0, params.t1));
+    if (params.t0 !== undefined)
+      finish.t0 = Math.min(1, Math.max(0, params.t0));
+    if (params.t1 !== undefined)
+      finish.t1 = Math.min(1, Math.max(0, params.t1));
     if (params.thickness !== undefined) finish.thickness = params.thickness;
     ctx.tx.create(finish);
     ctx.tx.attach(wall.id, finish.id, anchorIndexForSide(params.side), {});
@@ -118,13 +132,18 @@ export const AutoFinishCommand: Command<
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
       const params: AutoFinishParams = {
-        materialId: asId(raw['materialId'], 'materialId') as string as MaterialId,
+        materialId: asId(
+          raw['materialId'],
+          'materialId',
+        ) as string as MaterialId,
       };
       if (raw['levelId'] !== undefined) {
         params.levelId = asId(raw['levelId'], 'levelId') as string as LevelId;
       }
-      if (raw['sillHeight'] !== undefined) params.sillHeight = asNumber(raw['sillHeight'], 'sillHeight');
-      if (raw['topHeight'] !== undefined) params.topHeight = asNumber(raw['topHeight'], 'topHeight');
+      if (raw['sillHeight'] !== undefined)
+        params.sillHeight = asNumber(raw['sillHeight'], 'sillHeight');
+      if (raw['topHeight'] !== undefined)
+        params.topHeight = asNumber(raw['topHeight'], 'topHeight');
       return params;
     },
     () =>
@@ -144,7 +163,9 @@ export const AutoFinishCommand: Command<
     }
     const levelId = params.levelId ?? null;
     const onLevel = (wall: WallEntity): boolean =>
-      levelId === null || wall.baseLevelId === null || wall.baseLevelId === levelId;
+      levelId === null ||
+      wall.baseLevelId === null ||
+      wall.baseLevelId === levelId;
 
     // remove prior auto finishes whose host wall is on this level
     let removed = 0;
@@ -167,7 +188,8 @@ export const AutoFinishCommand: Command<
         const finish = new FinishEntity();
         finish.materialId = params.materialId;
         finish.auto = true;
-        if (params.sillHeight !== undefined) finish.sillHeight = params.sillHeight;
+        if (params.sillHeight !== undefined)
+          finish.sillHeight = params.sillHeight;
         if (params.topHeight !== undefined) finish.topHeight = params.topHeight;
         ctx.tx.create(finish);
         ctx.tx.attach(wall.id, finish.id, anchorIndexForSide(bf.side), {});
@@ -210,10 +232,14 @@ export const AddFloorFinishCommand: Command<AddFloorFinishParams, EntityId> = {
       const raw = (input ?? {}) as Record<string, unknown>;
       const params: AddFloorFinishParams = {
         slabId: asId(raw['slabId'], 'slabId'),
-        materialId: asId(raw['materialId'], 'materialId') as string as MaterialId,
+        materialId: asId(
+          raw['materialId'],
+          'materialId',
+        ) as string as MaterialId,
         surface: asSurface(raw['surface']),
       };
-      if (raw['thickness'] !== undefined) params.thickness = asNumber(raw['thickness'], 'thickness');
+      if (raw['thickness'] !== undefined)
+        params.thickness = asNumber(raw['thickness'], 'thickness');
       return params;
     },
     () =>
@@ -221,8 +247,13 @@ export const AddFloorFinishCommand: Command<AddFloorFinishParams, EntityId> = {
         {
           slabId: S.id('id of the host slab'),
           materialId: S.id('material to apply (its unit drives pricing)'),
-          surface: S.enum(['top', 'bottom'], 'top = floor finish, bottom = ceiling (default top)'),
-          thickness: S.number('finish build-up thickness in meters (default 0.01; only m³ uses it)'),
+          surface: S.enum(
+            ['top', 'bottom'],
+            'top = floor finish, bottom = ceiling (default top)',
+          ),
+          thickness: S.number(
+            'finish build-up thickness in meters (default 0.01; only m³ uses it)',
+          ),
         },
         ['slabId', 'materialId'],
       ),
@@ -230,7 +261,9 @@ export const AddFloorFinishCommand: Command<AddFloorFinishParams, EntityId> = {
   execute(ctx, params) {
     const slab = ctx.doc.get(params.slabId);
     if (!(slab instanceof SlabEntity)) {
-      throw new ValidationError(`slabId ${params.slabId} does not reference a slab`);
+      throw new ValidationError(
+        `slabId ${params.slabId} does not reference a slab`,
+      );
     }
     if (!ctx.doc.materials.has(params.materialId)) {
       throw new ValidationError(`material ${params.materialId} does not exist`);
@@ -239,7 +272,12 @@ export const AddFloorFinishCommand: Command<AddFloorFinishParams, EntityId> = {
     finish.materialId = params.materialId;
     if (params.thickness !== undefined) finish.thickness = params.thickness;
     ctx.tx.create(finish);
-    ctx.tx.attach(slab.id, finish.id, anchorIndexForSurface(params.surface ?? 'top'), {});
+    ctx.tx.attach(
+      slab.id,
+      finish.id,
+      anchorIndexForSurface(params.surface ?? 'top'),
+      {},
+    );
     return finish.id;
   },
 };
@@ -267,7 +305,10 @@ export const AutoFloorFinishCommand: Command<
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
       const params: AutoFloorFinishParams = {
-        materialId: asId(raw['materialId'], 'materialId') as string as MaterialId,
+        materialId: asId(
+          raw['materialId'],
+          'materialId',
+        ) as string as MaterialId,
         surface: asSurface(raw['surface']),
       };
       if (raw['levelId'] !== undefined) {
@@ -280,7 +321,10 @@ export const AutoFloorFinishCommand: Command<
         {
           materialId: S.id('material to apply to every slab'),
           levelId: S.id('level to finish (omit for level-unassigned geometry)'),
-          surface: S.enum(['top', 'bottom'], 'top = floor, bottom = ceiling (default top)'),
+          surface: S.enum(
+            ['top', 'bottom'],
+            'top = floor, bottom = ceiling (default top)',
+          ),
         },
         ['materialId'],
       ),
@@ -292,7 +336,9 @@ export const AutoFloorFinishCommand: Command<
     const levelId = params.levelId ?? null;
     const anchorIdx = anchorIndexForSurface(params.surface ?? 'top');
     const onLevel = (slab: SlabEntity): boolean =>
-      levelId === null || slab.baseLevelId === null || slab.baseLevelId === levelId;
+      levelId === null ||
+      slab.baseLevelId === null ||
+      slab.baseLevelId === levelId;
 
     // remove prior auto finishes whose host slab is on this level (and matches
     // the surface), leaving wall finishes and the other surface untouched
@@ -301,7 +347,11 @@ export const AutoFloorFinishCommand: Command<
       if (!(entity instanceof FinishEntity) || !entity.auto) continue;
       const relation = ctx.doc.relations.relationOfHosted(entity.id);
       const host = relation ? ctx.doc.get(relation.hostId) : null;
-      if (host instanceof SlabEntity && onLevel(host) && relation!.anchorIndex === anchorIdx) {
+      if (
+        host instanceof SlabEntity &&
+        onLevel(host) &&
+        relation!.anchorIndex === anchorIdx
+      ) {
         ctx.tx.remove(entity);
         removed += 1;
       }

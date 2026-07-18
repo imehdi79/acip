@@ -57,7 +57,9 @@ export function Viewer3D() {
     };
     const displayMaterialId = (entity: Entity): MaterialId | null => {
       if (entity instanceof FinishEntity) return entity.materialId;
-      const def = entity.typeRef ? session.doc.types.get(entity.typeRef) : undefined;
+      const def = entity.typeRef
+        ? session.doc.types.get(entity.typeRef)
+        : undefined;
       // the outermost assembly layer is what you see from outside
       return def?.layers?.[0]?.materialId ?? null;
     };
@@ -79,11 +81,13 @@ export function Viewer3D() {
     const rebuildMeshes = () => {
       for (const child of [...meshGroup.children]) {
         meshGroup.remove(child);
-        if (child instanceof THREE.Mesh) (child.geometry as THREE.BufferGeometry).dispose();
+        if (child instanceof THREE.Mesh)
+          (child.geometry as THREE.BufferGeometry).dispose();
       }
       disposeMaterials();
       for (const entity of session.doc.all()) {
-        if (!isMeshable(entity) || !isEntityVisible(session.doc, entity)) continue;
+        if (!isMeshable(entity) || !isEntityVisible(session.doc, entity))
+          continue;
         const mesh3d = entity.toMesh('medium');
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute(
@@ -92,7 +96,9 @@ export function Viewer3D() {
         );
         geometry.setIndex([...mesh3d.indices]);
         geometry.computeVertexNormals();
-        meshGroup.add(new THREE.Mesh(geometry, materialFor(displayMaterialId(entity))));
+        meshGroup.add(
+          new THREE.Mesh(geometry, materialFor(displayMaterialId(entity))),
+        );
       }
     };
     const unsubscribe = session.doc.events.on('change', rebuildMeshes);

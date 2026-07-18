@@ -5,9 +5,15 @@ import { ValidationError } from '../../common/errors.js';
 import type { Point } from '../../geometry/primitives/point.js';
 import { distance, point } from '../../geometry/primitives/point.js';
 import type { Matrix3 } from '../../geometry/primitives/matrix3.js';
-import { applyToPoint, applyToVector } from '../../geometry/primitives/matrix3.js';
+import {
+  applyToPoint,
+  applyToVector,
+} from '../../geometry/primitives/matrix3.js';
 import { length } from '../../geometry/primitives/point.js';
-import { distanceToCircle, pointOnCircle } from '../../geometry/curves/circle.js';
+import {
+  distanceToCircle,
+  pointOnCircle,
+} from '../../geometry/curves/circle.js';
 import type { Geometry } from '../../geometry/shapes.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
 import type { GripPoint, IGrippable } from '../base/capabilities.js';
@@ -35,7 +41,8 @@ export class CircleEntity extends Entity implements IGrippable {
   }
 
   getSnapPoints(filter?: readonly SnapKind[]): SnapPoint[] {
-    const wanted = (kind: SnapKind): boolean => !filter || filter.includes(kind);
+    const wanted = (kind: SnapKind): boolean =>
+      !filter || filter.includes(kind);
     const result: SnapPoint[] = [];
     if (wanted('center')) {
       result.push({ kind: 'center', point: this.center, entityId: this.id });
@@ -65,7 +72,9 @@ export class CircleEntity extends Entity implements IGrippable {
 
   /** grip 0 = center (move); grips 1-4 = quadrants (resize radius) */
   getGrips(): GripPoint[] {
-    const grips: GripPoint[] = [{ index: 0, point: this.center, kind: 'center' }];
+    const grips: GripPoint[] = [
+      { index: 0, point: this.center, kind: 'center' },
+    ];
     for (let q = 0; q < 4; q++) {
       grips.push({
         index: q + 1,
@@ -98,7 +107,11 @@ export class CircleEntity extends Entity implements IGrippable {
 
   protected loadProps(props: JsonObject, _version: number): void {
     const { cx, cy, radius } = props;
-    if (typeof cx !== 'number' || typeof cy !== 'number' || typeof radius !== 'number') {
+    if (
+      typeof cx !== 'number' ||
+      typeof cy !== 'number' ||
+      typeof radius !== 'number'
+    ) {
       throw new ValidationError(`circle ${this.id}: invalid props`);
     }
     this.center = point(cx, cy);

@@ -13,7 +13,10 @@ export function distanceToPolyline(
     best = Math.min(best, distanceToSegment(p, points[i - 1], points[i]));
   }
   if (closed) {
-    best = Math.min(best, distanceToSegment(p, points[points.length - 1], points[0]));
+    best = Math.min(
+      best,
+      distanceToSegment(p, points[points.length - 1], points[0]),
+    );
   }
   return best;
 }

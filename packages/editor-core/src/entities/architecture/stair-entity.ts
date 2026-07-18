@@ -3,14 +3,30 @@ import type { EntityId, LevelId } from '../../common/id.js';
 import type { JsonObject } from '../../common/json.js';
 import { ValidationError } from '../../common/errors.js';
 import type { Point, Vector } from '../../geometry/primitives/point.js';
-import { add, distance, normalize, perpendicular, point, scale, sub } from '../../geometry/primitives/point.js';
+import {
+  add,
+  distance,
+  normalize,
+  perpendicular,
+  point,
+  scale,
+  sub,
+} from '../../geometry/primitives/point.js';
 import type { Matrix3 } from '../../geometry/primitives/matrix3.js';
-import { applyToPoint, applyToVector } from '../../geometry/primitives/matrix3.js';
+import {
+  applyToPoint,
+  applyToVector,
+} from '../../geometry/primitives/matrix3.js';
 import type { Geometry } from '../../geometry/shapes.js';
 import type { Mesh3D, MeshDetail } from '../../geometry/mesh/index.js';
 import { extrudeQuad, mergeMeshes } from '../../geometry/mesh/index.js';
 import { pointInLoop } from '../../topology/arrangement.js';
-import type { GripPoint, IGrippable, ILevelAware, IMeshable } from '../base/capabilities.js';
+import type {
+  GripPoint,
+  IGrippable,
+  ILevelAware,
+  IMeshable,
+} from '../base/capabilities.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
 import type { Transaction } from '../../document/history/transaction.js';
 
@@ -27,7 +43,10 @@ const DEFAULT_WIDTH = 1.0;
  * derive on read from the two level datums, so raising the top level
  * re-treads the stair. See docs/editor-core/04-systems/stairs.md.
  */
-export class StairEntity extends Entity implements ILevelAware, IMeshable, IGrippable {
+export class StairEntity
+  extends Entity
+  implements ILevelAware, IMeshable, IGrippable
+{
   static readonly TYPE = 'stair';
 
   readonly type: string = StairEntity.TYPE;
@@ -62,7 +81,9 @@ export class StairEntity extends Entity implements ILevelAware, IMeshable, IGrip
   /** total vertical rise between the two levels (or the flat height) */
   getRise(): number {
     if ('topLevelId' in this.vertical) {
-      const topElev = this.doc?.levels.get(this.vertical.topLevelId)?.elevation ?? this.baseElevation();
+      const topElev =
+        this.doc?.levels.get(this.vertical.topLevelId)?.elevation ??
+        this.baseElevation();
       return Math.max(0, topElev - this.baseElevation());
     }
     return this.vertical.height;
@@ -108,14 +129,26 @@ export class StairEntity extends Entity implements ILevelAware, IMeshable, IGrip
     const tip = sub(end, scale(this.direction, GOING * 0.4));
     const back = scale(this.direction, GOING);
     children.push({ kind: 'segment', a: this.origin, b: tip });
-    children.push({ kind: 'segment', a: tip, b: add(sub(tip, back), scale(n, 0.6)) });
-    children.push({ kind: 'segment', a: tip, b: sub(sub(tip, back), scale(n, 0.6)) });
+    children.push({
+      kind: 'segment',
+      a: tip,
+      b: add(sub(tip, back), scale(n, 0.6)),
+    });
+    children.push({
+      kind: 'segment',
+      a: tip,
+      b: sub(sub(tip, back), scale(n, 0.6)),
+    });
     return { kind: 'group', children };
   }
 
   getSnapPoints(filter?: readonly SnapKind[]): SnapPoint[] {
     if (filter && !filter.includes('endpoint')) return [];
-    return this.corners().map((point) => ({ kind: 'endpoint', point, entityId: this.id }));
+    return this.corners().map((point) => ({
+      kind: 'endpoint',
+      point,
+      entityId: this.id,
+    }));
   }
 
   hitTest(pt: Point, _tolerance: number): boolean {
@@ -139,7 +172,8 @@ export class StairEntity extends Entity implements ILevelAware, IMeshable, IGrip
   moveGrip(index: number, to: Point, tx: Transaction): void {
     tx.update(this, (stair) => {
       if (index === 0) stair.origin = to;
-      else if (distance(to, stair.origin) > 1e-9) stair.direction = normalize(sub(to, stair.origin));
+      else if (distance(to, stair.origin) > 1e-9)
+        stair.direction = normalize(sub(to, stair.origin));
     });
   }
 
@@ -162,7 +196,12 @@ export class StairEntity extends Entity implements ILevelAware, IMeshable, IGrip
     for (let i = 0; i < steps; i++) {
       const a = add(this.origin, scale(this.direction, i * GOING));
       const b = add(this.origin, scale(this.direction, (i + 1) * GOING));
-      const quad: [Point, Point, Point, Point] = [add(a, n), add(b, n), sub(b, n), sub(a, n)];
+      const quad: [Point, Point, Point, Point] = [
+        add(a, n),
+        add(b, n),
+        sub(b, n),
+        sub(a, n),
+      ];
       meshes.push(extrudeQuad(quad, z0, z0 + (i + 1) * riser));
     }
     return mergeMeshes(meshes);
@@ -176,7 +215,8 @@ export class StairEntity extends Entity implements ILevelAware, IMeshable, IGrip
       dy: this.direction.y,
       width: this.width,
       baseLevelId: this.baseLevelId,
-      topLevelId: 'topLevelId' in this.vertical ? this.vertical.topLevelId : null,
+      topLevelId:
+        'topLevelId' in this.vertical ? this.vertical.topLevelId : null,
       height: 'height' in this.vertical ? this.vertical.height : null,
     };
   }
@@ -196,11 +236,15 @@ export class StairEntity extends Entity implements ILevelAware, IMeshable, IGrip
     this.direction = normalize(point(dx, dy));
     this.width = width;
     this.baseLevelId =
-      typeof props['baseLevelId'] === 'string' ? (props['baseLevelId'] as LevelId) : null;
+      typeof props['baseLevelId'] === 'string'
+        ? (props['baseLevelId'] as LevelId)
+        : null;
     if (typeof props['topLevelId'] === 'string') {
       this.vertical = { topLevelId: props['topLevelId'] as LevelId };
     } else {
-      this.vertical = { height: typeof props['height'] === 'number' ? props['height'] : 3 };
+      this.vertical = {
+        height: typeof props['height'] === 'number' ? props['height'] : 3,
+      };
     }
   }
 }

@@ -29,11 +29,15 @@ export function Panels() {
   // retype the selection when every selected entity is the same kind and
   // the catalog has types for it — the value-engineering dropdown
   const kinds = new Set(
-    selection.map((id) => session.doc.get(id)?.type).filter((t): t is string => !!t),
+    selection
+      .map((id) => session.doc.get(id)?.type)
+      .filter((t): t is string => !!t),
   );
   const kind = kinds.size === 1 ? [...kinds][0] : null;
   const kindTypes = kind ? session.doc.types.list(kind) : [];
-  const refs = new Set(selection.map((id) => session.doc.get(id)?.typeRef ?? ''));
+  const refs = new Set(
+    selection.map((id) => session.doc.get(id)?.typeRef ?? ''),
+  );
   const commonRef = refs.size === 1 ? [...refs][0] : '';
 
   return (
@@ -47,7 +51,9 @@ export function Panels() {
             <dt>Type</dt>
             <dd>{single.type}</dd>
             <dt>Layer</dt>
-            <dd>{session.doc.getLayer(single.layerId)?.name ?? single.layerId}</dd>
+            <dd>
+              {session.doc.getLayer(single.layerId)?.name ?? single.layerId}
+            </dd>
             {singleLength !== null && (
               <>
                 <dt>Length</dt>
@@ -69,7 +75,10 @@ export function Panels() {
                       ...(e.target.value ? { typeId: e.target.value } : {}),
                     });
                   } catch (err) {
-                    ui.appendLog(err instanceof Error ? err.message : String(err), 'error');
+                    ui.appendLog(
+                      err instanceof Error ? err.message : String(err),
+                      'error',
+                    );
                   }
                 }}
               >
@@ -133,7 +142,12 @@ export function QuantitiesSection() {
           <h3>Materials</h3>
           <dl>
             {report.materials.map((m) => (
-              <MaterialRow key={m.materialId} name={m.name} quantity={m.quantity} unit={m.unit} />
+              <MaterialRow
+                key={m.materialId}
+                name={m.name}
+                quantity={m.quantity}
+                unit={m.unit}
+              />
             ))}
           </dl>
         </>
@@ -146,7 +160,10 @@ export function QuantitiesSection() {
 /** live BOQ: default measurement rules + demo rates, recomputed per commit */
 function CostSection() {
   const session = useSession();
-  const boq = assembleBoq(session.doc, { rules: defaultRules(), rates: DEMO_RATES });
+  const boq = assembleBoq(session.doc, {
+    rules: defaultRules(),
+    rates: DEMO_RATES,
+  });
   if (boq.lines.length === 0) return null;
   return (
     <>
@@ -181,9 +198,21 @@ function CostRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MaterialRow({ name, quantity, unit }: { name: string; quantity: number; unit: string }) {
-  const label = unit === 'count' ? Math.ceil(quantity).toString() : quantity.toFixed(2);
-  const suffix = unit === 'count' ? '' : ` ${unit === 'm3' ? 'm³' : unit === 'm2' ? 'm²' : unit}`;
+function MaterialRow({
+  name,
+  quantity,
+  unit,
+}: {
+  name: string;
+  quantity: number;
+  unit: string;
+}) {
+  const label =
+    unit === 'count' ? Math.ceil(quantity).toString() : quantity.toFixed(2);
+  const suffix =
+    unit === 'count'
+      ? ''
+      : ` ${unit === 'm3' ? 'm³' : unit === 'm2' ? 'm²' : unit}`;
   return (
     <>
       <dt>{name}</dt>
@@ -226,7 +255,8 @@ function LayersSection() {
       <ul className="plain-list layers-list">
         {session.doc.layersList().map((layer: Layer) => {
           const isActive =
-            activeLayerId === layer.id || (activeLayerId === null && layer.id === DEFAULT_LAYER_ID);
+            activeLayerId === layer.id ||
+            (activeLayerId === null && layer.id === DEFAULT_LAYER_ID);
           return (
             <li key={layer.id} className="layer-row">
               <input
@@ -234,14 +264,21 @@ function LayersSection() {
                 className="layer-color"
                 title="Layer color"
                 value={layer.color ?? '#e0e0e0'}
-                onChange={(e) => dispatch('LAYER.UPDATE', { id: layer.id, color: e.target.value })}
+                onChange={(e) =>
+                  dispatch('LAYER.UPDATE', {
+                    id: layer.id,
+                    color: e.target.value,
+                  })
+                }
               />
               <button
                 type="button"
                 className={isActive ? 'layer-name active' : 'layer-name'}
                 title="Set active layer"
                 onClick={() =>
-                  ui.activeLayerId.set(layer.id === DEFAULT_LAYER_ID ? null : (layer.id as never))
+                  ui.activeLayerId.set(
+                    layer.id === DEFAULT_LAYER_ID ? null : (layer.id as never),
+                  )
                 }
               >
                 {layer.name}
@@ -251,18 +288,34 @@ function LayersSection() {
                 className="layer-flag"
                 title={layer.visible ? 'Hide layer' : 'Show layer'}
                 onClick={() =>
-                  dispatch('LAYER.UPDATE', { id: layer.id, visible: !layer.visible })
+                  dispatch('LAYER.UPDATE', {
+                    id: layer.id,
+                    visible: !layer.visible,
+                  })
                 }
               >
-                {layer.visible ? <IconEye size={14} stroke={1.75} /> : <IconEyeOff size={14} stroke={1.75} />}
+                {layer.visible ? (
+                  <IconEye size={14} stroke={1.75} />
+                ) : (
+                  <IconEyeOff size={14} stroke={1.75} />
+                )}
               </button>
               <button
                 type="button"
                 className="layer-flag"
                 title={layer.locked ? 'Unlock layer' : 'Lock layer'}
-                onClick={() => dispatch('LAYER.UPDATE', { id: layer.id, locked: !layer.locked })}
+                onClick={() =>
+                  dispatch('LAYER.UPDATE', {
+                    id: layer.id,
+                    locked: !layer.locked,
+                  })
+                }
               >
-                {layer.locked ? <IconLock size={14} stroke={1.75} /> : <IconLockOpen size={14} stroke={1.75} />}
+                {layer.locked ? (
+                  <IconLock size={14} stroke={1.75} />
+                ) : (
+                  <IconLockOpen size={14} stroke={1.75} />
+                )}
               </button>
               {layer.id !== DEFAULT_LAYER_ID && (
                 <button
@@ -334,7 +387,10 @@ function CatalogSection() {
   const setLayers = (def: EntityTypeDef, layers: AssemblyLayer[]) => {
     dispatch('TYPE.UPDATE', {
       id: def.id,
-      layers: layers.map((l) => ({ materialId: l.materialId, thickness: l.thickness })),
+      layers: layers.map((l) => ({
+        materialId: l.materialId,
+        thickness: l.thickness,
+      })),
     });
   };
 
@@ -349,7 +405,9 @@ function CatalogSection() {
               className="layer-color"
               title="Display color (3D + swatches)"
               value={materialDisplayColor(m)}
-              onChange={(e) => dispatch('MATERIAL.UPDATE', { id: m.id, color: e.target.value })}
+              onChange={(e) =>
+                dispatch('MATERIAL.UPDATE', { id: m.id, color: e.target.value })
+              }
             />
             <input
               key={`${m.id}:${m.name}`}
@@ -358,7 +416,8 @@ function CatalogSection() {
               onKeyDown={commitOnEnter}
               onBlur={(e) => {
                 const name = e.target.value.trim();
-                if (name && name !== m.name) dispatch('MATERIAL.UPDATE', { id: m.id, name });
+                if (name && name !== m.name)
+                  dispatch('MATERIAL.UPDATE', { id: m.id, name });
               }}
             />
             <input
@@ -378,7 +437,9 @@ function CatalogSection() {
               className="mat-unit"
               value={m.unit}
               title="Unit drives estimation: m³ by volume, m² by area, m by length, count ÷ coverage"
-              onChange={(e) => dispatch('MATERIAL.UPDATE', { id: m.id, unit: e.target.value })}
+              onChange={(e) =>
+                dispatch('MATERIAL.UPDATE', { id: m.id, unit: e.target.value })
+              }
             >
               <option value="m3">m³</option>
               <option value="m2">m²</option>
@@ -398,7 +459,11 @@ function CatalogSection() {
                 onKeyDown={commitOnEnter}
                 onBlur={(e) => {
                   const coverage = Number(e.target.value);
-                  if (Number.isFinite(coverage) && coverage > 0 && coverage !== m.coverage) {
+                  if (
+                    Number.isFinite(coverage) &&
+                    coverage > 0 &&
+                    coverage !== m.coverage
+                  ) {
                     dispatch('MATERIAL.UPDATE', { id: m.id, coverage });
                   }
                 }}
@@ -456,7 +521,8 @@ function CatalogSection() {
                 onKeyDown={commitOnEnter}
                 onBlur={(e) => {
                   const name = e.target.value.trim();
-                  if (name && name !== def.name) dispatch('TYPE.UPDATE', { id: def.id, name });
+                  if (name && name !== def.name)
+                    dispatch('TYPE.UPDATE', { id: def.id, name });
                 }}
               />
               <span className="muted">{def.targetType}</span>
@@ -470,13 +536,19 @@ function CatalogSection() {
               </button>
             </div>
             {(def.layers ?? []).length > 0 && (
-              <div className="assembly-swatch" title="Build-up, outermost first">
+              <div
+                className="assembly-swatch"
+                title="Build-up, outermost first"
+              >
                 {(def.layers ?? []).map((layer, i) => {
                   const mat = session.doc.materials.get(layer.materialId);
                   return (
                     <span
                       key={`${def.id}:swatch:${i}`}
-                      style={{ flexGrow: layer.thickness, background: materialDisplayColor(mat) }}
+                      style={{
+                        flexGrow: layer.thickness,
+                        background: materialDisplayColor(mat),
+                      }}
                       title={`${mat?.name ?? layer.materialId} · ${(layer.thickness * 1000).toFixed(0)} mm`}
                     />
                   );
@@ -490,7 +562,10 @@ function CatalogSection() {
                   title="Layer material"
                   onChange={(e) => {
                     const layers = [...(def.layers ?? [])];
-                    layers[i] = { ...layers[i], materialId: e.target.value as never };
+                    layers[i] = {
+                      ...layers[i],
+                      materialId: e.target.value as never,
+                    };
                     setLayers(def, layers);
                   }}
                 >
@@ -560,7 +635,10 @@ function CatalogSection() {
           onChange={(e) => setTypeName(e.target.value)}
           onKeyDown={(e) => e.stopPropagation()}
         />
-        <select value={typeTarget} onChange={(e) => setTypeTarget(e.target.value)}>
+        <select
+          value={typeTarget}
+          onChange={(e) => setTypeTarget(e.target.value)}
+        >
           <option value="wall">wall</option>
           <option value="slab">slab</option>
           <option value="roof">roof</option>
@@ -569,7 +647,12 @@ function CatalogSection() {
           type="button"
           onClick={() => {
             if (!typeName.trim()) return;
-            if (dispatch('TYPE.ADD', { targetType: typeTarget, name: typeName.trim() })) {
+            if (
+              dispatch('TYPE.ADD', {
+                targetType: typeTarget,
+                name: typeName.trim(),
+              })
+            ) {
               setTypeName('');
             }
           }}
@@ -595,7 +678,10 @@ function LevelsSection() {
       return;
     }
     try {
-      const id = session.dispatch('LEVEL.ADD', { name: name.trim(), elevation: value });
+      const id = session.dispatch('LEVEL.ADD', {
+        name: name.trim(),
+        elevation: value,
+      });
       ui.activeLevelId.set(id as never);
       setName('');
       setElevation('');
@@ -615,9 +701,13 @@ function LevelsSection() {
             <li key={level.id} className="level-item">
               <button
                 type="button"
-                className={activeLevelId === level.id ? 'level-row active' : 'level-row'}
+                className={
+                  activeLevelId === level.id ? 'level-row active' : 'level-row'
+                }
                 onClick={() =>
-                  ui.activeLevelId.set(activeLevelId === level.id ? null : level.id)
+                  ui.activeLevelId.set(
+                    activeLevelId === level.id ? null : level.id,
+                  )
                 }
               >
                 {level.name} · {level.elevation.toFixed(2)}m
@@ -636,7 +726,10 @@ function LevelsSection() {
                     ui.activeLevelId.set(id as never);
                     ui.appendLog(`Duplicated ${level.name} — one undo step.`);
                   } catch (err) {
-                    ui.appendLog(err instanceof Error ? err.message : String(err), 'error');
+                    ui.appendLog(
+                      err instanceof Error ? err.message : String(err),
+                      'error',
+                    );
                   }
                 }}
               >

@@ -27,7 +27,7 @@ Broken into its four identities:
    wall**. Cost-awareness is the app's reason to exist.
 4. **AI agents** — every mutation goes through one command bus whose command
    schemas double as LLM tool definitions. The first agent (`@acip/agent-drafter`)
-   already draws from a sentence: type *"draw a 6×4 m room with a door"* and
+   already draws from a sentence: type _"draw a 6×4 m room with a door"_ and
    watch it appear, undoable with a single Ctrl+Z.
 
 ### The five golden rules that make it hold together
@@ -48,13 +48,13 @@ Broken into its four identities:
 
 ### The monorepo today
 
-| Package / app | Role | Proof it works |
-| --- | --- | --- |
-| `packages/editor-core` | The headless 4-layer CAD/BIM engine and (for now) the SDK contract via its curated `index.ts` | 92 tests |
-| `packages/agents/drafter` | First AI agent: NL → commands via injectable LLM client (Anthropic Messages, fetch-based) | 6 tests |
-| `packages/estimator` | Quantity takeoff → measurement rules (policy) → rate tables (data) → live BOQ | 6 tests |
-| `apps/web-editor` | React + Vite shell: Canvas2D plan viewport (immediate mode), lazy three.js 3D, tools, panels, command line, agent prompt row | typecheck + build |
-| `apps/editor-server` | Reserved: persistence, collaboration, agent host (deferred by decision) | — |
+| Package / app             | Role                                                                                                                         | Proof it works    |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `packages/editor-core`    | The headless 4-layer CAD/BIM engine and (for now) the SDK contract via its curated `index.ts`                                | 92 tests          |
+| `packages/agents/drafter` | First AI agent: NL → commands via injectable LLM client (Anthropic Messages, fetch-based)                                    | 6 tests           |
+| `packages/estimator`      | Quantity takeoff → measurement rules (policy) → rate tables (data) → live BOQ                                                | 6 tests           |
+| `apps/web-editor`         | React + Vite shell: Canvas2D plan viewport (immediate mode), lazy three.js 3D, tools, panels, command line, agent prompt row | typecheck + build |
+| `apps/editor-server`      | Reserved: persistence, collaboration, agent host (deferred by decision)                                                      | —                 |
 
 The two external packages (drafter, estimator) are the architecture's proof:
 both consume core **only through the SDK barrel** — one acts through the bus,
@@ -67,15 +67,17 @@ Everything below happened over three days (2026-07-10 → 2026-07-12), each arc
 shipped with docs-first commits, tests, and a green build.
 
 ### 2026-07-10 — Seed
+
 - Nx monorepo scaffolded (bun, apps/web-editor + editor-server, packages).
 
 ### 2026-07-11 — Architecture and engine
+
 - **React Router** home/admin pages (the original small request that started
   the conversation).
 - **Design discussions** → decision: an advanced CAD app = AutoCAD + Revit +
   BIM with agents as separate packages later. Entity contract,
   command/transaction interfaces, host relations, multi-floor, 2.5D, material
-  layers, estimator — all decided *before code*.
+  layers, estimator — all decided _before code_.
 - **docs/editor-core written as source of truth** (14 files) so any session —
   human or LLM — starts from the same decisions. `@ecore` renamed to
   `@acip/editor-core`.
@@ -96,6 +98,7 @@ shipped with docs-first commits, tests, and a green build.
   filtering; level elevation moves its walls in 3D.
 
 ### 2026-07-12 — BIM data, joins, agents, and the full roadmap
+
 - **Quantities (estimator seed)**: `computeQuantities` — net face areas,
   net volumes, per-material splits from assembly layers; MATERIAL.ADD /
   TYPE.ADD; live Quantities panel.
@@ -103,8 +106,8 @@ shipped with docs-first commits, tests, and a green build.
   algorithm over pure `WallEnd` descriptors; miter-limit and parallel
   fallbacks; one integration seam in WallEntity.
 - **Wall joins V2 (T-junctions)**: tee ends butt against the host's near
-  face. Discovered invariant: *anything used to discover a derived
-  relationship must be independent of that relationship's result* (wall
+  face. Discovered invariant: _anything used to discover a derived
+  relationship must be independent of that relationship's result_ (wall
   bounds now always include the baseline).
 - **LLM projections + first agent**: every command gained `describe()`
   schemas; `toolDefinitions()` turns the registry into an agent tool catalog;
@@ -134,10 +137,10 @@ shipped with docs-first commits, tests, and a green build.
 - **Spaces / room detection**: rooms are detected automatically from walls —
   derived, never stored (the wall-joins pattern at room scale). A planar
   arrangement of baselines (`topology/arrangement.ts`) splits walls at every
-  touch point: corners, tees at *any* parameter along the host (face-flush
+  touch point: corners, tees at _any_ parameter along the host (face-flush
   walls connect via a `halfWidth` allowance), and X crossings; faces of the
   graph are the rooms, detached islands become holes. `detectSpaces(doc,
-  levelId)` reports **gross** (centerline) and **net** (inner-face — each
+levelId)` reports **gross** (centerline) and **net** (inner-face — each
   wall's assembly thickness deducted) boundaries and areas. Draw four walls
   and a partition — two rooms appear; erase the partition — they merge.
   Plan views fill rooms and label net areas live; `describeDocument()` gains

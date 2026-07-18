@@ -28,7 +28,9 @@ export const AddSlabCommand: Command<AddSlabParams, EntityId> = {
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
       if (!Array.isArray(raw['points']) || raw['points'].length < 3) {
-        throw new ValidationError('points must be an array of at least 3 points');
+        throw new ValidationError(
+          'points must be an array of at least 3 points',
+        );
       }
       const params: AddSlabParams = {
         points: raw['points'].map((p, i) => asPoint(p, `points[${i}]`)),
@@ -50,12 +52,19 @@ export const AddSlabCommand: Command<AddSlabParams, EntityId> = {
     () =>
       S.object(
         {
-          points: S.array(S.point('footprint vertex'), 'closed polygon footprint, in order'),
+          points: S.array(
+            S.point('footprint vertex'),
+            'closed polygon footprint, in order',
+          ),
           thickness: S.number(
             'slab thickness in meters (default 0.2; ignored when typeId has assembly layers)',
           ),
-          typeId: S.id('optional slab type id; thickness then derives from its assembly layers'),
-          levelId: S.id('optional level (floor) id whose elevation is the slab top'),
+          typeId: S.id(
+            'optional slab type id; thickness then derives from its assembly layers',
+          ),
+          levelId: S.id(
+            'optional level (floor) id whose elevation is the slab top',
+          ),
           layerId: S.id('optional layer id; defaults to the active layer'),
         },
         ['points'],
@@ -124,7 +133,11 @@ export const AutoSlabCommand: Command<
     const levelId = params.levelId ?? null;
     let removed = 0;
     for (const entity of ctx.doc.all()) {
-      if (entity instanceof SlabEntity && entity.auto && entity.baseLevelId === levelId) {
+      if (
+        entity instanceof SlabEntity &&
+        entity.auto &&
+        entity.baseLevelId === levelId
+      ) {
         ctx.tx.remove(entity);
         removed += 1;
       }

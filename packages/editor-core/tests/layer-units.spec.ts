@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { EditorSession, computeQuantities, layerQuantity, point } from '../src/index.js';
+import {
+  EditorSession,
+  computeQuantities,
+  layerQuantity,
+  point,
+} from '../src/index.js';
 import type { EntityId, MaterialId, TypeId } from '../src/index.js';
 
 describe('layerQuantity — pure unit mapping', () => {
@@ -14,7 +19,10 @@ describe('layerQuantity — pure unit mapping', () => {
     expect(layerQuantity('m', 0.05, 0.5, refs)).toBeCloseTo(10, 9);
   });
   test('count is area ÷ coverage; missing coverage falls back to 1/m²', () => {
-    expect(layerQuantity('count', 0, 0.5, refs, 0.09)).toBeCloseTo(30 / 0.09, 9);
+    expect(layerQuantity('count', 0, 0.5, refs, 0.09)).toBeCloseTo(
+      30 / 0.09,
+      9,
+    );
     expect(layerQuantity('count', 0, 0.5, refs)).toBeCloseTo(30, 9);
   });
 });

@@ -1,5 +1,16 @@
-import { FinishEntity, RoofEntity, SlabEntity, StairEntity, WallEntity } from '@acip/editor-core';
-import type { DrawingDocument, EntityId, MaterialUnit, TypeId } from '@acip/editor-core';
+import {
+  FinishEntity,
+  RoofEntity,
+  SlabEntity,
+  StairEntity,
+  WallEntity,
+} from '@acip/editor-core';
+import type {
+  DrawingDocument,
+  EntityId,
+  MaterialUnit,
+  TypeId,
+} from '@acip/editor-core';
 
 /**
  * Geometric FACTS extracted through the SDK — no measurement policy here.
@@ -45,7 +56,10 @@ export interface SlabTakeoff {
   readonly layers: readonly AssemblyLayerFact[];
 }
 
-function resolveLayers(doc: DrawingDocument, typeRef: TypeId | undefined): AssemblyLayerFact[] {
+function resolveLayers(
+  doc: DrawingDocument,
+  typeRef: TypeId | undefined,
+): AssemblyLayerFact[] {
   const layers: AssemblyLayerFact[] = [];
   if (!typeRef) return layers;
   const def = doc.types.get(typeRef);
@@ -59,7 +73,11 @@ function resolveLayers(doc: DrawingDocument, typeRef: TypeId | undefined): Assem
       costCode: material.costCode ?? material.name,
       thickness: layer.thickness,
     };
-    layers.push(material.coverage !== undefined ? { ...fact, coverage: material.coverage } : fact);
+    layers.push(
+      material.coverage !== undefined
+        ? { ...fact, coverage: material.coverage }
+        : fact,
+    );
   }
   return layers;
 }
@@ -140,7 +158,10 @@ export function computeFinishTakeoff(doc: DrawingDocument): FinishTakeoff[] {
           costCode: material.costCode ?? material.name,
           thickness: entity.getThickness(),
         };
-        layer = material.coverage !== undefined ? { ...fact, coverage: material.coverage } : fact;
+        layer =
+          material.coverage !== undefined
+            ? { ...fact, coverage: material.coverage }
+            : fact;
       }
     }
     result.push({
@@ -164,7 +185,11 @@ export function computeStairTakeoff(doc: DrawingDocument): StairTakeoff[] {
   const result: StairTakeoff[] = [];
   for (const entity of doc.all()) {
     if (!(entity instanceof StairEntity)) continue;
-    result.push({ entityId: entity.id, rise: entity.getRise(), riserCount: entity.getRiserCount() });
+    result.push({
+      entityId: entity.id,
+      rise: entity.getRise(),
+      riserCount: entity.getRiserCount(),
+    });
   }
   return result;
 }
@@ -183,7 +208,10 @@ export function computeWallTakeoff(doc: DrawingDocument): WallTakeoff[] {
       const end = Math.min(length, spec.t * length + spec.width / 2);
       const width = Math.max(0, end - start);
       const openingHeight = Math.min(spec.height, height - spec.sill);
-      deductions.push({ area: width * openingHeight, volume: width * thickness * openingHeight });
+      deductions.push({
+        area: width * openingHeight,
+        volume: width * thickness * openingHeight,
+      });
     }
 
     result.push({

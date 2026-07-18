@@ -1,4 +1,8 @@
-export type { DocumentChangeEvent, DocumentEvents, StoreName } from './document.js';
+export type {
+  DocumentChangeEvent,
+  DocumentEvents,
+  StoreName,
+} from './document.js';
 export { DrawingDocument } from './document.js';
 export type { StoreItem, MutableStore } from './store.js';
 export { RecordTable } from './store.js';

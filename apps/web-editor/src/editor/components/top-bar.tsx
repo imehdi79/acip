@@ -36,7 +36,9 @@ export function TopBar() {
           onClick={() => {
             if (
               session.doc.count > 0 &&
-              !window.confirm('Start a new drawing? The current one stays in autosave until you draw.')
+              !window.confirm(
+                'Start a new drawing? The current one stays in autosave until you draw.',
+              )
             ) {
               return;
             }
@@ -49,11 +51,19 @@ export function TopBar() {
           <IconFile size={16} stroke={1.75} />
           New
         </button>
-        <button type="button" title="Open .acip.json" onClick={() => openFromFile(session, ui)}>
+        <button
+          type="button"
+          title="Open .acip.json"
+          onClick={() => openFromFile(session, ui)}
+        >
           <IconFolderOpen size={16} stroke={1.75} />
           Open
         </button>
-        <button type="button" title="Save to file" onClick={() => saveToFile(session, ui)}>
+        <button
+          type="button"
+          title="Save to file"
+          onClick={() => saveToFile(session, ui)}
+        >
           <IconDeviceFloppy size={16} stroke={1.75} />
           Save
         </button>

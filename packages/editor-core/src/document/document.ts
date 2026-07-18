@@ -127,7 +127,12 @@ export class DrawingDocument {
     this.entities.clear();
     this.spatial = new NaiveSpatialIndex();
     this.relations._clear();
-    for (const store of [this.layers, this.levels, this.materials, this.types]) {
+    for (const store of [
+      this.layers,
+      this.levels,
+      this.materials,
+      this.types,
+    ]) {
       for (const item of store.list()) store.delete(item.id);
     }
     this.layers.set(createDefaultLayer());
@@ -140,7 +145,13 @@ export class DrawingDocument {
       record: {
         commandName: 'DOC.LOAD',
         params: null,
-        changes: { created: [], updated: [], removed: [], relations: [], stores: [] },
+        changes: {
+          created: [],
+          updated: [],
+          removed: [],
+          relations: [],
+          stores: [],
+        },
         timestamp: Date.now(),
       },
       dirty: [],
@@ -179,16 +190,25 @@ export class DrawingDocument {
       // top (a stair spans two levels — the cross-level relation)
       const boundToChangedLevel = (entity: Entity): boolean => {
         if (!isLevelAware(entity)) return false;
-        if (entity.baseLevelId && changedLevels.has(entity.baseLevelId as LevelId as string)) {
+        if (
+          entity.baseLevelId &&
+          changedLevels.has(entity.baseLevelId as LevelId as string)
+        ) {
           return true;
         }
         const v = entity.vertical;
-        return 'topLevelId' in v && changedLevels.has(v.topLevelId as LevelId as string);
+        return (
+          'topLevelId' in v &&
+          changedLevels.has(v.topLevelId as LevelId as string)
+        );
       };
       for (const entity of this.entities.values()) {
         if (boundToChangedLevel(entity)) {
           storeInvalidated.push(entity.id);
-        } else if (entity.typeRef && changedTypes.has(entity.typeRef as string)) {
+        } else if (
+          entity.typeRef &&
+          changedTypes.has(entity.typeRef as string)
+        ) {
           storeInvalidated.push(entity.id);
         }
       }
@@ -197,7 +217,12 @@ export class DrawingDocument {
     // store-invalidated entities (level/type changes) are themselves dirty —
     // their derived geometry changed but they carry no record entry, so a
     // consumer reading record + dirty would otherwise miss them
-    const dirty = [...new Set([...storeInvalidated, ...this.relations.collectDirty(touched)])];
+    const dirty = [
+      ...new Set([
+        ...storeInvalidated,
+        ...this.relations.collectDirty(touched),
+      ]),
+    ];
     for (const id of dirty) {
       const e = this.entities.get(id);
       if (e) this.spatial.update(id, e.getBounds());

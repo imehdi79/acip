@@ -39,18 +39,31 @@ export const LogRequestCommand: Command<LogRequestParams, string> = {
       const raw = (input ?? {}) as Record<string, unknown>;
       const kind = raw['kind'];
       if (kind !== 'missing-feature' && kind !== 'missing-price') {
-        throw new ValidationError(`kind must be one of ${REQUEST_KINDS.join(', ')}`);
+        throw new ValidationError(
+          `kind must be one of ${REQUEST_KINDS.join(', ')}`,
+        );
       }
-      const params: LogRequestParams = { kind, text: asText(raw['text'], 'text') };
-      if (raw['context'] !== undefined) params.context = asText(raw['context'], 'context');
+      const params: LogRequestParams = {
+        kind,
+        text: asText(raw['text'], 'text'),
+      };
+      if (raw['context'] !== undefined)
+        params.context = asText(raw['context'], 'context');
       return params;
     },
     () =>
       S.object(
         {
-          kind: S.enum(REQUEST_KINDS, 'missing-feature = no tool for it; missing-price = no rate for it'),
-          text: S.string('short description of what the user asked for, in their words'),
-          context: S.string('optional detail: dimensions, level, material names involved'),
+          kind: S.enum(
+            REQUEST_KINDS,
+            'missing-feature = no tool for it; missing-price = no rate for it',
+          ),
+          text: S.string(
+            'short description of what the user asked for, in their words',
+          ),
+          context: S.string(
+            'optional detail: dimensions, level, material names involved',
+          ),
         },
         ['kind', 'text'],
       ),

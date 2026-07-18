@@ -59,9 +59,9 @@ constant-height special case of it. Any future sloped footprint entity
 ## Integration
 
 - `entities/architecture/roof-entity.ts` — footprint + `slope` + `direction`
-  + `eavesHeight`; `ILevelAware`, `IMeshable`, `IGrippable` (vertex grips).
-  Plan symbol: the footprint region plus a fall arrow at the centroid.
-  `getSlopeArea()` = plan area / cos(slope) — what roofing trades price.
+  - `eavesHeight`; `ILevelAware`, `IMeshable`, `IGrippable` (vertex grips).
+    Plan symbol: the footprint region plus a fall arrow at the centroid.
+    `getSlopeArea()` = plan area / cos(slope) — what roofing trades price.
 - `commands/roofs.ts` — `ROOF.ADD` (explicit footprint) and `ROOF.AUTO`.
 - **Quantities** — per-roof plan/slope areas and volume
   (plan area × vertical thickness), assembly split, `roofSlopeArea` /

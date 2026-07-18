@@ -90,7 +90,8 @@ export class OpenAiClient implements LlmClient {
 
   private toOpenAiMessages(request: LlmRequest): OpenAiMessage[] {
     const out: OpenAiMessage[] = [{ role: 'system', content: request.system }];
-    for (const message of request.messages) out.push(...translateMessage(message));
+    for (const message of request.messages)
+      out.push(...translateMessage(message));
     return out;
   }
 }
@@ -98,7 +99,11 @@ export class OpenAiClient implements LlmClient {
 function toOpenAiTool(tool: ToolDefinition): unknown {
   return {
     type: 'function',
-    function: { name: tool.name, description: tool.description, parameters: tool.input_schema },
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.input_schema,
+    },
   };
 }
 
@@ -141,18 +146,27 @@ function translateMessage(message: LlmMessage): OpenAiMessage[] {
   return out;
 }
 
-function fromOpenAiMessage(message: OpenAiMessage | undefined): (TextBlock | ToolUseBlock)[] {
+function fromOpenAiMessage(
+  message: OpenAiMessage | undefined,
+): (TextBlock | ToolUseBlock)[] {
   if (!message) return [];
   const content: (TextBlock | ToolUseBlock)[] = [];
   if (message.content) content.push({ type: 'text', text: message.content });
   for (const call of message.tool_calls ?? []) {
     let input: JsonObject = {};
     try {
-      input = call.function.arguments ? (JSON.parse(call.function.arguments) as JsonObject) : {};
+      input = call.function.arguments
+        ? (JSON.parse(call.function.arguments) as JsonObject)
+        : {};
     } catch {
       // leave input empty — the bus rejects it and the agent self-corrects
     }
-    content.push({ type: 'tool_use', id: call.id, name: call.function.name, input });
+    content.push({
+      type: 'tool_use',
+      id: call.id,
+      name: call.function.name,
+      input,
+    });
   }
   return content;
 }

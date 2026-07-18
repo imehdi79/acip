@@ -32,11 +32,16 @@ export const AddWallCommand: Command<AddWallParams, EntityId> = {
         a: asPoint(raw['a'], 'a'),
         b: asPoint(raw['b'], 'b'),
       };
-      if (raw['thickness'] !== undefined) params.thickness = asPositive(raw['thickness'], 'thickness');
-      if (raw['height'] !== undefined) params.height = asPositive(raw['height'], 'height');
-      if (raw['levelId'] !== undefined) params.levelId = asId(raw['levelId'], 'levelId') as string as LevelId;
-      if (raw['typeId'] !== undefined) params.typeId = asId(raw['typeId'], 'typeId') as string as TypeId;
-      if (raw['layerId'] !== undefined) params.layerId = asId(raw['layerId'], 'layerId') as string as LayerId;
+      if (raw['thickness'] !== undefined)
+        params.thickness = asPositive(raw['thickness'], 'thickness');
+      if (raw['height'] !== undefined)
+        params.height = asPositive(raw['height'], 'height');
+      if (raw['levelId'] !== undefined)
+        params.levelId = asId(raw['levelId'], 'levelId') as string as LevelId;
+      if (raw['typeId'] !== undefined)
+        params.typeId = asId(raw['typeId'], 'typeId') as string as TypeId;
+      if (raw['layerId'] !== undefined)
+        params.layerId = asId(raw['layerId'], 'layerId') as string as LayerId;
       return params;
     },
     () =>
@@ -44,10 +49,14 @@ export const AddWallCommand: Command<AddWallParams, EntityId> = {
         {
           a: S.point('baseline start'),
           b: S.point('baseline end'),
-          thickness: S.number('wall thickness in meters (default 0.3; ignored when typeId has assembly layers)'),
+          thickness: S.number(
+            'wall thickness in meters (default 0.3; ignored when typeId has assembly layers)',
+          ),
           height: S.number('wall height in meters (default 3)'),
           levelId: S.id('optional level (floor) id the wall sits on'),
-          typeId: S.id('optional wall type id from the type catalog; thickness then derives from its assembly layers'),
+          typeId: S.id(
+            'optional wall type id from the type catalog; thickness then derives from its assembly layers',
+          ),
           layerId: S.id('optional layer id; defaults to the active layer'),
         },
         ['a', 'b'],
@@ -98,7 +107,9 @@ export const AddWindowCommand: Command<AddWindowParams, EntityId> = {
           wallId: S.id('id of the host wall'),
           t: S.number('position along the wall baseline, 0 = start, 1 = end'),
           width: S.number('opening width in meters (default 1.0)'),
-          sill: S.number('sill height above the wall base in meters (default 0.9)'),
+          sill: S.number(
+            'sill height above the wall base in meters (default 0.9)',
+          ),
           height: S.number('opening height in meters (default 1.2)'),
         },
         ['wallId', 't'],
@@ -107,7 +118,9 @@ export const AddWindowCommand: Command<AddWindowParams, EntityId> = {
   execute(ctx, params) {
     const host = ctx.doc.get(params.wallId);
     if (!host || !isHost(host)) {
-      throw new ValidationError(`wallId ${params.wallId} does not reference a host entity`);
+      throw new ValidationError(
+        `wallId ${params.wallId} does not reference a host entity`,
+      );
     }
     const window = new WindowEntity();
     window.t = Math.min(1, Math.max(0, params.t));
@@ -156,7 +169,10 @@ export const AddDoorCommand: Command<AddDoorParams, EntityId> = {
           t: S.number('position along the wall baseline, 0 = start, 1 = end'),
           width: S.number('door width in meters (default 0.9)'),
           height: S.number('door height in meters (default 2.1)'),
-          swing: S.enum([1, -1], 'swing direction relative to the wall normal (default 1)'),
+          swing: S.enum(
+            [1, -1],
+            'swing direction relative to the wall normal (default 1)',
+          ),
         },
         ['wallId', 't'],
       ),
@@ -164,7 +180,9 @@ export const AddDoorCommand: Command<AddDoorParams, EntityId> = {
   execute(ctx, params) {
     const host = ctx.doc.get(params.wallId);
     if (!host || !isHost(host)) {
-      throw new ValidationError(`wallId ${params.wallId} does not reference a host entity`);
+      throw new ValidationError(
+        `wallId ${params.wallId} does not reference a host entity`,
+      );
     }
     const door = new DoorEntity();
     door.t = Math.min(1, Math.max(0, params.t));

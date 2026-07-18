@@ -8,8 +8,8 @@ Status: **Decided** · Last updated: 2026-07-11
 
 - **AutoCAD**: precise 2D drafting — snapping (OSNAP), trimming, command-line driven
   workflow, layers, blocks.
-- **Revit**: *semantic* building modeling — walls, windows, doors, levels, and types are
-  first-class objects that know what they are and how they relate. A window is *hosted on*
+- **Revit**: _semantic_ building modeling — walls, windows, doors, levels, and types are
+  first-class objects that know what they are and how they relate. A window is _hosted on_
   a wall, cuts an opening in it, and follows it when it moves.
 - **BIM**: a data-rich model — materials, assembly layers, quantities — feeding a **live
   cost estimator**. The model is not a drawing; it is a priced description of a building.

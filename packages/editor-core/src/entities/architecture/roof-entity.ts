@@ -3,15 +3,31 @@ import type { EntityId, LevelId } from '../../common/id.js';
 import type { JsonObject } from '../../common/json.js';
 import { ValidationError } from '../../common/errors.js';
 import type { Point, Vector } from '../../geometry/primitives/point.js';
-import { add, distance, dot, midpoint, normalize, point, scale } from '../../geometry/primitives/point.js';
+import {
+  add,
+  distance,
+  dot,
+  midpoint,
+  normalize,
+  point,
+  scale,
+} from '../../geometry/primitives/point.js';
 import type { Matrix3 } from '../../geometry/primitives/matrix3.js';
-import { applyToPoint, applyToVector } from '../../geometry/primitives/matrix3.js';
+import {
+  applyToPoint,
+  applyToVector,
+} from '../../geometry/primitives/matrix3.js';
 import { distanceToPolyline } from '../../geometry/curves/polyline.js';
 import type { Geometry } from '../../geometry/shapes.js';
 import type { Mesh3D, MeshDetail } from '../../geometry/mesh/index.js';
 import { loftPolygon } from '../../geometry/mesh/index.js';
 import { loopSignedArea, pointInLoop } from '../../topology/arrangement.js';
-import type { GripPoint, IGrippable, ILevelAware, IMeshable } from '../base/capabilities.js';
+import type {
+  GripPoint,
+  IGrippable,
+  ILevelAware,
+  IMeshable,
+} from '../base/capabilities.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
 import type { Transaction } from '../../document/history/transaction.js';
 
@@ -23,7 +39,10 @@ import type { Transaction } from '../../document/history/transaction.js';
  * vertex; thickness (assembly wins) is measured vertically.
  * See docs/editor-core/04-systems/roofs.md.
  */
-export class RoofEntity extends Entity implements ILevelAware, IMeshable, IGrippable {
+export class RoofEntity
+  extends Entity
+  implements ILevelAware, IMeshable, IGrippable
+{
   static readonly TYPE = 'roof';
 
   readonly type: string = RoofEntity.TYPE;
@@ -69,7 +88,10 @@ export class RoofEntity extends Entity implements ILevelAware, IMeshable, IGripp
   getPerimeter(): number {
     let total = 0;
     for (let i = 0; i < this.footprint.length; i++) {
-      total += distance(this.footprint[i], this.footprint[(i + 1) % this.footprint.length]);
+      total += distance(
+        this.footprint[i],
+        this.footprint[(i + 1) % this.footprint.length],
+      );
     }
     return total;
   }
@@ -104,7 +126,10 @@ export class RoofEntity extends Entity implements ILevelAware, IMeshable, IGripp
     const barb = (angle: number): Point => {
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
-      return add(tip, scale({ x: d.x * cos - d.y * sin, y: d.x * sin + d.y * cos }, -0.25));
+      return add(
+        tip,
+        scale({ x: d.x * cos - d.y * sin, y: d.x * sin + d.y * cos }, -0.25),
+      );
     };
     return {
       kind: 'group',
@@ -118,16 +143,24 @@ export class RoofEntity extends Entity implements ILevelAware, IMeshable, IGripp
   }
 
   getSnapPoints(filter?: readonly SnapKind[]): SnapPoint[] {
-    const wanted = (kind: SnapKind): boolean => !filter || filter.includes(kind);
+    const wanted = (kind: SnapKind): boolean =>
+      !filter || filter.includes(kind);
     const result: SnapPoint[] = [];
     for (let i = 0; i < this.footprint.length; i++) {
       if (wanted('endpoint')) {
-        result.push({ kind: 'endpoint', point: this.footprint[i], entityId: this.id });
+        result.push({
+          kind: 'endpoint',
+          point: this.footprint[i],
+          entityId: this.id,
+        });
       }
       if (wanted('midpoint')) {
         result.push({
           kind: 'midpoint',
-          point: midpoint(this.footprint[i], this.footprint[(i + 1) % this.footprint.length]),
+          point: midpoint(
+            this.footprint[i],
+            this.footprint[(i + 1) % this.footprint.length],
+          ),
           entityId: this.id,
         });
       }
@@ -150,7 +183,11 @@ export class RoofEntity extends Entity implements ILevelAware, IMeshable, IGripp
   }
 
   getGrips(): GripPoint[] {
-    return this.footprint.map((p, index) => ({ index, point: p, kind: 'endpoint' }));
+    return this.footprint.map((p, index) => ({
+      index,
+      point: p,
+      kind: 'endpoint',
+    }));
   }
 
   moveGrip(index: number, to: Point, tx: Transaction): void {
@@ -231,7 +268,9 @@ export class RoofEntity extends Entity implements ILevelAware, IMeshable, IGripp
     this.thickness = thickness;
     this.auto = props['auto'] === true;
     this.baseLevelId =
-      typeof props['baseLevelId'] === 'string' ? (props['baseLevelId'] as LevelId) : null;
+      typeof props['baseLevelId'] === 'string'
+        ? (props['baseLevelId'] as LevelId)
+        : null;
   }
 }
 

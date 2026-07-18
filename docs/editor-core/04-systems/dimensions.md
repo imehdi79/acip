@@ -26,7 +26,7 @@ measured to the perpendicular foot on wall B's side line. Consequences:
 
 - **Stretch a wall** → the dimension follows.
 - **Change a wall type's assembly build-up** → the faces move, the clear
-  width re-measures. A 20 cm assembly becoming 30 cm shrinks the room *and*
+  width re-measures. A 20 cm assembly becoming 30 cm shrinks the room _and_
   its dimensions, with no dimension edit.
 - **Delete a referenced wall** → the reference is unresolvable and the
   dimension renders nothing (stale, like wall-join neighbor staleness).
@@ -37,7 +37,7 @@ measured to the perpendicular foot on wall B's side line. Consequences:
 
 ## Golden decision 3: DIM.AUTO regenerates, it does not maintain
 
-Auto-dimensioning is a *derivation*, so `DIM.AUTO` deletes every dimension it
+Auto-dimensioning is a _derivation_, so `DIM.AUTO` deletes every dimension it
 previously created on that level (`auto: true` in props) and rebuilds from
 current geometry — one transaction, one undo, idempotent under re-run.
 Generated dimensions are `points`-mode snapshots; re-running after edits is
@@ -48,7 +48,7 @@ What it generates:
 - **Inner (per detected space)**: the net boundary from `detectSpaces` —
   corners already sit on inner wall faces — is collinear-merged, edges are
   grouped by direction, and the longest edge per direction gets a clear-width
-  dimension offset *into* the room. A rectangular room gets its width and
+  dimension offset _into_ the room. A rectangular room gets its width and
   height; an L-room gets one per direction of its outline.
 - **Outer (per level)**: the union of wall bounds — which include thickness
   and join caps, i.e. **outer** extents — gets an overall width below the
@@ -59,7 +59,7 @@ What it generates:
 Dimensions are the first text-bearing entity, so the `Geometry` union gains
 `TextShape { anchor, text, height, rotation }` — height in world meters,
 rotation in radians, anchor at the text center. Core stays headless: it never
-measures fonts (bbox is a conservative estimate); *drawing* text is the
+measures fonts (bbox is a conservative estimate); _drawing_ text is the
 renderer's job, like every other shape. Text auto-flips to stay readable
 (never upside-down). Future TextEntity/labels reuse the same shape.
 

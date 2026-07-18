@@ -34,7 +34,9 @@
       },
       "typecheck": {
         "executor": "nx:run-commands",
-        "dependsOn": ["^build"],
+        "dependsOn": [
+          "^build"
+        ],
         "options": {
           "command": "bun x tsc -p packages/estimator/tsconfig.lib.json --noEmit",
           "cwd": "{workspaceRoot}"
@@ -42,7 +44,9 @@
       },
       "test": {
         "executor": "nx:run-commands",
-        "dependsOn": ["^build"],
+        "dependsOn": [
+          "^build"
+        ],
         "options": {
           "command": "bun test",
           "cwd": "packages/estimator"

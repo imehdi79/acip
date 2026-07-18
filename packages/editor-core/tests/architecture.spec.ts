@@ -11,7 +11,13 @@ import {
 } from '../src/index.js';
 import type { DocumentChangeEvent, EntityId } from '../src/index.js';
 
-function addWall(session: EditorSession, ax: number, ay: number, bx: number, by: number) {
+function addWall(
+  session: EditorSession,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+) {
   return session.dispatch<EntityId>('WALL.ADD', {
     a: point(ax, ay),
     b: point(bx, by),
@@ -26,7 +32,9 @@ describe('subtractIntervals', () => {
       { start: 0, end: 4 },
       { start: 6, end: 10 },
     ]);
-    expect(subtractIntervals(10, [{ start: -1, end: 1 }])).toEqual([{ start: 1, end: 10 }]);
+    expect(subtractIntervals(10, [{ start: -1, end: 1 }])).toEqual([
+      { start: 1, end: 10 },
+    ]);
     expect(
       subtractIntervals(10, [
         { start: 2, end: 5 },
@@ -69,7 +77,11 @@ describe('WindowEntity — hosted placement and openings', () => {
   test('WINDOW.ADD attaches to the wall and cuts the plan geometry', () => {
     const session = new EditorSession();
     const wallId = addWall(session, 0, 0, 10, 0);
-    const winId = session.dispatch<EntityId>('WINDOW.ADD', { wallId, t: 0.5, width: 2 });
+    const winId = session.dispatch<EntityId>('WINDOW.ADD', {
+      wallId,
+      t: 0.5,
+      width: 2,
+    });
 
     expect(session.doc.relations.dependentsOf(wallId)).toEqual([winId]);
 
@@ -158,16 +170,21 @@ describe('WindowEntity — hosted placement and openings', () => {
     const wall = session.doc.get(wallId) as WallEntity;
     const solid = new EditorSession();
     const solidWallId = addWall(solid, 0, 0, 10, 0);
-    const solidMesh = (solid.doc.get(solidWallId) as WallEntity).toMesh('medium');
+    const solidMesh = (solid.doc.get(solidWallId) as WallEntity).toMesh(
+      'medium',
+    );
     const cutMesh = wall.toMesh('medium');
     // spans + sill band + lintel band → more geometry than the solid wall
-    expect(cutMesh.positions.length).toBeGreaterThan(solidMesh.positions.length);
+    expect(cutMesh.positions.length).toBeGreaterThan(
+      solidMesh.positions.length,
+    );
 
     const pane = (session.doc.get(winId) as WindowEntity).toMesh('medium');
     expect(pane.positions.length).toBeGreaterThan(0);
     // pane z range = [sill, sill + height]
     const zs: number[] = [];
-    for (let i = 2; i < pane.positions.length; i += 3) zs.push(pane.positions[i]);
+    for (let i = 2; i < pane.positions.length; i += 3)
+      zs.push(pane.positions[i]);
     expect(Math.min(...zs)).toBeCloseTo(0.9);
     expect(Math.max(...zs)).toBeCloseTo(2.1);
   });
@@ -175,7 +192,11 @@ describe('WindowEntity — hosted placement and openings', () => {
   test('document round-trips with wall, window, and relation intact', () => {
     const session = new EditorSession();
     const wallId = addWall(session, 0, 0, 10, 0);
-    const winId = session.dispatch<EntityId>('WINDOW.ADD', { wallId, t: 0.25, width: 2 });
+    const winId = session.dispatch<EntityId>('WINDOW.ADD', {
+      wallId,
+      t: 0.25,
+      width: 2,
+    });
 
     const data = JSON.parse(JSON.stringify(saveDocument(session.doc)));
     const restored = loadDocument(data, session.entityTypes);

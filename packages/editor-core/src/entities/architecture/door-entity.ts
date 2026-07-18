@@ -1,7 +1,13 @@
 import type { EntityId } from '../../common/id.js';
 import type { JsonObject } from '../../common/json.js';
 import { ValidationError } from '../../common/errors.js';
-import { add, angleOf, point, scale, sub } from '../../geometry/primitives/point.js';
+import {
+  add,
+  angleOf,
+  point,
+  scale,
+  sub,
+} from '../../geometry/primitives/point.js';
 import type { Geometry } from '../../geometry/shapes.js';
 import { HostedOpeningEntity, clamp01 } from './hosted-opening.js';
 
@@ -70,7 +76,12 @@ export class DoorEntity extends HostedOpeningEntity {
   }
 
   protected saveProps(): JsonObject {
-    return { t: this.t, width: this.width, height: this.height, swing: this.swing };
+    return {
+      t: this.t,
+      width: this.width,
+      height: this.height,
+      swing: this.swing,
+    };
   }
 
   protected loadProps(props: JsonObject, _version: number): void {

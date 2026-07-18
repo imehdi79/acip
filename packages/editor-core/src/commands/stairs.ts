@@ -27,16 +27,27 @@ export const AddStairCommand: Command<AddStairParams, EntityId> = {
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
-      const params: AddStairParams = { origin: asPoint(raw['origin'], 'origin') };
-      if (raw['direction'] !== undefined) params.direction = asPoint(raw['direction'], 'direction');
-      if (raw['width'] !== undefined) params.width = asPositive(raw['width'], 'width');
+      const params: AddStairParams = {
+        origin: asPoint(raw['origin'], 'origin'),
+      };
+      if (raw['direction'] !== undefined)
+        params.direction = asPoint(raw['direction'], 'direction');
+      if (raw['width'] !== undefined)
+        params.width = asPositive(raw['width'], 'width');
       if (raw['baseLevelId'] !== undefined) {
-        params.baseLevelId = asId(raw['baseLevelId'], 'baseLevelId') as string as LevelId;
+        params.baseLevelId = asId(
+          raw['baseLevelId'],
+          'baseLevelId',
+        ) as string as LevelId;
       }
       if (raw['topLevelId'] !== undefined) {
-        params.topLevelId = asId(raw['topLevelId'], 'topLevelId') as string as LevelId;
+        params.topLevelId = asId(
+          raw['topLevelId'],
+          'topLevelId',
+        ) as string as LevelId;
       }
-      if (raw['height'] !== undefined) params.height = asPositive(raw['height'], 'height');
+      if (raw['height'] !== undefined)
+        params.height = asPositive(raw['height'], 'height');
       if (raw['layerId'] !== undefined) {
         params.layerId = asId(raw['layerId'], 'layerId') as string as LayerId;
       }
@@ -48,25 +59,36 @@ export const AddStairCommand: Command<AddStairParams, EntityId> = {
           origin: S.point('start point (bottom of the flight)'),
           direction: S.point('run direction in plan (default {x:1,y:0})'),
           width: S.number('stair width in meters (default 1.0)'),
-          baseLevelId: S.id('bottom level id (default: unassigned, elevation 0)'),
+          baseLevelId: S.id(
+            'bottom level id (default: unassigned, elevation 0)',
+          ),
           topLevelId: S.id('top level id; its elevation sets the rise'),
-          height: S.number('flat rise in meters when no topLevelId is given (default 3)'),
+          height: S.number(
+            'flat rise in meters when no topLevelId is given (default 3)',
+          ),
           layerId: S.id('optional layer id; defaults to the active layer'),
         },
         ['origin'],
       ),
   ),
   execute(ctx, params) {
-    if (params.baseLevelId !== undefined && !ctx.doc.levels.has(params.baseLevelId)) {
+    if (
+      params.baseLevelId !== undefined &&
+      !ctx.doc.levels.has(params.baseLevelId)
+    ) {
       throw new ValidationError(`level ${params.baseLevelId} does not exist`);
     }
-    if (params.topLevelId !== undefined && !ctx.doc.levels.has(params.topLevelId)) {
+    if (
+      params.topLevelId !== undefined &&
+      !ctx.doc.levels.has(params.topLevelId)
+    ) {
       throw new ValidationError(`level ${params.topLevelId} does not exist`);
     }
     const stair = new StairEntity();
     stair.setRun(params.origin, params.direction ?? { x: 1, y: 0 });
     if (params.width !== undefined) stair.width = params.width;
-    if (params.baseLevelId !== undefined) stair.baseLevelId = params.baseLevelId;
+    if (params.baseLevelId !== undefined)
+      stair.baseLevelId = params.baseLevelId;
     stair.vertical =
       params.topLevelId !== undefined
         ? { topLevelId: params.topLevelId }

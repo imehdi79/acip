@@ -5,7 +5,8 @@ export const DEFAULT_DISPLAY_COLOR = '#8fa3b8';
 function hslToHex(h: number, s: number, l: number): string {
   const f = (n: number): string => {
     const k = (n + h / 30) % 12;
-    const c = l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    const c =
+      l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
     return Math.round(c * 255)
       .toString(16)
       .padStart(2, '0');
@@ -19,7 +20,9 @@ function hslToHex(h: number, s: number, l: number): string {
  * materials stay distinguishable with zero configuration. Always returns a
  * hex string so `<input type="color">` can consume it.
  */
-export function materialDisplayColor(material: Material | null | undefined): string {
+export function materialDisplayColor(
+  material: Material | null | undefined,
+): string {
   if (!material) return DEFAULT_DISPLAY_COLOR;
   const color = material.appearance?.['color'];
   if (typeof color === 'string' && color) return color;

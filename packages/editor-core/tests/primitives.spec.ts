@@ -27,7 +27,10 @@ describe('curve math', () => {
     // quarter arc in the first quadrant
     expect(distanceToArc(point(2, 0), c, 1, 0, Math.PI / 2)).toBeCloseTo(1);
     // opposite side: nearest endpoint is (1,0) at distance 1 from (0,-...
-    expect(distanceToArc(point(0, -1), c, 1, 0, Math.PI / 2)).toBeCloseTo(Math.SQRT2, 5);
+    expect(distanceToArc(point(0, -1), c, 1, 0, Math.PI / 2)).toBeCloseTo(
+      Math.SQRT2,
+      5,
+    );
   });
 
   test('distanceToPolyline includes the closing segment only when closed', () => {
@@ -41,7 +44,10 @@ describe('curve math', () => {
 describe('primitive commands and entities', () => {
   test('CIRCLE.ADD: geometry, measure, quadrant grips resize', () => {
     const session = new EditorSession();
-    const id = session.dispatch<EntityId>('CIRCLE.ADD', { center: point(2, 2), radius: 1.5 });
+    const id = session.dispatch<EntityId>('CIRCLE.ADD', {
+      center: point(2, 2),
+      radius: 1.5,
+    });
     const circle = session.doc.get(id) as CircleEntity;
     expect(circle).toBeInstanceOf(CircleEntity);
     expect(session.measure.areaOf(id)).toBeCloseTo(Math.PI * 1.5 * 1.5);
@@ -96,9 +102,9 @@ describe('primitive commands and entities', () => {
 
   test('POLYLINE.ADD rejects fewer than 2 points', () => {
     const session = new EditorSession();
-    expect(() => session.dispatch('POLYLINE.ADD', { points: [point(0, 0)] })).toThrow(
-      'at least 2',
-    );
+    expect(() =>
+      session.dispatch('POLYLINE.ADD', { points: [point(0, 0)] }),
+    ).toThrow('at least 2');
   });
 
   test('primitives surface in the agent tool catalog and undo cleanly', () => {

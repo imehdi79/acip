@@ -29,7 +29,10 @@ export { wallAssemblyStrips } from './assembly-strips.js';
 
 const DEFAULT_STYLE: DisplayStyle = { stroke: '#e0e0e0', width: 1 };
 
-export function buildDisplayList(doc: DrawingDocument, view: ViewDefinition): RenderItem[] {
+export function buildDisplayList(
+  doc: DrawingDocument,
+  view: ViewDefinition,
+): RenderItem[] {
   return entitiesInView(doc, view)
     .filter((e) => isEntityVisible(doc, e))
     .map((e) => {

@@ -2,7 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { EditorSession } from '@acip/editor-core';
 import type { JsonObject } from '@acip/editor-core';
 import { DrafterAgent } from '../src/index.js';
-import type { LlmClient, LlmRequest, LlmTurn, ToolResultBlock } from '../src/index.js';
+import type {
+  LlmClient,
+  LlmRequest,
+  LlmTurn,
+  ToolResultBlock,
+} from '../src/index.js';
 
 /** scripted fake: returns canned turns, records every request it saw */
 class FakeLlm implements LlmClient {
@@ -20,7 +25,13 @@ class FakeLlm implements LlmClient {
   }
 }
 
-function wallCall(id: string, ax: number, ay: number, bx: number, by: number): JsonObject {
+function wallCall(
+  id: string,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): JsonObject {
   return {
     type: 'tool_use',
     id,
@@ -43,7 +54,9 @@ describe('DrafterAgent — NL to commands through the bus', () => {
         stopReason: 'tool_use',
       },
       {
-        content: [{ type: 'text', text: 'Drew a 6x4 room of four joined walls.' }],
+        content: [
+          { type: 'text', text: 'Drew a 6x4 room of four joined walls.' },
+        ],
         stopReason: 'end_turn',
       },
     ]);
@@ -71,7 +84,9 @@ describe('DrafterAgent — NL to commands through the bus', () => {
     expect(first.tools.some((t) => t.name === 'WALL_ADD')).toBe(true);
     const firstText = first.messages[0].content[0];
     expect(firstText.type).toBe('text');
-    expect((firstText as { text: string }).text).toContain('Current document digest');
+    expect((firstText as { text: string }).text).toContain(
+      'Current document digest',
+    );
   });
 
   test('validation errors feed back as is_error tool results; agent can correct', async () => {
@@ -80,7 +95,12 @@ describe('DrafterAgent — NL to commands through the bus', () => {
       {
         // missing b — the bus rejects it
         content: [
-          { type: 'tool_use', id: 'bad', name: 'WALL_ADD', input: { a: { x: 0, y: 0 } } },
+          {
+            type: 'tool_use',
+            id: 'bad',
+            name: 'WALL_ADD',
+            input: { a: { x: 0, y: 0 } },
+          },
         ] as LlmTurn['content'],
         stopReason: 'tool_use',
       },
@@ -105,7 +125,8 @@ describe('DrafterAgent — NL to commands through the bus', () => {
 
     // the error went back to the model as an is_error tool result
     const secondRequest = llm.requests[1];
-    const lastMessage = secondRequest.messages[secondRequest.messages.length - 1];
+    const lastMessage =
+      secondRequest.messages[secondRequest.messages.length - 1];
     const errorResult = lastMessage.content[0] as ToolResultBlock;
     expect(errorResult.type).toBe('tool_result');
     expect(errorResult.is_error).toBe(true);
@@ -115,7 +136,10 @@ describe('DrafterAgent — NL to commands through the bus', () => {
   test('stops at maxTurns when the model never finishes', async () => {
     const session = new EditorSession();
     const llm = new FakeLlm([
-      { content: [wallCall('loop', 0, 0, 1, 0)] as LlmTurn['content'], stopReason: 'tool_use' },
+      {
+        content: [wallCall('loop', 0, 0, 1, 0)] as LlmTurn['content'],
+        stopReason: 'tool_use',
+      },
     ]);
 
     const agent = new DrafterAgent(session, llm);

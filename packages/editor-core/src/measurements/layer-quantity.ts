@@ -43,6 +43,8 @@ export function layerQuantity(
       return refs.area / (coverage && coverage > 0 ? coverage : 1);
     case 'm3':
     default:
-      return totalThickness > 0 ? refs.volume * (layerThickness / totalThickness) : 0;
+      return totalThickness > 0
+        ? refs.volume * (layerThickness / totalThickness)
+        : 0;
   }
 }

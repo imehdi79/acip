@@ -24,7 +24,11 @@ export function asId(value: unknown, label: string): EntityId {
   return value as EntityId;
 }
 
-export function asNumber(value: unknown, label: string, fallback?: number): number {
+export function asNumber(
+  value: unknown,
+  label: string,
+  fallback?: number,
+): number {
   if (value === undefined && fallback !== undefined) return fallback;
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new ValidationError(`${label} must be a finite number`);
@@ -32,7 +36,11 @@ export function asNumber(value: unknown, label: string, fallback?: number): numb
   return value;
 }
 
-export function asPositive(value: unknown, label: string, fallback?: number): number {
+export function asPositive(
+  value: unknown,
+  label: string,
+  fallback?: number,
+): number {
   const n = asNumber(value, label, fallback);
   if (n <= 0) throw new ValidationError(`${label} must be positive`);
   return n;

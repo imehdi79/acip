@@ -1,4 +1,9 @@
-import type { Point, Tool, ToolContext, ToolInputEvent } from '@acip/editor-core';
+import type {
+  Point,
+  Tool,
+  ToolContext,
+  ToolInputEvent,
+} from '@acip/editor-core';
 import { angleOf, distance, sub } from '@acip/editor-core';
 import type { EditorUi } from '../ui-state';
 
@@ -36,7 +41,11 @@ export class CircleTool implements Tool {
     }
     const radius = distance(this.center, e.point);
     if (radius > 1e-9) {
-      ctx.dispatch('CIRCLE.ADD', { center: this.center, radius, ...this.extraParams?.() });
+      ctx.dispatch('CIRCLE.ADD', {
+        center: this.center,
+        radius,
+        ...this.extraParams?.(),
+      });
     }
     this.center = null;
     this.ui.setGhost(null);
@@ -46,7 +55,9 @@ export class CircleTool implements Tool {
   onPointerMove(e: ToolInputEvent): void {
     if (!this.center) return;
     const radius = distance(this.center, e.point);
-    this.ui.setGhost(radius > 1e-9 ? [{ kind: 'circle', center: this.center, radius }] : null);
+    this.ui.setGhost(
+      radius > 1e-9 ? [{ kind: 'circle', center: this.center, radius }] : null,
+    );
   }
 
   onPointerUp(): void {}
@@ -124,7 +135,11 @@ export class ArcTool implements Tool {
     if (!this.center) return;
     if (!this.start) {
       const radius = distance(this.center, e.point);
-      this.ui.setGhost(radius > 1e-9 ? [{ kind: 'circle', center: this.center, radius }] : null);
+      this.ui.setGhost(
+        radius > 1e-9
+          ? [{ kind: 'circle', center: this.center, radius }]
+          : null,
+      );
       return;
     }
     this.ui.setGhost([
@@ -179,7 +194,10 @@ export class PolylineTool implements Tool {
   onPointerDown(e: ToolInputEvent): void {
     if (!this.ctx) return;
     // clicking the first vertex again closes the polyline
-    if (this.points.length >= 3 && distance(e.point, this.points[0]) <= this.getTolerance()) {
+    if (
+      this.points.length >= 3 &&
+      distance(e.point, this.points[0]) <= this.getTolerance()
+    ) {
       this.commit(true);
       return;
     }
@@ -195,7 +213,9 @@ export class PolylineTool implements Tool {
     if (this.points.length === 0) return;
     this.ui.setRubber({ a: this.points[this.points.length - 1], b: e.point });
     if (this.points.length >= 2) {
-      this.ui.setGhost([{ kind: 'polyline', points: this.points, closed: false }]);
+      this.ui.setGhost([
+        { kind: 'polyline', points: this.points, closed: false },
+      ]);
     }
   }
 
@@ -221,7 +241,11 @@ export class PolylineTool implements Tool {
     const ctx = this.ctx;
     if (!ctx) return;
     if (this.points.length >= 2) {
-      ctx.dispatch('POLYLINE.ADD', { points: this.points, closed, ...this.extraParams?.() });
+      ctx.dispatch('POLYLINE.ADD', {
+        points: this.points,
+        closed,
+        ...this.extraParams?.(),
+      });
     }
     this.points = [];
     this.ui.setGhost(null);

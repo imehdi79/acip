@@ -23,7 +23,8 @@ export interface AddCircleParams {
 
 export const AddCircleCommand: Command<AddCircleParams, EntityId> = {
   name: 'CIRCLE.ADD',
-  description: 'Draw a circle from center and radius. Returns the new entity id.',
+  description:
+    'Draw a circle from center and radius. Returns the new entity id.',
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
@@ -86,7 +87,9 @@ export const AddArcCommand: Command<AddArcParams, EntityId> = {
           center: S.point('arc center'),
           radius: S.number('radius in meters (positive)'),
           startAngle: S.number('start angle in radians (0 = +x axis)'),
-          endAngle: S.number('end angle in radians; sweep is counter-clockwise from start'),
+          endAngle: S.number(
+            'end angle in radians; sweep is counter-clockwise from start',
+          ),
           layerId: S.id('optional layer id; defaults to the active layer'),
         },
         ['center', 'radius', 'startAngle', 'endAngle'],
@@ -118,13 +121,16 @@ export const AddPolylineCommand: Command<AddPolylineParams, EntityId> = {
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
       if (!Array.isArray(raw['points']) || raw['points'].length < 2) {
-        throw new ValidationError('points must be an array of at least 2 points');
+        throw new ValidationError(
+          'points must be an array of at least 2 points',
+        );
       }
       const params: AddPolylineParams = {
         points: raw['points'].map((p, i) => asPoint(p, `points[${i}]`)),
       };
       if (raw['closed'] !== undefined) {
-        if (typeof raw['closed'] !== 'boolean') throw new ValidationError('closed must be boolean');
+        if (typeof raw['closed'] !== 'boolean')
+          throw new ValidationError('closed must be boolean');
         params.closed = raw['closed'];
       }
       const layerId = optionalLayer(raw);
@@ -134,8 +140,13 @@ export const AddPolylineCommand: Command<AddPolylineParams, EntityId> = {
     () =>
       S.object(
         {
-          points: S.array(S.point('vertex'), 'polyline vertices in order (2 or more)'),
-          closed: S.boolean('connect the last vertex back to the first (default false)'),
+          points: S.array(
+            S.point('vertex'),
+            'polyline vertices in order (2 or more)',
+          ),
+          closed: S.boolean(
+            'connect the last vertex back to the first (default false)',
+          ),
           layerId: S.id('optional layer id; defaults to the active layer'),
         },
         ['points'],

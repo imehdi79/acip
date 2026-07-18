@@ -10,7 +10,13 @@ import {
 } from '../src/index.js';
 import type { EntityId, LevelId, MaterialId, TypeId } from '../src/index.js';
 
-function addWall(session: EditorSession, ax: number, ay: number, bx: number, by: number) {
+function addWall(
+  session: EditorSession,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+) {
   return session.dispatch<EntityId>('WALL.ADD', {
     a: point(ax, ay),
     b: point(bx, by),
@@ -27,7 +33,10 @@ function drawRoom(session: EditorSession, dx = 0): void {
   addWall(session, dx, 4, dx, 0);
 }
 
-function zRange(mesh: { positions: readonly number[] }): { min: number; max: number } {
+function zRange(mesh: { positions: readonly number[] }): {
+  min: number;
+  max: number;
+} {
   let min = Infinity;
   let max = -Infinity;
   for (let i = 2; i < mesh.positions.length; i += 3) {
@@ -90,7 +99,9 @@ describe('RoofEntity — mono-pitch plane', () => {
       typeId,
     });
     session.open(session.save());
-    const roof = session.doc.all().find((e): e is RoofEntity => e instanceof RoofEntity)!;
+    const roof = session.doc
+      .all()
+      .find((e): e is RoofEntity => e instanceof RoofEntity)!;
     expect(roof.getThickness()).toBeCloseTo(0.3, 9);
     expect(roof.slope).toBeCloseTo(15, 9);
   });
@@ -122,22 +133,28 @@ describe('ROOF.AUTO — one dispatch roofs the building', () => {
   test('footprint = outer faces + overhang, eaves on the wall tops, regenerated', () => {
     const session = new EditorSession();
     drawRoom(session);
-    const first = session.dispatch<{ removed: number; created: number; planArea: number }>(
-      'ROOF.AUTO',
-      { slope: 15 },
-    );
+    const first = session.dispatch<{
+      removed: number;
+      created: number;
+      planArea: number;
+    }>('ROOF.AUTO', { slope: 15 });
     expect(first.removed).toBe(0);
     expect(first.created).toBe(1);
     expect(first.planArea).toBeCloseTo(6.9 * 4.9, 6); // 0.15 + 0.3 out per side
 
-    const roof = session.doc.all().find((e): e is RoofEntity => e instanceof RoofEntity)!;
+    const roof = session.doc
+      .all()
+      .find((e): e is RoofEntity => e instanceof RoofEntity)!;
     expect(roof.eavesHeight).toBeCloseTo(3, 9); // tallest wall
     // wider than tall → fall across y (the narrow span)
     expect(roof.direction.x).toBeCloseTo(0, 9);
     const { max } = zRange(roof.toMesh('medium'));
     expect(max).toBeCloseTo(3 + Math.tan((15 * Math.PI) / 180) * 4.9, 6);
 
-    const second = session.dispatch<{ removed: number; created: number }>('ROOF.AUTO', {});
+    const second = session.dispatch<{ removed: number; created: number }>(
+      'ROOF.AUTO',
+      {},
+    );
     expect(second.removed).toBe(1);
     expect(second.created).toBe(1);
   });
@@ -156,7 +173,10 @@ describe('ROOF.AUTO — one dispatch roofs the building', () => {
     session.dispatch('ROOF.AUTO', { slope: 15 });
     const report = computeQuantities(session.doc);
     const plan = 6.9 * 4.9;
-    expect(report.totals.roofSlopeArea).toBeCloseTo(plan / Math.cos((15 * Math.PI) / 180), 5);
+    expect(report.totals.roofSlopeArea).toBeCloseTo(
+      plan / Math.cos((15 * Math.PI) / 180),
+      5,
+    );
     expect(report.totals.roofVolume).toBeCloseTo(plan * 0.25, 5);
   });
 });

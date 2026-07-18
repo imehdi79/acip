@@ -65,7 +65,9 @@ function useVoiceInput(handlers: {
         recorder.onstop = () => {
           for (const track of stream.getTracks()) track.stop();
           recorderRef.current = null;
-          const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+          const blob = new Blob(chunks, {
+            type: recorder.mimeType || 'audio/webm',
+          });
           if (blob.size === 0) {
             setState('idle');
             return;
@@ -78,14 +80,18 @@ function useVoiceInput(handlers: {
             })
             .catch((err) => {
               setState('idle');
-              handlersRef.current.onError(err instanceof Error ? err.message : String(err));
+              handlersRef.current.onError(
+                err instanceof Error ? err.message : String(err),
+              );
             });
         };
         recorderRef.current = recorder;
         setState('recording');
         recorder.start();
       })
-      .catch(() => handlersRef.current.onError('Microphone access was denied.'));
+      .catch(() =>
+        handlersRef.current.onError('Microphone access was denied.'),
+      );
   };
 
   useEffect(
@@ -157,7 +163,11 @@ export function AgentChat() {
         title="Drafter chat"
         onClick={() => ui.agentChatOpen.set(true)}
       >
-        <IconSparkles size={22} stroke={1.75} className={busy ? 'agent-icon busy' : 'agent-icon'} />
+        <IconSparkles
+          size={22}
+          stroke={1.75}
+          className={busy ? 'agent-icon busy' : 'agent-icon'}
+        />
       </button>
     );
   }
@@ -165,9 +175,14 @@ export function AgentChat() {
   return (
     <div className="chat-panel">
       <header className="chat-header">
-        <IconSparkles size={16} stroke={1.75} className={busy ? 'agent-icon busy' : 'agent-icon'} />
+        <IconSparkles
+          size={16}
+          stroke={1.75}
+          className={busy ? 'agent-icon busy' : 'agent-icon'}
+        />
         <span className="chat-title">
-          Drafter · {info.label} · {info.models.find((m) => m.id === model)?.label ?? model}
+          Drafter · {info.label} ·{' '}
+          {info.models.find((m) => m.id === model)?.label ?? model}
         </span>
         <button
           type="button"
@@ -176,20 +191,31 @@ export function AgentChat() {
         >
           <IconSettings size={15} stroke={1.75} />
         </button>
-        <button type="button" title="Minimize" onClick={() => ui.agentChatOpen.set(false)}>
+        <button
+          type="button"
+          title="Minimize"
+          onClick={() => ui.agentChatOpen.set(false)}
+        >
           <IconX size={15} stroke={1.75} />
         </button>
       </header>
       {showSettings && (
         <div className="chat-settings">
-          <select value={provider} onChange={(e) => switchProvider(e.target.value as AgentProvider)}>
+          <select
+            value={provider}
+            onChange={(e) => switchProvider(e.target.value as AgentProvider)}
+          >
             {PROVIDERS.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label}
               </option>
             ))}
           </select>
-          <select value={model} title="Model" onChange={(e) => setModelState(e.target.value)}>
+          <select
+            value={model}
+            title="Model"
+            onChange={(e) => setModelState(e.target.value)}
+          >
             {info.models.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label}
@@ -205,7 +231,9 @@ export function AgentChat() {
         {messages.length === 0 && (
           <p className="chat-empty">
             Ask for a drawing — “a 6 by 4 m room with a door and two windows”.
-            {voice.supported ? ' Or tap the mic and say it in any language.' : ''}
+            {voice.supported
+              ? ' Or tap the mic and say it in any language.'
+              : ''}
           </p>
         )}
         {messages.map((m, i) => (
@@ -213,13 +241,17 @@ export function AgentChat() {
             {m.text}
           </div>
         ))}
-        {busy && <div className="chat-msg chat-progress chat-typing">drawing…</div>}
+        {busy && (
+          <div className="chat-msg chat-progress chat-typing">drawing…</div>
+        )}
       </div>
       <div className="chat-input-row">
         {voice.supported && (
           <button
             type="button"
-            className={voice.state === 'idle' ? 'chat-mic' : 'chat-mic listening'}
+            className={
+              voice.state === 'idle' ? 'chat-mic' : 'chat-mic listening'
+            }
             title={
               voice.state === 'recording'
                 ? 'Stop recording (transcribes & sends)'

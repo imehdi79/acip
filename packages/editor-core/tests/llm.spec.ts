@@ -32,10 +32,19 @@ describe('toolDefinitions — command registry as LLM tool catalog', () => {
 
   test('described commands expose parameter schemas the bus accepts', () => {
     const session = new EditorSession();
-    const wallTool = toolDefinitions(session.commands).find((t) => t.name === 'WALL_ADD')!;
+    const wallTool = toolDefinitions(session.commands).find(
+      (t) => t.name === 'WALL_ADD',
+    )!;
     const props = wallTool.input_schema['properties'] as JsonObject;
     expect(Object.keys(props)).toEqual(
-      expect.arrayContaining(['a', 'b', 'thickness', 'height', 'levelId', 'typeId']),
+      expect.arrayContaining([
+        'a',
+        'b',
+        'thickness',
+        'height',
+        'levelId',
+        'typeId',
+      ]),
     );
     expect(wallTool.input_schema['required']).toEqual(['a', 'b']);
     // an input matching the schema dispatches cleanly
@@ -51,7 +60,10 @@ describe('toolDefinitions — command registry as LLM tool catalog', () => {
 describe('describeDocument — LLM digest', () => {
   test('digest carries catalogs, entities, relations, and quantities', () => {
     const session = new EditorSession();
-    const levelId = session.dispatch('LEVEL.ADD', { name: 'Ground', elevation: 0 });
+    const levelId = session.dispatch('LEVEL.ADD', {
+      name: 'Ground',
+      elevation: 0,
+    });
     const wallId = session.dispatch<EntityId>('WALL.ADD', {
       a: point(0, 0),
       b: point(6, 0),
@@ -63,9 +75,13 @@ describe('describeDocument — LLM digest', () => {
     const counts = digest['counts'] as JsonObject;
     expect(counts['entities']).toBe(2);
     expect((counts['byType'] as JsonObject)['wall']).toBe(1);
-    expect((digest['levels'] as JsonObject[]).map((l) => l['name'])).toContain('Ground');
+    expect((digest['levels'] as JsonObject[]).map((l) => l['name'])).toContain(
+      'Ground',
+    );
     expect((digest['relations'] as JsonObject[]).length).toBe(1);
-    expect((digest['entities'] as JsonObject[]).some((e) => e['id'] === wallId)).toBe(true);
+    expect(
+      (digest['entities'] as JsonObject[]).some((e) => e['id'] === wallId),
+    ).toBe(true);
     const quantities = digest['quantities'] as JsonObject;
     expect(quantities['wallLength']).toBeCloseTo(6);
     expect(quantities['windowCount']).toBe(1);

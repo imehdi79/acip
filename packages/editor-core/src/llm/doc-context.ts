@@ -31,7 +31,9 @@ export function describeDocument(
 
   const digest: Record<string, JsonValue> = {
     counts: { entities: all.length, byType },
-    levels: doc.levels.list().map((l) => ({ id: l.id, name: l.name, elevation: l.elevation })),
+    levels: doc.levels
+      .list()
+      .map((l) => ({ id: l.id, name: l.name, elevation: l.elevation })),
     layers: doc.layersList().map((l) => ({
       id: l.id,
       name: l.name,
@@ -39,7 +41,9 @@ export function describeDocument(
       locked: l.locked,
       ...(l.color ? { color: l.color } : {}),
     })),
-    materials: doc.materials.list().map((m) => ({ id: m.id, name: m.name, unit: m.unit })),
+    materials: doc.materials
+      .list()
+      .map((m) => ({ id: m.id, name: m.name, unit: m.unit })),
     types: doc.types.list().map((t) => ({
       id: t.id,
       targetType: t.targetType,
@@ -49,8 +53,12 @@ export function describeDocument(
         thickness: layer.thickness,
       })),
     })),
-    entities: all.slice(0, maxEntities).map((e) => e.saveData() as unknown as JsonObject),
-    relations: doc.relations.all().map((r) => ({ hostId: r.hostId, hostedId: r.hostedId })),
+    entities: all
+      .slice(0, maxEntities)
+      .map((e) => e.saveData() as unknown as JsonObject),
+    relations: doc.relations
+      .all()
+      .map((r) => ({ hostId: r.hostId, hostedId: r.hostedId })),
     // detected rooms make the drawing ADDRESSABLE ("the 14 m² room on L1")
     // for a few tokens each — far cheaper than reasoning over wall envelopes
     spaces: spacesDigest(doc),
@@ -68,14 +76,16 @@ export function describeDocument(
       doorCount: quantities.totals.doorCount,
     },
   };
-  if (all.length > maxEntities) digest['entitiesTruncated'] = all.length - maxEntities;
+  if (all.length > maxEntities)
+    digest['entitiesTruncated'] = all.length - maxEntities;
   return digest;
 }
 
 /** one entry per detected room, per level (the scopes plan views use) */
 function spacesDigest(doc: DrawingDocument): JsonValue[] {
   const levels = doc.levels.list();
-  const scopes: (LevelId | null)[] = levels.length > 0 ? levels.map((l) => l.id) : [null];
+  const scopes: (LevelId | null)[] =
+    levels.length > 0 ? levels.map((l) => l.id) : [null];
   const round = (v: number): number => Math.round(v * 100) / 100;
   const out: JsonValue[] = [];
   for (const scope of scopes) {

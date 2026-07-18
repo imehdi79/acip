@@ -15,8 +15,12 @@ describe('REQUEST.LOG — signal command for unfulfillable requests', () => {
 
   test('validates kind and text', () => {
     const session = new EditorSession();
-    expect(() => session.dispatch('REQUEST.LOG', { kind: 'nonsense', text: 'x' })).toThrow();
-    expect(() => session.dispatch('REQUEST.LOG', { kind: 'missing-price' })).toThrow();
+    expect(() =>
+      session.dispatch('REQUEST.LOG', { kind: 'nonsense', text: 'x' }),
+    ).toThrow();
+    expect(() =>
+      session.dispatch('REQUEST.LOG', { kind: 'missing-price' }),
+    ).toThrow();
   });
 
   test('is exposed to agents as the REQUEST_LOG tool', () => {
