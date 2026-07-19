@@ -13,9 +13,19 @@ import { PrismaService } from './prisma.service';
 
 const UNITS = new Set(['m3', 'm2', 'm', 'count']);
 
+type ExtractionProvider = 'anthropic' | 'openai';
+
+const DEFAULT_MODEL: Record<ExtractionProvider, string> = {
+  anthropic: 'claude-sonnet-4-6',
+  openai: 'gpt-5',
+};
+
 interface IngestBody {
   fileName?: unknown;
   content?: unknown;
+  /** 'anthropic' (default) or 'openai' — admin's choice, keys stay in .env */
+  provider?: unknown;
+  model?: unknown;
 }
 
 interface ExtractedRow {
@@ -67,8 +77,18 @@ export class RatesController {
     if (!content) throw new HttpException('content is required', 400);
     if (content.length > 200_000)
       throw new HttpException('content too large (200 kB max)', 413);
+    const provider: ExtractionProvider =
+      body.provider === 'openai' ? 'openai' : 'anthropic';
+    // explicit choice wins; the env override keeps its original (Anthropic)
+    // meaning so a claude id never gets sent to the OpenAI endpoint
+    const model =
+      typeof body.model === 'string' && body.model.trim()
+        ? body.model.trim()
+        : provider === 'anthropic'
+          ? process.env.RATES_EXTRACTION_MODEL || DEFAULT_MODEL.anthropic
+          : DEFAULT_MODEL.openai;
 
-    const rows = await extractRows(content);
+    const rows = await extractRows(content, provider, model);
     if (rows.length === 0) {
       throw new HttpException(
         'no priced line items could be extracted from that file',
@@ -157,12 +177,30 @@ export class RatesController {
   }
 }
 
-/** one Anthropic call, JSON-array-only output, forgiving parse + strict validation */
-async function extractRows(content: string): Promise<ExtractedRow[]> {
+/**
+ * One provider call, JSON-array-only output, forgiving parse + strict
+ * validation. Same admin choice the drafter offers: Anthropic or OpenAI,
+ * keys from .env either way.
+ */
+async function extractRows(
+  content: string,
+  provider: ExtractionProvider,
+  model: string,
+): Promise<ExtractedRow[]> {
+  const raw =
+    provider === 'openai'
+      ? await completeOpenAi(content, model)
+      : await completeAnthropic(content, model);
+  return parseRows(raw);
+}
+
+async function completeAnthropic(
+  content: string,
+  model: string,
+): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey)
     throw new HttpException('ANTHROPIC_API_KEY is not configured', 503);
-  const model = process.env.RATES_EXTRACTION_MODEL || 'claude-sonnet-4-6';
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -184,11 +222,38 @@ async function extractRows(content: string): Promise<ExtractedRow[]> {
   const reply = JSON.parse(text) as {
     content?: { type: string; text?: string }[];
   };
-  const raw = (reply.content ?? [])
+  return (reply.content ?? [])
     .filter((block) => block.type === 'text')
     .map((block) => block.text ?? '')
     .join('\n');
-  return parseRows(raw);
+}
+
+async function completeOpenAi(content: string, model: string): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new HttpException('OPENAI_API_KEY is not configured', 503);
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_completion_tokens: 8192,
+      messages: [
+        { role: 'system', content: EXTRACTION_PROMPT },
+        { role: 'user', content },
+      ],
+    }),
+  });
+  const text = await response.text();
+  if (!response.ok) throw new HttpException(text, response.status);
+
+  const reply = JSON.parse(text) as {
+    choices?: { message?: { content?: string | null } }[];
+  };
+  return reply.choices?.[0]?.message?.content ?? '';
 }
 
 function parseRows(raw: string): ExtractedRow[] {

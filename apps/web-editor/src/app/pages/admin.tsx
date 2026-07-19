@@ -5,7 +5,8 @@ import {
   IconRefresh,
   IconTrash,
 } from '@tabler/icons-react';
-import { serverUrl } from '../../editor/agent';
+import { PROVIDERS, providerInfo, serverUrl } from '../../editor/agent';
+import type { AgentProvider } from '../../editor/agent';
 import './admin.css';
 
 interface RateRow {
@@ -30,6 +31,24 @@ interface PricingRequest {
 
 const UNITS = ['m3', 'm2', 'm', 'count'];
 
+/* extraction model choice — persisted separately from the drafter chat's,
+   so the office's pick never flips a field user's provider */
+const ADMIN_PROVIDER_KEY = 'acip.admin-provider';
+const adminModelKey = (p: AgentProvider): string => `acip.admin-model.${p}`;
+
+function storedProvider(): AgentProvider {
+  return localStorage.getItem(ADMIN_PROVIDER_KEY) === 'openai'
+    ? 'openai'
+    : 'anthropic';
+}
+
+function storedModel(provider: AgentProvider): string {
+  return (
+    localStorage.getItem(adminModelKey(provider)) ||
+    providerInfo(provider).models[0].id
+  );
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${serverUrl()}/api${path}`, {
     headers: { 'content-type': 'application/json' },
@@ -53,7 +72,20 @@ export function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [provider, setProvider] = useState<AgentProvider>(storedProvider);
+  const [model, setModel] = useState(() => storedModel(storedProvider()));
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const switchProvider = (next: AgentProvider) => {
+    setProvider(next);
+    setModel(storedModel(next));
+    localStorage.setItem(ADMIN_PROVIDER_KEY, next);
+  };
+
+  const switchModel = (next: string) => {
+    setModel(next);
+    localStorage.setItem(adminModelKey(provider), next);
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -75,12 +107,14 @@ export function AdminPage() {
 
   const ingest = async (fileName: string, content: string) => {
     setBusy(true);
-    setMessage('Extracting rates — the agent is reading the file…');
+    setMessage(
+      `Extracting rates — ${providerInfo(provider).label} is reading the file…`,
+    );
     setError('');
     try {
       const result = await api<{ staged: number }>('/rates/ingest', {
         method: 'POST',
-        body: JSON.stringify({ fileName, content }),
+        body: JSON.stringify({ fileName, content, provider, model }),
       });
       setMessage(
         `${result.staged} rows staged from ${fileName} — review and publish below.`,
@@ -177,14 +211,40 @@ export function AdminPage() {
             e.target.value = '';
           }}
         />
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => fileRef.current?.click()}
-        >
-          <IconCloudUpload size={15} stroke={1.75} />
-          {busy ? 'Extracting…' : 'Upload & extract'}
-        </button>
+        <div className="admin-upload-row">
+          <select
+            value={provider}
+            title="Extraction provider"
+            disabled={busy}
+            onChange={(e) => switchProvider(e.target.value as AgentProvider)}
+          >
+            {PROVIDERS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={model}
+            title="Extraction model"
+            disabled={busy}
+            onChange={(e) => switchModel(e.target.value)}
+          >
+            {providerInfo(provider).models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => fileRef.current?.click()}
+          >
+            <IconCloudUpload size={15} stroke={1.75} />
+            {busy ? 'Extracting…' : 'Upload & extract'}
+          </button>
+        </div>
       </section>
 
       <section>
