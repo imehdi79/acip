@@ -61,7 +61,8 @@ const modelStorage = (p: AgentProvider): string => `acip.${p}-model`;
  */
 export function serverUrl(): string {
   const configured =
-    (import.meta.env.VITE_EDITOR_SERVER_URL as string | undefined) ||
+    // TODO: VITE_EDITOR_SERVER_URL is a temporary env var for local dev; remove it once the server is deployed and the client can use the same origin
+    // (import.meta.env.VITE_EDITOR_SERVER_URL as string | undefined) ||
     'https://acip-api.mehdify.com';
   console.log('serverUrl', configured);
   if (configured) return configured.replace(/\/+$/, '');
