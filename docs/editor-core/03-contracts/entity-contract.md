@@ -30,6 +30,9 @@ abstract class Entity {
   abstract readonly type: string; // registry key: 'wall', 'window', 'dim'
   layerId: LayerId;
   typeRef?: TypeId; // WallType etc. from the type catalog
+  mark?: number; // per-type sequence ("wall 3") — the human/agent
+  // handle; assigned once on create, never reused,
+  // persisted in saveData (added 2026-07-19)
 
   // ── 2D plan geometry: the source of truth ──
   abstract getBaseGeometry(): Geometry; // from own definition data only

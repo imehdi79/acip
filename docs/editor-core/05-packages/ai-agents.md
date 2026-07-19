@@ -90,6 +90,32 @@ via editor-server. web-editor wires this as a prompt row under the command
 line, with a provider/model/key selector (see
 [web-editor 04-agent.md](../../web-editor/04-agent.md)).
 
+### Marks: the shared conversation vocabulary (shipped 2026-07-19)
+
+Every entity carries a per-type sequence number (`Entity.mark` — "wall 3",
+"door 1") assigned at creation and never reused, persisted in the saveData
+envelope so it survives undo/save/load unchanged. The digest exposes marks on
+entities and `wallMarks` on detected spaces; the system prompts instruct
+agents to speak marks, never ids. `DrawingDocument.byMark('wall', 3)` is the
+lookup. The plan view labels entities (W3, D1) behind a Marks toggle that
+auto-enables when the chat opens. This replaces "the north wall" ambiguity
+with the same numbering an estimator writes on a paper plan.
+
+### Second mode: the estimator conversation (shipped 2026-07-19)
+
+`ESTIMATOR_SYSTEM_PROMPT` reuses the drafter loop and tool catalog with the
+opposite confirmation policy: the drafter draws speculatively, the estimator
+NEVER mutates before the user confirms a step. It works in groups (exterior
+vs interior walls via space wallMarks; slabs and roofs as their own groups),
+offers smart (full plan upfront, applied group by group on approval) and
+manual (ask group by group) styles, applies one confirmed step per reply so
+each stays individually undoable, and REQUEST_LOGs missing prices. To make
+the propose → confirm flow possible, `DrafterRunOptions` gained `system` and
+`history` (prior chat turns replayed as plain text — the fresh digest on the
+current prompt stays the ground truth). web-editor switches modes from the
+chat header or the estimate sheet's ask-the-agent button. Promote to a
+standalone `@acip/agent-estimator` package when it outgrows the shared loop.
+
 ## Remaining candidates (build later, same contract)
 
 - Auto-dimensioning (needs dimension entities)
