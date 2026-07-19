@@ -81,6 +81,14 @@ export const MoveCommand: Command<MoveParams, number> = {
       ),
   ),
   execute(ctx, params) {
+    // unknown ids are an error, not a skip: a silent "moved 0" reads as
+    // success to an agent, which then retries variations forever
+    const missing = params.ids.filter((id) => !ctx.doc.has(id));
+    if (missing.length > 0) {
+      throw new ValidationError(
+        `unknown entity ids: ${missing.join(', ')} — use ids from the document digest, not marks`,
+      );
+    }
     const m = translation(params.delta);
     let moved = 0;
     for (const id of params.ids) {
@@ -112,6 +120,12 @@ export const EraseCommand: Command<EraseParams, number> = {
       ]),
   ),
   execute(ctx, params) {
+    const missing = params.ids.filter((id) => !ctx.doc.has(id));
+    if (missing.length > 0) {
+      throw new ValidationError(
+        `unknown entity ids: ${missing.join(', ')} — use ids from the document digest, not marks`,
+      );
+    }
     let erased = 0;
     const visit = (id: EntityId): void => {
       const entity = ctx.doc.get(id);

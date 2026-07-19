@@ -26,7 +26,8 @@ export interface DrafterRunResult {
   readonly summary: string;
   readonly dispatched: readonly DispatchLogEntry[];
   readonly turns: number;
-  readonly stopped: 'completed' | 'max-turns';
+  /** 'stuck' = the circuit breaker tripped on consecutive failures */
+  readonly stopped: 'completed' | 'max-turns' | 'stuck';
 }
 
 /** one prior conversation exchange, replayed as plain text for context */
@@ -60,10 +61,14 @@ Rules of the model:
   their corners — draw a room as a closed loop of walls with exactly shared
   endpoint coordinates.
 - Windows and doors are hosted in walls parametrically: t runs 0..1 along the
-  wall baseline. They follow the wall when it moves.
+  wall baseline. They follow the wall when it moves. To reposition one along
+  its wall, call OPENING_MOVE with the new t (e.g. a quarter of the wall is
+  t 0.25) — never try to derive a world-space delta for it.
 - Prefer WALL_ADD for building elements; LINE_ADD is bare drafting geometry.
 - If a tool call fails you get the validation message back — correct the
-  parameters and retry.
+  parameters and retry ONCE with a real change. Never repeat a call that
+  failed with identical parameters; if you cannot make progress after a
+  couple of corrections, stop and reply in text with what is blocking you.
 - The user's message includes a JSON digest of the current document (ids,
   levels, materials, quantities). Use those ids; never invent ids.
 - Every entity carries a per-type "mark" number — the name users know it by.
@@ -114,7 +119,23 @@ Rules of the conversation:
   then ENTITY_SETTYPE the group) so every step stays individually undoable.
 - Reuse existing materials and types from the digest whenever they fit.
 - If a needed price is missing, call REQUEST_LOG once per gap with a short
-  description so the office can price it, tell the user, and continue.`;
+  description so the office can price it, tell the user, and continue.
+- Never repeat a tool call that failed with identical parameters; if you
+  cannot make progress, stop and tell the user what is blocking you.`;
+
+/** consecutive dispatch failures before the run aborts as 'stuck' */
+const STUCK_AFTER = 5;
+
+interface LoopGuard {
+  /** keys of calls that already failed — repeats are intercepted, not dispatched */
+  readonly failed: Set<string>;
+  consecutive: number;
+}
+
+const REPEAT_MESSAGE =
+  'This exact call already failed with the same parameters. Do not repeat ' +
+  'it — change the parameters, use a different tool, or reply in text with ' +
+  'what is blocking you.';
 
 /**
  * The first agent: natural language -> commands. Observes nothing it isn't
@@ -153,6 +174,7 @@ export class DrafterAgent {
       },
     ];
     const dispatched: DispatchLogEntry[] = [];
+    const guard: LoopGuard = { failed: new Set(), consecutive: 0 };
     let summary = '';
 
     return this.session.history.runGrouped(async () => {
@@ -182,9 +204,19 @@ export class DrafterAgent {
         }
 
         const results: ToolResultBlock[] = toolUses.map((use) =>
-          this.execute(use, dispatched, options.onDispatch),
+          this.execute(use, dispatched, guard, options.onDispatch),
         );
         messages.push({ role: 'user', content: results });
+        // circuit breaker: a model that only produces failures is stuck —
+        // stop burning turns and hand the transcript back to the user
+        if (guard.consecutive >= STUCK_AFTER) {
+          return {
+            summary,
+            dispatched,
+            turns: turn,
+            stopped: 'stuck' as const,
+          };
+        }
       }
       return {
         summary,
@@ -198,28 +230,46 @@ export class DrafterAgent {
   private execute(
     use: ToolUseBlock,
     log: DispatchLogEntry[],
+    guard: LoopGuard,
     onDispatch?: (entry: DispatchLogEntry) => void,
   ): ToolResultBlock {
     const command = commandNameFromTool(use.name);
+    const key = `${command}:${JSON.stringify(use.input)}`;
     let entry: DispatchLogEntry;
     let result: ToolResultBlock;
-    try {
-      const value = this.session.dispatch(command, use.input);
-      entry = { command, params: use.input, ok: true, result: value };
+    if (guard.failed.has(key)) {
+      // intercepted, not dispatched: repeating a known-failing call is the
+      // loop signature — push back instead of burning a transaction
+      guard.consecutive += 1;
+      entry = { command, params: use.input, ok: false, error: REPEAT_MESSAGE };
       result = {
         type: 'tool_result',
         tool_use_id: use.id,
-        content: JSON.stringify({ result: value ?? null }),
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      entry = { command, params: use.input, ok: false, error: message };
-      result = {
-        type: 'tool_result',
-        tool_use_id: use.id,
-        content: message,
+        content: REPEAT_MESSAGE,
         is_error: true,
       };
+    } else {
+      try {
+        const value = this.session.dispatch(command, use.input);
+        guard.consecutive = 0;
+        entry = { command, params: use.input, ok: true, result: value };
+        result = {
+          type: 'tool_result',
+          tool_use_id: use.id,
+          content: JSON.stringify({ result: value ?? null }),
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        guard.failed.add(key);
+        guard.consecutive += 1;
+        entry = { command, params: use.input, ok: false, error: message };
+        result = {
+          type: 'tool_result',
+          tool_use_id: use.id,
+          content: message,
+          is_error: true,
+        };
+      }
     }
     log.push(entry);
     onDispatch?.(entry);

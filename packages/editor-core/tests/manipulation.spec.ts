@@ -79,6 +79,44 @@ describe('grips', () => {
     ).toThrow(ValidationError);
     expect(session.history.canUndo).toBe(false);
   });
+
+  test('OPENING.MOVE slides a window to the given t; undoable', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const winId = session.dispatch<EntityId>('WINDOW.ADD', { wallId, t: 0.5 });
+
+    session.dispatch('OPENING.MOVE', { id: winId, t: 0.25 });
+    const win = session.doc.get(winId) as WindowEntity;
+    expect(win.t).toBeCloseTo(0.25);
+    expect(bboxCenter(win.getBounds()).x).toBeCloseTo(2.5);
+
+    session.undo();
+    expect((session.doc.get(winId) as WindowEntity).t).toBeCloseTo(0.5);
+  });
+
+  test('OPENING.MOVE rejects non-openings and out-of-range t', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const winId = session.dispatch<EntityId>('WINDOW.ADD', { wallId, t: 0.5 });
+    expect(() =>
+      session.dispatch('OPENING.MOVE', { id: wallId, t: 0.25 }),
+    ).toThrow(ValidationError);
+    expect(() =>
+      session.dispatch('OPENING.MOVE', { id: winId, t: 1.5 }),
+    ).toThrow(ValidationError);
+  });
+
+  test('ENTITY.MOVE and ENTITY.ERASE reject unknown ids loudly', () => {
+    // a silent "moved 0" reads as success to an agent — the retry-loop trap
+    const session = new EditorSession();
+    expect(() =>
+      session.dispatch('ENTITY.MOVE', { ids: ['ghost'], delta: point(1, 0) }),
+    ).toThrow(/unknown entity ids/);
+    expect(() => session.dispatch('ENTITY.ERASE', { ids: ['ghost'] })).toThrow(
+      /unknown entity ids/,
+    );
+    expect(session.history.canUndo).toBe(false);
+  });
 });
 
 describe('DoorEntity', () => {

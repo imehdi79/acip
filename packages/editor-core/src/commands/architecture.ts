@@ -5,6 +5,7 @@ import { isHost } from '../entities/base/capabilities.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
 import { WindowEntity } from '../entities/architecture/window-entity.js';
 import { DoorEntity } from '../entities/architecture/door-entity.js';
+import { HostedOpeningEntity } from '../entities/architecture/hosted-opening.js';
 import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
 import type { CommandRegistry } from './command-registry.js';
@@ -195,8 +196,54 @@ export const AddDoorCommand: Command<AddDoorParams, EntityId> = {
   },
 };
 
+export interface MoveOpeningParams {
+  id: EntityId;
+  t: number;
+}
+
+/**
+ * The parametric move "move the window to a quarter of the wall" asks for.
+ * Without it, agents fall back to delta/grip moves they must derive from
+ * geometry they cannot see — the classic retry-loop trap.
+ */
+export const MoveOpeningCommand: Command<MoveOpeningParams, void> = {
+  name: 'OPENING.MOVE',
+  description:
+    'Slide a hosted window or door along its wall: t is the normalized position of its center (0 = wall start, 0.25 = quarter, 0.5 = middle, 1 = wall end).',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const t = asNumber(raw['t'], 't');
+      if (t < 0 || t > 1) {
+        throw new ValidationError('t must be between 0 and 1');
+      }
+      return { id: asId(raw['id'], 'id'), t };
+    },
+    () =>
+      S.object(
+        {
+          id: S.id('window or door entity id'),
+          t: S.number('normalized position along the wall baseline, 0..1'),
+        },
+        ['id', 't'],
+      ),
+  ),
+  execute(ctx, params) {
+    const entity = ctx.doc.get(params.id);
+    if (!(entity instanceof HostedOpeningEntity)) {
+      throw new ValidationError(
+        `entity ${params.id} is not a hosted opening (window or door)`,
+      );
+    }
+    ctx.tx.update(entity, (opening) => {
+      opening.t = params.t;
+    });
+  },
+};
+
 export function registerArchitectureCommands(registry: CommandRegistry): void {
   registry.register(AddWallCommand);
   registry.register(AddWindowCommand);
   registry.register(AddDoorCommand);
+  registry.register(MoveOpeningCommand);
 }

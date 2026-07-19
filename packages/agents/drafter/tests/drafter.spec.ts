@@ -183,6 +183,70 @@ describe('DrafterAgent — NL to commands through the bus', () => {
     expect(message.content[1].type).toBe('text');
   });
 
+  test('repeating an identical failed call is intercepted, not dispatched', async () => {
+    const session = new EditorSession();
+    const badCall = {
+      type: 'tool_use',
+      id: 'r1',
+      name: 'WALL_ADD',
+      input: { a: { x: 0, y: 0 } }, // missing b — always fails
+    };
+    const llm = new FakeLlm([
+      { content: [badCall] as LlmTurn['content'], stopReason: 'tool_use' },
+      {
+        content: [{ ...badCall, id: 'r2' }] as LlmTurn['content'],
+        stopReason: 'tool_use',
+      },
+      {
+        content: [{ type: 'text', text: 'I am blocked: b is unknown.' }],
+        stopReason: 'end_turn',
+      },
+    ]);
+
+    const agent = new DrafterAgent(session, llm);
+    const result = await agent.run('add a wall');
+
+    expect(result.dispatched).toHaveLength(2);
+    expect(result.dispatched[1].ok).toBe(false);
+    expect(result.dispatched[1].error).toContain('already failed');
+    // the second attempt never reached the bus — still an empty document
+    expect(session.doc.count).toBe(0);
+    // and the interception went back to the model as an is_error result
+    const thirdRequest = llm.requests[2];
+    const lastMessage = thirdRequest.messages[thirdRequest.messages.length - 1];
+    const block = lastMessage.content[0] as ToolResultBlock;
+    expect(block.is_error).toBe(true);
+    expect(block.content).toContain('already failed');
+  });
+
+  test('circuit breaker stops a run that only produces failures', async () => {
+    const session = new EditorSession();
+    // the model always retries the same broken call — without the breaker
+    // this burns every turn until maxTurns
+    const llm = new FakeLlm([
+      {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'loop',
+            name: 'WALL_ADD',
+            input: { a: { x: 0, y: 0 } },
+          },
+        ] as LlmTurn['content'],
+        stopReason: 'tool_use',
+      },
+    ]);
+
+    const agent = new DrafterAgent(session, llm);
+    const result = await agent.run('add a wall', { maxTurns: 20 });
+
+    expect(result.stopped).toBe('stuck');
+    expect(result.turns).toBeLessThan(20);
+    expect(session.doc.count).toBe(0);
+    // partial work (none here) still lands as one clean undo group
+    expect(session.history.canUndo).toBe(false);
+  });
+
   test('stops at maxTurns when the model never finishes', async () => {
     const session = new EditorSession();
     const llm = new FakeLlm([

@@ -208,6 +208,11 @@ export async function runDrafter(
         'Stopped at the turn limit — say "continue" to pick up where it left off.';
       ui.appendLog(warning, 'error');
       ui.appendChat(warning, 'error');
+    } else if (result.stopped === 'stuck') {
+      const warning =
+        'Stopped: the agent kept failing the same way. Rephrase the request or give it the missing detail (e.g. which wall, which mark).';
+      ui.appendLog(warning, 'error');
+      ui.appendChat(warning, 'error');
     }
     return result.summary || null;
   } catch (err) {
