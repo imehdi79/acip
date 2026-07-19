@@ -116,6 +116,28 @@ current prompt stays the ground truth). web-editor switches modes from the
 chat header or the estimate sheet's ask-the-agent button. Promote to a
 standalone `@acip/agent-estimator` package when it outgrows the shared loop.
 
+### Plan-image tracing (shipped 2026-07-19)
+
+The normalized LLM protocol gained an `ImageBlock` (Anthropic base64 source
+shape; `AnthropicClient` passes it through, `OpenAiClient` translates to
+`image_url` parts), and `DrafterRunOptions.images` attaches crops to the
+current prompt. web-editor pairs this with a presentation-only underlay
+(raster plan under the drawing — never part of the document), a two-point
+scale calibration tool, and a trace tool: drag a region, the crop plus its
+exact world placement goes to the drafter, walls land at true coordinates.
+The agent must state the dimensions it assumed so the user corrects them
+against the visible underlay.
+
+### Server-side extraction: the rates ingest (shipped 2026-07-19)
+
+Not a document agent — LLM-powered ETL in editor-server (`/api/rates/*`):
+price lists are extracted into STAGED RateRow records (strict validation,
+per-row source-line provenance), an admin reviews/edits/publishes on the
+admin page, and `GET /api/rates/table` serves the published set in the
+estimator's RateTable shape. Editors load it at startup over the demo rates.
+Guardrail: nothing auto-publishes, ever — a hallucinated decimal point in a
+rate corrupts every estimate silently.
+
 ## Remaining candidates (build later, same contract)
 
 - Auto-dimensioning (needs dimension entities)
