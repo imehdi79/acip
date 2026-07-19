@@ -161,7 +161,11 @@ export function AgentChat() {
         type="button"
         className="chat-bubble"
         title="Drafter chat"
-        onClick={() => ui.agentChatOpen.set(true)}
+        onClick={() => {
+          ui.agentChatOpen.set(true);
+          // marks are the shared vocabulary of the conversation
+          ui.showMarks.set(true);
+        }}
       >
         <IconSparkles
           size={22}

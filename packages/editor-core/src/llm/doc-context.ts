@@ -96,6 +96,8 @@ function spacesDigest(doc: DrawingDocument): JsonValue[] {
         netArea: round(space.netArea),
         grossArea: round(space.grossArea),
         walls: space.boundaryWallIds as unknown as string[],
+        // parallel per-type marks ("wall 3") — how users name these walls
+        wallMarks: space.boundaryWallIds.map((id) => doc.get(id)?.mark ?? null),
       });
     }
   }

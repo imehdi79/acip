@@ -43,6 +43,23 @@ const COLORS = {
   assemblyTint: 'rgba(255, 255, 255, 0.05)',
   assemblySeparator: 'rgba(224, 224, 224, 0.45)',
   assemblyHatch: 'rgba(224, 224, 224, 0.28)',
+  mark: '#8fb4d8',
+  markHalo: '#16181d',
+};
+
+/**
+ * Mark label prefixes — architectural entities only, so drafting geometry
+ * (lines, dimensions) never clutters the plan. "W3" on screen is what "wall 3"
+ * means in the agent conversation.
+ */
+const MARK_PREFIX: Record<string, string> = {
+  wall: 'W',
+  door: 'D',
+  window: 'WN',
+  slab: 'SL',
+  roof: 'RF',
+  stair: 'ST',
+  finish: 'FN',
 };
 
 export const GRIP_PIXELS = 4;
@@ -249,6 +266,7 @@ export function drawScene(
   doc: DrawingDocument,
   view: ViewDefinition,
   selection: ReadonlySet<string>,
+  showMarks = false,
 ): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -293,6 +311,7 @@ export function drawScene(
   }
 
   const texts: { shape: TextShape; color: string }[] = [];
+  const marks: { text: string; x: number; y: number }[] = [];
   for (const item of buildDisplayList(doc, view)) {
     const isSelected = selection.has(item.entityId);
     // solid regions (wall spans) get a light fill under the stroke
@@ -336,6 +355,24 @@ export function drawScene(
     const found: TextShape[] = [];
     collectTexts(item.geometry, found);
     for (const shape of found) texts.push({ shape, color });
+
+    // mark labels ("W3") at the entity's center — only entities big enough
+    // on screen to carry a label without clutter
+    if (showMarks && entity && entity.mark !== undefined) {
+      const prefix = MARK_PREFIX[entity.type];
+      if (prefix) {
+        const b = entity.getBounds();
+        const diagPx =
+          Math.hypot(b.maxX - b.minX, b.maxY - b.minY) * viewport.scale;
+        if (diagPx >= 28) {
+          const at = viewport.toScreen({
+            x: (b.minX + b.maxX) / 2,
+            y: (b.minY + b.maxY) / 2,
+          });
+          marks.push({ text: `${prefix}${entity.mark}`, x: at.x, y: at.y });
+        }
+      }
+    }
   }
 
   // text shapes (dimension values) — screen space so glyphs are never
@@ -354,6 +391,20 @@ export function drawScene(
     ctx.textBaseline = 'middle';
     ctx.fillText(shape.text, 0, 0);
     ctx.restore();
+  }
+
+  // mark labels — screen space, fixed size, dark halo for readability
+  if (marks.length > 0) {
+    ctx.font = 'bold 11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = COLORS.markHalo;
+    ctx.fillStyle = COLORS.mark;
+    for (const m of marks) {
+      ctx.strokeText(m.text, m.x, m.y);
+      ctx.fillText(m.text, m.x, m.y);
+    }
   }
 
   // grips for selected entities — fixed pixel size, drawn in screen space

@@ -18,6 +18,12 @@ export abstract class Entity {
   abstract readonly type: string;
   layerId: LayerId = DEFAULT_LAYER_ID;
   typeRef?: TypeId;
+  /**
+   * Per-type sequence number ("wall 3") — the reference users and agents
+   * share. Assigned by the transaction on create; clone() deliberately does
+   * not copy it, so copies get fresh numbers.
+   */
+  mark?: number;
 
   protected readonly dataVersion: number = 1;
 
@@ -81,6 +87,7 @@ export abstract class Entity {
       version: number;
       props: JsonObject;
       typeRef?: string;
+      mark?: number;
     } = {
       id: this.id,
       type: this.type,
@@ -89,12 +96,14 @@ export abstract class Entity {
       props: this.saveProps(),
     };
     if (this.typeRef !== undefined) data.typeRef = this.typeRef;
+    if (this.mark !== undefined) data.mark = this.mark;
     return data;
   }
 
   loadData(data: EntityData): void {
     this.layerId = data.layerId as LayerId;
     this.typeRef = data.typeRef as TypeId | undefined;
+    this.mark = data.mark;
     this.loadProps(data.props, data.version);
   }
 

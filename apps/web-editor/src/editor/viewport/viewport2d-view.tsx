@@ -51,6 +51,7 @@ export function Viewport2DView() {
           session.doc,
           planView(),
           new Set(session.selection.list()),
+          ui.showMarks.get(),
         );
       });
     };
@@ -83,6 +84,7 @@ export function Viewport2DView() {
       }),
       ui.overlay.subscribe(redrawOverlay),
       ui.activeLevelId.subscribe(redrawBase),
+      ui.showMarks.subscribe(redrawBase),
     ];
     tools.worldTolerance = pickPixels / viewport.scale;
 

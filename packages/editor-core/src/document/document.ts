@@ -38,6 +38,8 @@ export class DrawingDocument {
 
   private entities = new Map<EntityId, Entity>();
   private spatial: SpatialIndex = new NaiveSpatialIndex();
+  /** highest mark seen per type — derived from entities, maintained on insert */
+  private markCounters = new Map<string, number>();
 
   constructor() {
     this.layers.set(createDefaultLayer());
@@ -90,6 +92,25 @@ export class DrawingDocument {
     }
   }
 
+  /**
+   * Next per-type mark ("wall 3"). Reserves the number immediately; marks are
+   * never reused within a session, so a deleted wall's number stays retired
+   * and conversation references ("wall 3") never silently change referent.
+   */
+  nextMark(type: string): number {
+    const next = (this.markCounters.get(type) ?? 0) + 1;
+    this.markCounters.set(type, next);
+    return next;
+  }
+
+  /** entity with the given per-type mark, or null (the "wall 3" lookup) */
+  byMark(type: string, mark: number): Entity | null {
+    for (const entity of this.entities.values()) {
+      if (entity.type === type && entity.mark === mark) return entity;
+    }
+    return null;
+  }
+
   /** @internal mutation path for transactions/history only — use the command bus */
   _insert(entity: Entity): void {
     if (this.entities.has(entity.id)) {
@@ -98,6 +119,13 @@ export class DrawingDocument {
     this.entities.set(entity.id, entity);
     entity._attachToDocument(this);
     this.spatial.insert(entity.id, entity.getBounds());
+    // loads and redo insert pre-marked entities — keep the counter ahead
+    if (
+      entity.mark !== undefined &&
+      entity.mark > (this.markCounters.get(entity.type) ?? 0)
+    ) {
+      this.markCounters.set(entity.type, entity.mark);
+    }
   }
 
   /** @internal mutation path for transactions/history only — use the command bus */
@@ -126,6 +154,7 @@ export class DrawingDocument {
     }
     this.entities.clear();
     this.spatial = new NaiveSpatialIndex();
+    this.markCounters.clear();
     this.relations._clear();
     for (const store of [
       this.layers,

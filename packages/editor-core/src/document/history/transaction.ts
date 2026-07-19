@@ -87,6 +87,9 @@ export class TransactionImpl implements Transaction {
 
   create(entity: Entity): void {
     this.assertOpen();
+    // fresh entities get the next per-type mark; restored/pasted data that
+    // already carries one keeps it (undo snapshots must round-trip exactly)
+    if (entity.mark === undefined) entity.mark = this.doc.nextMark(entity.type);
     this.doc._insert(entity);
     this.createdIds.add(entity.id);
     this.createdOrder.push(entity.id);

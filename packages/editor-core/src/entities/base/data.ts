@@ -10,6 +10,12 @@ export interface EntityData {
   readonly type: string;
   readonly layerId: string;
   readonly typeRef?: string;
+  /**
+   * Human-facing per-type sequence number ("wall 3"), assigned once at
+   * creation and never reused — the stable handle users and agents share
+   * in conversation. Persisted so references survive save/load.
+   */
+  readonly mark?: number;
   /** schema version of the entity type's props format */
   readonly version: number;
   readonly props: JsonObject;

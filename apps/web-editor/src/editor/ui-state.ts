@@ -60,6 +60,8 @@ export class EditorUi {
   /** drafter chat panel: bubble collapsed vs conversation open */
   readonly agentChatOpen = new ValueStore<boolean>(false);
   readonly agentChat = new ValueStore<readonly ChatMessage[]>([]);
+  /** entity mark labels ("W3") in the plan — auto-enabled when chat opens */
+  readonly showMarks = new ValueStore<boolean>(false);
 
   appendLog(text: string, kind: LogEntry['kind'] = 'info'): void {
     this.log.set([...this.log.get().slice(-99), { text, kind }]);

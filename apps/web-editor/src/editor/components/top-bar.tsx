@@ -6,6 +6,7 @@ import {
   IconFile,
   IconFolderOpen,
   IconGrid4x4,
+  IconHash,
 } from '@tabler/icons-react';
 import type { Icon } from '@tabler/icons-react';
 import { useSession } from '../session-context';
@@ -25,6 +26,7 @@ export function TopBar() {
   const { ui } = useRuntime();
   useDocRevision(session);
   const activeTab = useStoreValue(ui.viewTab);
+  const showMarks = useStoreValue(ui.showMarks);
 
   return (
     <header className="top-bar">
@@ -86,6 +88,17 @@ export function TopBar() {
         >
           <IconArrowForwardUp size={16} stroke={1.75} />
           Redo
+        </button>
+      </div>
+      <div className="top-bar-group">
+        <button
+          type="button"
+          className={showMarks ? 'active' : ''}
+          title="Show entity marks (W3, D1) — how you and the agent name things"
+          onClick={() => ui.showMarks.set(!showMarks)}
+        >
+          <IconHash size={16} stroke={1.75} />
+          Marks
         </button>
       </div>
       <div className="top-bar-group tabs">
