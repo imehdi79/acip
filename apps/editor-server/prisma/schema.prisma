@@ -22,3 +22,25 @@ model Request {
   status    String   @default("open")
   createdAt DateTime @default(now())
 }
+
+// Rate rows extracted from uploaded price lists. Staged until an admin
+// approves — extraction is LLM-assisted and a wrong decimal in a rate
+// silently corrupts every estimate, so NOTHING auto-publishes.
+model RateRow {
+  id          Int      @id @default(autoincrement())
+  /// rate-table key (matches Material.costCode in documents)
+  costCode    String
+  description String
+  /// "m3" | "m2" | "m" | "count"
+  unit        String
+  unitCost    Float
+  currency    String   @default("EUR")
+  /// "staged" | "published"
+  status      String   @default("staged")
+  /// provenance: the upload this row came from
+  sourceFile  String
+  /// the source line/cell the extractor read, for one-glance verification
+  sourceHint  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

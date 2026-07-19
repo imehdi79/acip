@@ -10,7 +10,7 @@ import {
 import { DEFAULT_LAYER_ID, computeQuantities } from '@acip/editor-core';
 import type { AssemblyLayer, EntityTypeDef, Layer } from '@acip/editor-core';
 import { assembleBoq, defaultRules } from '@acip/estimator';
-import { DEMO_RATES } from '../rates';
+import { ratesStore } from '../rates';
 import { materialDisplayColor } from '../material-color';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
@@ -157,17 +157,18 @@ export function QuantitiesSection() {
   );
 }
 
-/** live BOQ: default measurement rules + demo rates, recomputed per commit */
+/** live BOQ: default measurement rules + the live rate table, per commit */
 function CostSection() {
   const session = useSession();
+  const rates = useStoreValue(ratesStore);
   const boq = assembleBoq(session.doc, {
     rules: defaultRules(),
-    rates: DEMO_RATES,
+    rates,
   });
   if (boq.lines.length === 0) return null;
   return (
     <>
-      <h3>Cost (demo rates)</h3>
+      <h3>Cost</h3>
       <dl>
         {boq.lines.map((line) => (
           <CostRow

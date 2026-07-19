@@ -15,6 +15,8 @@ import { StatusBar } from './components/status-bar';
 import { Panels } from './components/panels';
 import { AgentChat } from './components/agent-chat';
 import { EstimateSheet } from './components/estimate-sheet';
+import { loadServerRates } from './rates';
+import { serverUrl } from './agent';
 import './editor.css';
 
 export function Editor() {
@@ -28,6 +30,11 @@ export function Editor() {
 function EditorShell() {
   const session = useSession();
   const [runtime] = useState(() => createRuntime(session));
+
+  // published office rates replace the demo table once (offline keeps demo)
+  useEffect(() => {
+    void loadServerRates(serverUrl());
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

@@ -1,0 +1,177 @@
+.admin-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px clamp(12px, 4vw, 48px) 48px;
+  background: #16181d;
+  color: #cfd3da;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.admin-page h1 {
+  margin: 0;
+  font-size: 18px;
+  color: #8fa3b8;
+  letter-spacing: 0.04em;
+}
+
+.admin-page h2 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7d8794;
+}
+
+.admin-page section {
+  margin-top: 28px;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.admin-page button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #262b33;
+  color: #cfd3da;
+  border: 1px solid #333a44;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.admin-page button:hover:not(:disabled) {
+  background: #2f3540;
+}
+
+.admin-page button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.admin-hint {
+  color: #5d6672;
+  margin: 4px 0 8px;
+}
+
+.admin-error {
+  color: #e57373;
+  background: rgba(229, 115, 115, 0.08);
+  border: 1px solid rgba(229, 115, 115, 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 14px 0 0;
+}
+
+.admin-message {
+  color: #8fd08f;
+  margin: 14px 0 0;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th {
+  text-align: left;
+  font-size: 11px;
+  color: #7d8794;
+  font-weight: 600;
+  padding: 4px 6px;
+  border-bottom: 1px solid #2c313a;
+}
+
+.admin-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid #23272e;
+  vertical-align: middle;
+}
+
+.admin-table input,
+.admin-table select {
+  width: 100%;
+  min-width: 70px;
+  box-sizing: border-box;
+  background: #1b1e23;
+  color: #e8ecf1;
+  border: 1px solid #2c313a;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.admin-table input:focus {
+  border-color: #4da3ff;
+  outline: none;
+}
+
+.admin-number {
+  max-width: 90px;
+  text-align: right;
+}
+
+.admin-currency {
+  max-width: 60px;
+}
+
+.admin-source {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #5d6672;
+  font-size: 11px;
+}
+
+.admin-actions {
+  white-space: nowrap;
+}
+
+.admin-actions button {
+  padding: 4px 6px;
+  margin-left: 4px;
+}
+
+.admin-requests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-requests li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #23272e;
+}
+
+.admin-request-kind {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #d9c069;
+  border: 1px solid rgba(217, 192, 105, 0.4);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+
+.admin-request-text {
+  flex: 1;
+  min-width: 0;
+}

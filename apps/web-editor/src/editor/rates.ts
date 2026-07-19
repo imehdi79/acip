@@ -1,4 +1,5 @@
 import type { RateTable } from '@acip/estimator';
+import { ValueStore } from './store';
 
 /** demo rate table for the seeded catalog — real projects load their own data */
 export const DEMO_RATES: RateTable = {
@@ -20,3 +21,26 @@ export const DEMO_RATES: RateTable = {
     stair: { unit: 'count', unitCost: 1500 },
   },
 };
+
+/**
+ * The live rate table: starts as demo data, replaced by the office's
+ * published rates from editor-server once they exist. Cost panels subscribe,
+ * so a publish on the admin page reprices open editors on next load.
+ */
+export const ratesStore = new ValueStore<RateTable>(DEMO_RATES);
+
+/** merge published rates over the demo table; demo fills the gaps */
+export async function loadServerRates(serverUrl: string): Promise<void> {
+  try {
+    const response = await fetch(`${serverUrl}/api/rates/table`);
+    if (!response.ok) return;
+    const table = (await response.json()) as RateTable;
+    if (!table || Object.keys(table.rates ?? {}).length === 0) return;
+    ratesStore.set({
+      currency: table.currency || DEMO_RATES.currency,
+      rates: { ...DEMO_RATES.rates, ...table.rates },
+    });
+  } catch {
+    // offline or no server — demo rates remain
+  }
+}

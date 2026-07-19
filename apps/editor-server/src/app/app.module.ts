@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { LlmController } from './llm.controller';
 import { SttController } from './stt.controller';
 import { RequestsController } from './requests.controller';
+import { RatesController } from './rates.controller';
 import { PrismaService } from './prisma.service';
 
 @Module({
@@ -13,6 +14,7 @@ import { PrismaService } from './prisma.service';
     LlmController,
     SttController,
     RequestsController,
+    RatesController,
   ],
   providers: [AppService, PrismaService],
 })
