@@ -469,6 +469,38 @@ body,
   animation: agent-pulse 1.2s ease-in-out infinite;
 }
 
+/* ── underlay controls (floating card while a plan image is loaded) ── */
+.underlay-card {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(20, 22, 26, 0.92);
+  border: 1px solid #2c313a;
+  border-radius: 8px;
+  z-index: 4;
+}
+
+.underlay-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7d8794;
+}
+
+.underlay-card input[type='range'] {
+  width: 80px;
+}
+
+.underlay-card button {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 6px;
+}
+
 /* ── estimate sheet (mobile companion to the chat bubble) ──
    desktop already shows quantities + cost in the side panels */
 .estimate-bubble,

@@ -162,6 +162,27 @@ describe('DrafterAgent — NL to commands through the bus', () => {
     expect(current.text).toContain('Current document digest');
   });
 
+  test('attached images precede the prompt text (plan tracing)', async () => {
+    const session = new EditorSession();
+    const llm = new FakeLlm([
+      { content: [{ type: 'text', text: 'traced.' }], stopReason: 'end_turn' },
+    ]);
+
+    const agent = new DrafterAgent(session, llm);
+    await agent.run('trace this crop', {
+      images: [
+        {
+          type: 'image',
+          source: { type: 'base64', media_type: 'image/png', data: 'AAAA' },
+        },
+      ],
+    });
+
+    const message = llm.requests[0].messages[0];
+    expect(message.content[0].type).toBe('image');
+    expect(message.content[1].type).toBe('text');
+  });
+
   test('stops at maxTurns when the model never finishes', async () => {
     const session = new EditorSession();
     const llm = new FakeLlm([

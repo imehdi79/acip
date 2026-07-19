@@ -1,5 +1,6 @@
 export type {
   ContentBlock,
+  ImageBlock,
   LlmClient,
   LlmMessage,
   LlmRequest,

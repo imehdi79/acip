@@ -14,6 +14,8 @@ import { ArcTool, CircleTool, PolylineTool } from './tools/circle-tool';
 import { DimensionTool } from './tools/dim-tool';
 import { SlabTool } from './tools/slab-tool';
 import { StairTool } from './tools/stair-tool';
+import { CalibrateTool, TraceTool } from './tools/underlay-tools';
+import { traceRegion } from './underlay';
 
 export interface EditorRuntime {
   readonly ui: EditorUi;
@@ -199,6 +201,10 @@ export function createRuntime(session: EditorSession): EditorRuntime {
       const levelId = ui.activeLevelId.get();
       return { ...activeLayer(), ...(levelId ? { levelId } : {}) };
     }),
+  );
+  tools.register(new CalibrateTool(ui, finish));
+  tools.register(
+    new TraceTool(ui, finish, (a, b) => traceRegion(session, ui, a, b)),
   );
   tools.useById('select');
   return { ui, tools };

@@ -4,7 +4,7 @@ import {
   ESTIMATOR_SYSTEM_PROMPT,
   OpenAiClient,
 } from '@acip/agent-drafter';
-import type { ChatTurn, LlmClient } from '@acip/agent-drafter';
+import type { ChatTurn, ImageBlock, LlmClient } from '@acip/agent-drafter';
 import type { EditorSession } from '@acip/editor-core';
 import type { EditorUi } from './ui-state';
 
@@ -166,19 +166,21 @@ export async function runDrafter(
   session: EditorSession,
   ui: EditorUi,
   prompt: string,
+  images?: readonly ImageBlock[],
 ): Promise<string | null> {
   if (ui.agentBusy.get()) return null;
   const provider = getProvider();
   const info = providerInfo(provider);
   const mode = ui.agentMode.get();
   const history = chatHistory(ui);
-  ui.appendChat(prompt, 'user');
+  ui.appendChat(images?.length ? `📎 ${prompt}` : prompt, 'user');
   ui.agentBusy.set(true);
   ui.appendLog(`ai(${info.label}/${mode})> ${prompt}`, 'echo');
   try {
     const agent = new DrafterAgent(session, makeClient(provider));
     const result = await agent.run(prompt, {
       history,
+      ...(images?.length ? { images } : {}),
       ...(mode === 'estimator' ? { system: ESTIMATOR_SYSTEM_PROMPT } : {}),
       onDispatch: (entry) => {
         if (entry.ok) {

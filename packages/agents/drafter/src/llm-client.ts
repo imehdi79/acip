@@ -25,7 +25,21 @@ export interface ToolResultBlock {
   readonly is_error?: boolean;
 }
 
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+/** base64 image in the Anthropic source shape (plan crops for tracing) */
+export interface ImageBlock {
+  readonly type: 'image';
+  readonly source: {
+    readonly type: 'base64';
+    readonly media_type: string;
+    readonly data: string;
+  };
+}
+
+export type ContentBlock =
+  | TextBlock
+  | ToolUseBlock
+  | ToolResultBlock
+  | ImageBlock;
 
 export interface LlmMessage {
   readonly role: 'user' | 'assistant';

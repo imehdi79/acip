@@ -7,8 +7,11 @@ import {
   IconFolderOpen,
   IconGrid4x4,
   IconHash,
+  IconPhoto,
 } from '@tabler/icons-react';
 import type { Icon } from '@tabler/icons-react';
+import { useRef } from 'react';
+import { loadUnderlayFromFile } from '../underlay';
 import { useSession } from '../session-context';
 import { useRuntime, seedCatalog } from '../runtime';
 import { useDocRevision } from '../hooks';
@@ -27,6 +30,7 @@ export function TopBar() {
   useDocRevision(session);
   const activeTab = useStoreValue(ui.viewTab);
   const showMarks = useStoreValue(ui.showMarks);
+  const underlayFileRef = useRef<HTMLInputElement>(null);
 
   return (
     <header className="top-bar">
@@ -99,6 +103,25 @@ export function TopBar() {
         >
           <IconHash size={16} stroke={1.75} />
           Marks
+        </button>
+        <input
+          ref={underlayFileRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) loadUnderlayFromFile(file, ui);
+            e.target.value = '';
+          }}
+        />
+        <button
+          type="button"
+          title="Load a plan image to trace over"
+          onClick={() => underlayFileRef.current?.click()}
+        >
+          <IconPhoto size={16} stroke={1.75} />
+          Underlay
         </button>
       </div>
       <div className="top-bar-group tabs">

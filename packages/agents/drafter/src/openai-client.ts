@@ -24,9 +24,13 @@ interface OpenAiToolCall {
   function: { name: string; arguments: string };
 }
 
+type OpenAiContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 interface OpenAiMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
+  content: string | OpenAiContentPart[] | null;
   tool_calls?: OpenAiToolCall[];
   tool_call_id?: string;
 }
@@ -111,12 +115,21 @@ function toOpenAiTool(tool: ToolDefinition): unknown {
 function translateMessage(message: LlmMessage): OpenAiMessage[] {
   const out: OpenAiMessage[] = [];
   const texts: string[] = [];
+  const images: OpenAiContentPart[] = [];
   const toolCalls: OpenAiToolCall[] = [];
   const toolResults: OpenAiMessage[] = [];
 
   for (const block of message.content) {
     if (block.type === 'text') {
       texts.push(block.text);
+    } else if (block.type === 'image') {
+      // Anthropic base64 source → OpenAI data-URL image part
+      images.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:${block.source.media_type};base64,${block.source.data}`,
+        },
+      });
     } else if (block.type === 'tool_use') {
       toolCalls.push({
         id: block.id,
@@ -139,6 +152,15 @@ function translateMessage(message: LlmMessage): OpenAiMessage[] {
       content: texts.length > 0 ? texts.join('\n') : null,
       ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
     });
+  } else if (images.length > 0) {
+    // multimodal user turn: image parts first, then the text
+    out.push({
+      role: 'user',
+      content: [
+        ...images,
+        ...texts.map((text): OpenAiContentPart => ({ type: 'text', text })),
+      ],
+    });
   } else if (texts.length > 0) {
     out.push({ role: 'user', content: texts.join('\n') });
   }
@@ -151,7 +173,9 @@ function fromOpenAiMessage(
 ): (TextBlock | ToolUseBlock)[] {
   if (!message) return [];
   const content: (TextBlock | ToolUseBlock)[] = [];
-  if (message.content) content.push({ type: 'text', text: message.content });
+  // API replies are always plain strings; the array form is request-only
+  if (typeof message.content === 'string' && message.content)
+    content.push({ type: 'text', text: message.content });
   for (const call of message.tool_calls ?? []) {
     let input: JsonObject = {};
     try {

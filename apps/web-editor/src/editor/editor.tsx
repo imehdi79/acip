@@ -15,6 +15,7 @@ import { StatusBar } from './components/status-bar';
 import { Panels } from './components/panels';
 import { AgentChat } from './components/agent-chat';
 import { EstimateSheet } from './components/estimate-sheet';
+import { UnderlayControls } from './components/underlay-controls';
 import { loadServerRates } from './rates';
 import { serverUrl } from './agent';
 import './editor.css';
@@ -84,6 +85,7 @@ function EditorShell() {
           <ToolPalette />
           <div className="viewport-area">
             <ViewportArea />
+            <UnderlayControls />
             <EstimateSheet />
             <AgentChat />
           </div>

@@ -16,7 +16,7 @@ import {
   wallAssemblyStrips,
 } from '@acip/editor-core';
 import type { Viewport2D } from './viewport2d';
-import type { OverlayState } from '../ui-state';
+import type { OverlayState, UnderlayState } from '../ui-state';
 
 const COLORS = {
   background: '#1b1e23',
@@ -267,6 +267,7 @@ export function drawScene(
   view: ViewDefinition,
   selection: ReadonlySet<string>,
   showMarks = false,
+  underlay: UnderlayState | null = null,
 ): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -290,6 +291,17 @@ export function drawScene(
   );
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+
+  // plan underlay: the raster reference under everything drawn. scale(s, -s)
+  // undoes the world Y-flip so the image reads upright, top-left at anchor.
+  if (underlay) {
+    ctx.save();
+    ctx.globalAlpha = underlay.opacity;
+    ctx.translate(underlay.anchor.x, underlay.anchor.y);
+    ctx.scale(underlay.scale, -underlay.scale);
+    ctx.drawImage(underlay.image, 0, 0);
+    ctx.restore();
+  }
 
   // detected rooms (derived on read): soft net-boundary fill under the walls
   const spaces: SpaceInfo[] =

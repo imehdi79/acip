@@ -5,6 +5,7 @@ import {
 } from '@acip/editor-core';
 import type { EditorSession, JsonObject } from '@acip/editor-core';
 import type {
+  ImageBlock,
   LlmClient,
   LlmMessage,
   TextBlock,
@@ -46,6 +47,8 @@ export interface DrafterRunOptions {
    * to the current prompt is the ground truth, not old tool traffic.
    */
   history?: readonly ChatTurn[];
+  /** attached to the current prompt (plan crops for tracing), images first */
+  images?: readonly ImageBlock[];
 }
 
 const SYSTEM_PROMPT = `You are a drafting agent for a cost-aware building modeler (CAD).
@@ -141,6 +144,7 @@ export class DrafterAgent {
       {
         role: 'user',
         content: [
+          ...(options.images ?? []),
           {
             type: 'text',
             text: `${prompt}\n\nCurrent document digest:\n${JSON.stringify(digest)}`,

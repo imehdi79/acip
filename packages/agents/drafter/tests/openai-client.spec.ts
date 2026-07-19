@@ -61,6 +61,47 @@ describe('OpenAiClient', () => {
     expect(turn.content[0]).toEqual({ type: 'text', text: 'ok' });
   });
 
+  test('translates image blocks into multimodal user content (data URLs)', async () => {
+    const calls: CapturedCall[] = [];
+    const client = new OpenAiClient({
+      apiKey: 'sk',
+      fetchFn: fakeFetch(calls),
+    });
+    await client.complete({
+      system: 'sys',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/png',
+                data: 'AAAA',
+              },
+            },
+            { type: 'text', text: 'trace this plan' },
+          ],
+        },
+      ],
+      tools: [],
+    });
+
+    const messages = calls[0].body['messages'] as {
+      role: string;
+      content: unknown;
+    }[];
+    expect(messages[1].role).toBe('user');
+    expect(messages[1].content).toEqual([
+      {
+        type: 'image_url',
+        image_url: { url: 'data:image/png;base64,AAAA' },
+      },
+      { type: 'text', text: 'trace this plan' },
+    ]);
+  });
+
   test('translates tools and a tool_use/tool_result exchange to OpenAI messages', async () => {
     const calls: CapturedCall[] = [];
     const client = new OpenAiClient({

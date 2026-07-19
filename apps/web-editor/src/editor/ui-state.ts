@@ -39,6 +39,20 @@ export interface OverlayState {
   readonly box: SelectionBox | null;
 }
 
+/**
+ * A raster plan image drawn under the drawing — the reference to trace over,
+ * by hand or by the agent. Presentation state only (not part of the document,
+ * not persisted): the drawn model stays the single source of truth.
+ */
+export interface UnderlayState {
+  readonly image: HTMLImageElement;
+  /** world position (meters) of the image's top-left corner */
+  readonly anchor: Point;
+  /** meters per image pixel — set by two-point calibration */
+  readonly scale: number;
+  readonly opacity: number;
+}
+
 const EMPTY_OVERLAY: OverlayState = {
   snap: null,
   rubber: null,
@@ -66,6 +80,8 @@ export class EditorUi {
   readonly agentMode = new ValueStore<AgentMode>('drafter');
   /** entity mark labels ("W3") in the plan — auto-enabled when chat opens */
   readonly showMarks = new ValueStore<boolean>(false);
+  /** plan image traced under the drawing; null = none loaded */
+  readonly underlay = new ValueStore<UnderlayState | null>(null);
 
   appendLog(text: string, kind: LogEntry['kind'] = 'info'): void {
     this.log.set([...this.log.get().slice(-99), { text, kind }]);
