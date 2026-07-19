@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { EditorSession } from '@acip/editor-core';
 import type { JsonObject } from '@acip/editor-core';
-import { DrafterAgent } from '../src/index.js';
+import { DrafterAgent, ESTIMATOR_SYSTEM_PROMPT } from '../src/index.js';
 import type {
   LlmClient,
   LlmRequest,
@@ -131,6 +131,35 @@ describe('DrafterAgent — NL to commands through the bus', () => {
     expect(errorResult.type).toBe('tool_result');
     expect(errorResult.is_error).toBe(true);
     expect(errorResult.tool_use_id).toBe('bad');
+  });
+
+  test('history and system overrides reach the model (estimator mode)', async () => {
+    const session = new EditorSession();
+    const llm = new FakeLlm([
+      {
+        content: [{ type: 'text', text: 'Apply to walls 2 and 3? Confirm.' }],
+        stopReason: 'end_turn',
+      },
+    ]);
+
+    const agent = new DrafterAgent(session, llm);
+    await agent.run('yes, apply it', {
+      system: ESTIMATOR_SYSTEM_PROMPT,
+      history: [
+        { role: 'user', text: 'propose assemblies' },
+        { role: 'assistant', text: 'Exterior walls: block + plaster.' },
+      ],
+    });
+
+    const request = llm.requests[0];
+    expect(request.system).toBe(ESTIMATOR_SYSTEM_PROMPT);
+    // history precedes the current prompt, prompt still carries the digest
+    expect(request.messages).toHaveLength(3);
+    expect(request.messages[0].role).toBe('user');
+    expect(request.messages[1].role).toBe('assistant');
+    const current = request.messages[2].content[0] as { text: string };
+    expect(current.text).toContain('yes, apply it');
+    expect(current.text).toContain('Current document digest');
   });
 
   test('stops at maxTurns when the model never finishes', async () => {

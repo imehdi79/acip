@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   IconMicrophone,
+  IconReportMoney,
   IconSend2,
   IconSettings,
   IconSparkles,
@@ -116,6 +117,7 @@ export function AgentChat() {
   const open = useStoreValue(ui.agentChatOpen);
   const busy = useStoreValue(ui.agentBusy);
   const messages = useStoreValue(ui.agentChat);
+  const mode = useStoreValue(ui.agentMode);
   const [input, setInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [provider, setProviderState] = useState<AgentProvider>(getProvider);
@@ -155,6 +157,17 @@ export function AgentChat() {
     ui.appendChat(`${info.label} · ${model} selected.`, 'progress');
   };
 
+  const switchMode = () => {
+    const next = mode === 'estimator' ? 'drafter' : 'estimator';
+    ui.agentMode.set(next);
+    ui.appendChat(
+      next === 'estimator'
+        ? 'Estimation mode — the agent proposes build-ups and applies nothing until you confirm.'
+        : 'Drafting mode — describe what to draw.',
+      'progress',
+    );
+  };
+
   if (!open) {
     return (
       <button
@@ -179,15 +192,38 @@ export function AgentChat() {
   return (
     <div className="chat-panel">
       <header className="chat-header">
-        <IconSparkles
-          size={16}
-          stroke={1.75}
-          className={busy ? 'agent-icon busy' : 'agent-icon'}
-        />
+        {mode === 'estimator' ? (
+          <IconReportMoney
+            size={16}
+            stroke={1.75}
+            className={busy ? 'estimate-icon busy' : 'estimate-icon'}
+          />
+        ) : (
+          <IconSparkles
+            size={16}
+            stroke={1.75}
+            className={busy ? 'agent-icon busy' : 'agent-icon'}
+          />
+        )}
         <span className="chat-title">
-          Drafter · {info.label} ·{' '}
+          {mode === 'estimator' ? 'Estimator' : 'Drafter'} · {info.label} ·{' '}
           {info.models.find((m) => m.id === model)?.label ?? model}
         </span>
+        <button
+          type="button"
+          title={
+            mode === 'estimator'
+              ? 'Switch to drafting mode'
+              : 'Switch to estimation mode'
+          }
+          onClick={switchMode}
+        >
+          {mode === 'estimator' ? (
+            <IconSparkles size={15} stroke={1.75} />
+          ) : (
+            <IconReportMoney size={15} stroke={1.75} />
+          )}
+        </button>
         <button
           type="button"
           title="Provider & model"
@@ -234,7 +270,9 @@ export function AgentChat() {
       <div className="chat-messages" ref={listRef}>
         {messages.length === 0 && (
           <p className="chat-empty">
-            Ask for a drawing — “a 6 by 4 m room with a door and two windows”.
+            {mode === 'estimator'
+              ? 'Say “propose assemblies” for a full plan, or assign build-ups wall by wall — nothing applies until you confirm.'
+              : 'Ask for a drawing — “a 6 by 4 m room with a door and two windows”.'}
             {voice.supported
               ? ' Or tap the mic and say it in any language.'
               : ''}
@@ -246,7 +284,9 @@ export function AgentChat() {
           </div>
         ))}
         {busy && (
-          <div className="chat-msg chat-progress chat-typing">drawing…</div>
+          <div className="chat-msg chat-progress chat-typing">
+            {mode === 'estimator' ? 'estimating…' : 'drawing…'}
+          </div>
         )}
       </div>
       <div className="chat-input-row">

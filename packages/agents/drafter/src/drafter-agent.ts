@@ -28,10 +28,24 @@ export interface DrafterRunResult {
   readonly stopped: 'completed' | 'max-turns';
 }
 
+/** one prior conversation exchange, replayed as plain text for context */
+export interface ChatTurn {
+  readonly role: 'user' | 'assistant';
+  readonly text: string;
+}
+
 export interface DrafterRunOptions {
   maxTurns?: number;
   /** fires after every dispatch (success or failure) — live progress for UIs */
   onDispatch?: (entry: DispatchLogEntry) => void;
+  /** replaces the drafting system prompt (e.g. ESTIMATOR_SYSTEM_PROMPT) */
+  system?: string;
+  /**
+   * Prior exchanges for multi-message conversations (the estimator's
+   * propose → confirm flow). Text only — the fresh document digest attached
+   * to the current prompt is the ground truth, not old tool traffic.
+   */
+  history?: readonly ChatTurn[];
 }
 
 const SYSTEM_PROMPT = `You are a drafting agent for a cost-aware building modeler (CAD).
@@ -61,6 +75,45 @@ Rules of the model:
   tool calls.`;
 
 /**
+ * Estimation mode: same loop, same tools, opposite confirmation policy —
+ * the drafter draws speculatively, the estimator NEVER mutates before the
+ * user confirms a step. Guides assembly build-up assignment group by group.
+ */
+export const ESTIMATOR_SYSTEM_PROMPT = `You are an estimation agent for a cost-aware building modeler (CAD).
+You help the user assign assembly build-ups to elements and produce a priced
+bill of quantities. You act ONLY by calling tools; each tool is a validated
+document command.
+
+Rules of the model:
+- Entities carry a per-type "mark" number — "wall 3" is the entity with type
+  "wall" and mark 3 in the digest. Resolve marks to ids for tool calls; always
+  speak in marks, never raw ids. Detected spaces list wallMarks per room.
+- Types are assembly build-ups (ordered layers: material + thickness)
+  targeting walls, slabs, or roofs. A material's unit (m3, m2, m, or count
+  with coverage) drives how its layer is measured; its costCode keys the rate
+  table. Assign a type with ENTITY_SETTYPE.
+- The app shows a live bill of quantities that reprices on every change —
+  keep numeric summaries brief.
+
+Rules of the conversation:
+- THE USER DECIDES. Never call a mutating tool before the user explicitly
+  confirms that step. Propose in plain text first: the build-up (layers,
+  thicknesses, units) and exactly which marks it applies to.
+- Work in groups, never element by element: use spaces/wallMarks to separate
+  exterior walls from interior partitions; slabs and roofs are their own
+  groups. Offer choices like "apply to walls 2, 5, 7" or "all exterior walls".
+- Two working styles — follow the user's lead:
+  smart: propose a complete plan (one build-up per group) in one message,
+  then apply group by group as the user approves;
+  manual: ask group by group what the user wants, listing existing catalog
+  types first so nothing gets duplicated.
+- Apply ONE confirmed step per reply (create or reuse materials and types,
+  then ENTITY_SETTYPE the group) so every step stays individually undoable.
+- Reuse existing materials and types from the digest whenever they fit.
+- If a needed price is missing, call REQUEST_LOG once per gap with a short
+  description so the office can price it, tell the user, and continue.`;
+
+/**
  * The first agent: natural language -> commands. Observes nothing it isn't
  * given, reads through the document digest, acts only via the command bus,
  * and the whole run is one history group — a single Ctrl+Z for the user.
@@ -79,6 +132,12 @@ export class DrafterAgent {
     const tools = toolDefinitions(this.session.commands);
     const digest = describeDocument(this.session.doc);
     const messages: LlmMessage[] = [
+      ...(options.history ?? []).map(
+        (turn): LlmMessage => ({
+          role: turn.role,
+          content: [{ type: 'text', text: turn.text }],
+        }),
+      ),
       {
         role: 'user',
         content: [
@@ -95,7 +154,7 @@ export class DrafterAgent {
     return this.session.history.runGrouped(async () => {
       for (let turn = 1; turn <= maxTurns; turn++) {
         const reply = await this.llm.complete({
-          system: SYSTEM_PROMPT,
+          system: options.system ?? SYSTEM_PROMPT,
           messages,
           tools,
         });

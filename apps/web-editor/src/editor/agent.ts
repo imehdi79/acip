@@ -1,9 +1,10 @@
 import {
   AnthropicClient,
   DrafterAgent,
+  ESTIMATOR_SYSTEM_PROMPT,
   OpenAiClient,
 } from '@acip/agent-drafter';
-import type { LlmClient } from '@acip/agent-drafter';
+import type { ChatTurn, LlmClient } from '@acip/agent-drafter';
 import type { EditorSession } from '@acip/editor-core';
 import type { EditorUi } from './ui-state';
 
@@ -145,6 +146,22 @@ function makeClient(provider: AgentProvider): LlmClient {
  * and the chat panel (the conversation). Returns the model's summary so the
  * chat can speak it for voice-initiated runs.
  */
+/**
+ * Prior user/agent exchanges as plain text — the estimator's propose → confirm
+ * flow needs the model to remember its own proposal. Progress and error rows
+ * are UI chrome, not conversation.
+ */
+function chatHistory(ui: EditorUi): ChatTurn[] {
+  return ui.agentChat
+    .get()
+    .filter((m) => m.role === 'user' || m.role === 'agent')
+    .slice(-20)
+    .map((m) => ({
+      role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+      text: m.text,
+    }));
+}
+
 export async function runDrafter(
   session: EditorSession,
   ui: EditorUi,
@@ -153,12 +170,16 @@ export async function runDrafter(
   if (ui.agentBusy.get()) return null;
   const provider = getProvider();
   const info = providerInfo(provider);
+  const mode = ui.agentMode.get();
+  const history = chatHistory(ui);
   ui.appendChat(prompt, 'user');
   ui.agentBusy.set(true);
-  ui.appendLog(`ai(${info.label})> ${prompt}`, 'echo');
+  ui.appendLog(`ai(${info.label}/${mode})> ${prompt}`, 'echo');
   try {
     const agent = new DrafterAgent(session, makeClient(provider));
     const result = await agent.run(prompt, {
+      history,
+      ...(mode === 'estimator' ? { system: ESTIMATOR_SYSTEM_PROMPT } : {}),
       onDispatch: (entry) => {
         if (entry.ok) {
           ui.appendLog(`  ${entry.command} ok`);

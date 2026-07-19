@@ -16,6 +16,9 @@ export interface LogEntry {
 
 export type ChatRole = 'user' | 'agent' | 'progress' | 'error';
 
+/** drafter draws on request; estimator proposes and applies only on confirm */
+export type AgentMode = 'drafter' | 'estimator';
+
 export interface ChatMessage {
   readonly role: ChatRole;
   readonly text: string;
@@ -60,6 +63,7 @@ export class EditorUi {
   /** drafter chat panel: bubble collapsed vs conversation open */
   readonly agentChatOpen = new ValueStore<boolean>(false);
   readonly agentChat = new ValueStore<readonly ChatMessage[]>([]);
+  readonly agentMode = new ValueStore<AgentMode>('drafter');
   /** entity mark labels ("W3") in the plan — auto-enabled when chat opens */
   readonly showMarks = new ValueStore<boolean>(false);
 
