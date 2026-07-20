@@ -11,6 +11,13 @@ export type ViewTab = 'plan' | '3d';
 
 export type StarterMode = 'replace' | 'add';
 
+export interface FitBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 export interface LogEntry {
   readonly text: string;
   readonly kind: 'info' | 'error' | 'echo';
@@ -88,11 +95,18 @@ export class EditorUi {
   readonly starterMode = new ValueStore<StarterMode>('replace');
   /** plan image traced under the drawing; null = none loaded */
   readonly underlay = new ValueStore<UnderlayState | null>(null);
-  /** bumped to ask the 2D viewport to zoom-to-fit the drawing */
+  /** bumped to ask the 2D viewport to zoom-to-fit */
   readonly fitTick = new ValueStore<number>(0);
+  /** optional target for the next fit; null = fit the whole drawing */
+  readonly fitTarget = new ValueStore<FitBounds | null>(null);
 
-  /** request a zoom-to-fit (the viewport owns the camera + container size) */
-  requestFit(): void {
+  /**
+   * Request a zoom-to-fit. With no argument the viewport frames the whole
+   * drawing; with a bounds it frames just that (a room, from the rooms list).
+   * The viewport owns the camera + container size, so this is a signal.
+   */
+  requestFit(target?: FitBounds): void {
+    this.fitTarget.set(target ?? null);
     this.fitTick.set(this.fitTick.get() + 1);
   }
 

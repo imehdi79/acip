@@ -88,17 +88,23 @@ export function Viewport2DView() {
       ui.showMarks.subscribe(redrawBase),
       ui.underlay.subscribe(redrawBase),
       ui.fitTick.subscribe(() => {
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        const target = ui.fitTarget.get();
+        if (target) {
+          viewport.fit(
+            target.minX,
+            target.minY,
+            target.maxX,
+            target.maxY,
+            w,
+            h,
+          );
+          return;
+        }
         const entities = session.doc.all();
         if (entities.length === 0) {
-          // empty plan → frame a comfortable ~12 m around the origin
-          viewport.fit(
-            -6,
-            -6,
-            6,
-            6,
-            container.clientWidth,
-            container.clientHeight,
-          );
+          viewport.fit(-6, -6, 6, 6, w, h); // empty plan → ~12 m around origin
           return;
         }
         let minX = Infinity;
@@ -112,14 +118,7 @@ export function Viewport2DView() {
           if (b.maxX > maxX) maxX = b.maxX;
           if (b.maxY > maxY) maxY = b.maxY;
         }
-        viewport.fit(
-          minX,
-          minY,
-          maxX,
-          maxY,
-          container.clientWidth,
-          container.clientHeight,
-        );
+        viewport.fit(minX, minY, maxX, maxY, w, h);
       }),
     ];
     tools.worldTolerance = pickPixels / viewport.scale;

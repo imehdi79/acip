@@ -472,15 +472,36 @@ body,
 /* ── per-room estimate breakdown ── */
 .rooms-breakdown .room-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: baseline;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.6fr) auto;
+  align-items: center;
   gap: 8px;
-  padding: 3px 0;
+  padding: 4px 0;
   border-bottom: 1px solid #23272e;
+  cursor: pointer;
 }
 
-.room-row-name {
+.rooms-breakdown .room-row:hover {
+  background: #1b1f27;
+}
+
+input.room-row-name {
+  min-width: 0;
+  background: transparent;
   color: #cfd3da;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 3px 5px;
+  font-size: 12px;
+}
+
+input.room-row-name:hover {
+  border-color: #2c313a;
+}
+
+input.room-row-name:focus {
+  background: #1b1e23;
+  border-color: #4da3ff;
+  outline: none;
 }
 
 .room-row-meta {
@@ -491,6 +512,7 @@ body,
 .room-row-cost {
   color: #8fd08f;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 /* ── room numeric editor (shared: desktop panel + mobile sheet) ── */

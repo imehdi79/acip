@@ -23,6 +23,7 @@ import { assembleBoq, defaultRules } from '@acip/estimator';
 import { ratesStore } from '../rates';
 import { materialDisplayColor } from '../material-color';
 import { formatLength, lengthUnit } from '../units';
+import { roomNameKey, roomNames, setRoomName } from '../room-names';
 import { RoomDimensions, useRectRoom } from './room-dimensions';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
@@ -205,11 +206,26 @@ function loopPerimeter(points: readonly Point[]): number {
   return sum;
 }
 
+function boundsOf(points: readonly Point[]) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
 /**
- * Shape-by-shape estimate: one line per detected room with its area,
- * perimeter (the numbers the user typed, cashed out), and a floor cost from
- * the live rate table. Floor is genuinely per-room; shared wall assemblies
- * stay in the document Cost total, not split here.
+ * Shape-by-shape estimate AND rooms list: one row per detected room with an
+ * editable name, its area/perimeter (the numbers typed, cashed out), and a
+ * floor cost from the live rate table. Tap a row to select the room and zoom
+ * to it. Floor is genuinely per-room; shared wall assemblies stay in the
+ * document Cost total, not split here.
  */
 function RoomsBreakdown() {
   const session = useSession();
@@ -218,6 +234,7 @@ function RoomsBreakdown() {
   const unit = useStoreValue(lengthUnit);
   const activeLevelId = useStoreValue(ui.activeLevelId);
   const rates = useStoreValue(ratesStore);
+  const names = useStoreValue(roomNames);
 
   const spaces = detectSpaces(session.doc, activeLevelId);
   if (spaces.length === 0) return null;
@@ -229,32 +246,47 @@ function RoomsBreakdown() {
   let totalArea = 0;
   let totalFloor = 0;
 
-  const rows = spaces.map((space, i) => {
-    const area = space.netArea;
-    const perimeter = loopPerimeter(space.boundary);
-    const floor = floorRate !== null ? area * floorRate : null;
-    totalArea += area;
-    if (floor !== null) totalFloor += floor;
-    return { key: space.key, label: `Room ${i + 1}`, area, perimeter, floor };
-  });
+  const focus = (space: (typeof spaces)[number]) => {
+    session.selection.clear();
+    for (const wid of space.boundaryWallIds) session.selection.add(wid);
+    ui.requestFit(boundsOf(space.grossBoundary));
+  };
 
   return (
     <>
-      <h3>Rooms ({rows.length})</h3>
+      <h3>Rooms ({spaces.length})</h3>
       <ul className="plain-list rooms-breakdown">
-        {rows.map((row) => (
-          <li key={row.key} className="room-row">
-            <span className="room-row-name">{row.label}</span>
-            <span className="room-row-meta">
-              {row.area.toFixed(2)} m² · {formatLength(row.perimeter, unit)}
-            </span>
-            {row.floor !== null && (
-              <span className="room-row-cost">
-                {row.floor.toFixed(0)} {rates.currency}
+        {spaces.map((space, i) => {
+          const area = space.netArea;
+          const floor = floorRate !== null ? area * floorRate : null;
+          totalArea += area;
+          if (floor !== null) totalFloor += floor;
+          const nameKey = roomNameKey(space.boundaryWallIds);
+          return (
+            <li
+              key={space.key}
+              className="room-row"
+              onClick={() => focus(space)}
+            >
+              <input
+                className="room-row-name"
+                value={names[nameKey] ?? ''}
+                placeholder={`Room ${i + 1}`}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setRoomName(nameKey, e.target.value)}
+              />
+              <span className="room-row-meta">
+                {area.toFixed(2)} m² ·{' '}
+                {formatLength(loopPerimeter(space.boundary), unit)}
               </span>
-            )}
-          </li>
-        ))}
+              {floor !== null && (
+                <span className="room-row-cost">
+                  {floor.toFixed(0)} {rates.currency}
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
       <dl>
         <dt>Total floor area</dt>
