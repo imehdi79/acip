@@ -241,9 +241,50 @@ export const MoveOpeningCommand: Command<MoveOpeningParams, void> = {
   },
 };
 
+export interface ResizeOpeningParams {
+  id: EntityId;
+  width: number;
+}
+
+/** the numbers-first companion to OPENING.MOVE: set an opening's width */
+export const ResizeOpeningCommand: Command<ResizeOpeningParams, void> = {
+  name: 'OPENING.RESIZE',
+  description:
+    'Set the width in meters of a hosted window or door (its position along the wall is unchanged).',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return {
+        id: asId(raw['id'], 'id'),
+        width: asPositive(raw['width'], 'width'),
+      };
+    },
+    () =>
+      S.object(
+        {
+          id: S.id('window or door entity id'),
+          width: S.number('opening width in meters, greater than 0'),
+        },
+        ['id', 'width'],
+      ),
+  ),
+  execute(ctx, params) {
+    const entity = ctx.doc.get(params.id);
+    if (!(entity instanceof HostedOpeningEntity)) {
+      throw new ValidationError(
+        `entity ${params.id} is not a hosted opening (window or door)`,
+      );
+    }
+    ctx.tx.update(entity, (opening) => {
+      (opening as HostedOpeningEntity).width = params.width;
+    });
+  },
+};
+
 export function registerArchitectureCommands(registry: CommandRegistry): void {
   registry.register(AddWallCommand);
   registry.register(AddWindowCommand);
   registry.register(AddDoorCommand);
   registry.register(MoveOpeningCommand);
+  registry.register(ResizeOpeningCommand);
 }

@@ -24,7 +24,12 @@ import { ratesStore } from '../rates';
 import { materialDisplayColor } from '../material-color';
 import { formatLength, lengthUnit } from '../units';
 import { roomNameKey, roomNames, setRoomName } from '../room-names';
-import { RoomDimensions, useRectRoom } from './room-dimensions';
+import {
+  OpeningDimensions,
+  RoomDimensions,
+  useRectRoom,
+  useSelectedOpening,
+} from './room-dimensions';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useDocRevision, useSelectionIds } from '../hooks';
@@ -37,6 +42,7 @@ export function Panels() {
   const unit = useStoreValue(lengthUnit);
   const selection = useSelectionIds(session);
   const room = useRectRoom();
+  const opening = useSelectedOpening();
 
   const single = selection.length === 1 ? session.doc.get(selection[0]) : null;
   const singleLength = single ? session.measure.lengthOf(single.id) : null;
@@ -78,6 +84,12 @@ export function Panels() {
           <>
             <p className="room-label">Rectangular room</p>
             <RoomDimensions room={room} />
+          </>
+        )}
+        {opening && (
+          <>
+            <p className="room-label">{opening.kind}</p>
+            <OpeningDimensions opening={opening} />
           </>
         )}
         {selection.length > 1 && !room && (

@@ -94,6 +94,23 @@ describe('grips', () => {
     expect((session.doc.get(winId) as WindowEntity).t).toBeCloseTo(0.5);
   });
 
+  test('OPENING.RESIZE sets the width; undoable; rejects non-openings', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const winId = session.dispatch<EntityId>('WINDOW.ADD', { wallId, t: 0.5 });
+
+    session.dispatch('OPENING.RESIZE', { id: winId, width: 2 });
+    expect((session.doc.get(winId) as WindowEntity).width).toBeCloseTo(2);
+
+    session.undo();
+    const prev = (session.doc.get(winId) as WindowEntity).width;
+    expect(prev).not.toBeCloseTo(2);
+
+    expect(() =>
+      session.dispatch('OPENING.RESIZE', { id: wallId, width: 1 }),
+    ).toThrow(ValidationError);
+  });
+
   test('OPENING.MOVE rejects non-openings and out-of-range t', () => {
     const session = new EditorSession();
     const wallId = addWall(session, 0, 0, 10, 0);
