@@ -1,5 +1,7 @@
 import type { EditorSession } from '@acip/editor-core';
+import { WallEntity } from '@acip/editor-core';
 import { seedCatalog } from './runtime';
+import { detectRectRoom } from './rooms';
 
 export interface PresetPoint {
   x: number;
@@ -149,28 +151,68 @@ function documentBounds(session: EditorSession): Bounds | null {
   return { minX, minY, maxX, maxY };
 }
 
+const SNAP_TOL = 1e-3;
+const samePt = (p: PresetPoint, q: PresetPoint): boolean =>
+  Math.abs(p.x - q.x) <= SNAP_TOL && Math.abs(p.y - q.y) <= SNAP_TOL;
+
+function wallBaselines(
+  session: EditorSession,
+): { a: PresetPoint; b: PresetPoint }[] {
+  const out: { a: PresetPoint; b: PresetPoint }[] = [];
+  for (const entity of session.doc.all()) {
+    if (entity instanceof WallEntity) out.push(entity.getBaseline());
+  }
+  return out;
+}
+
+function coincides(
+  baselines: { a: PresetPoint; b: PresetPoint }[],
+  a: PresetPoint,
+  b: PresetPoint,
+): boolean {
+  return baselines.some(
+    (bl) =>
+      (samePt(bl.a, a) && samePt(bl.b, b)) ||
+      (samePt(bl.a, b) && samePt(bl.b, a)),
+  );
+}
+
 /**
- * Drop a preset into the CURRENT document without resetting it, placed just
- * to the right of whatever is already drawn (vertically centered on it) so it
- * never lands on top of existing walls. One undo step, typed like the rest.
+ * Drop a preset into the CURRENT document without resetting it. If a
+ * rectangular room is selected, the new room SNAPS flush against its right
+ * edge, bottom-aligned, and any new wall that coincides with an existing one
+ * is skipped — so adjacent rooms share a wall instead of doubling it.
+ * Otherwise it lands to the right of everything drawn, vertically centered.
+ * One undo step, typed like the rest.
  */
 export function addPreset(session: EditorSession, preset: RoomPreset): void {
-  const existing = documentBounds(session);
+  const selected = detectRectRoom(session, session.selection.list());
   const pb = presetBounds(preset.walls);
   let dx = 0;
   let dy = 0;
-  if (existing) {
-    const gap = 2; // meters between the existing plan and the new room
-    dx = existing.maxX + gap - pb.minX;
-    dy = (existing.minY + existing.maxY) / 2 - (pb.minY + pb.maxY) / 2;
+  if (selected) {
+    dx = selected.maxX - pb.minX; // left edge on the room's right edge
+    dy = selected.minY - pb.minY; // bottom-aligned
+  } else {
+    const existing = documentBounds(session);
+    if (existing) {
+      const gap = 2; // meters between the existing plan and the new room
+      dx = existing.maxX + gap - pb.minX;
+      dy = (existing.minY + existing.maxY) / 2 - (pb.minY + pb.maxY) / 2;
+    }
   }
   const wallType = session.doc.types.list('wall')[0]?.id;
+  const existingWalls = selected ? wallBaselines(session) : [];
   session.history.beginGroup();
   try {
     for (const w of preset.walls) {
+      const a = { x: w.a.x + dx, y: w.a.y + dy };
+      const b = { x: w.b.x + dx, y: w.b.y + dy };
+      // reuse a shared wall rather than drawing a duplicate on top of it
+      if (selected && coincides(existingWalls, a, b)) continue;
       session.dispatch('WALL.ADD', {
-        a: { x: w.a.x + dx, y: w.a.y + dy },
-        b: { x: w.b.x + dx, y: w.b.y + dy },
+        a,
+        b,
         thickness: 0.3,
         height: 3,
         ...(wallType ? { typeId: wallType } : {}),
