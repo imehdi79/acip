@@ -87,6 +87,40 @@ export function Viewport2DView() {
       ui.activeLevelId.subscribe(redrawBase),
       ui.showMarks.subscribe(redrawBase),
       ui.underlay.subscribe(redrawBase),
+      ui.fitTick.subscribe(() => {
+        const entities = session.doc.all();
+        if (entities.length === 0) {
+          // empty plan → frame a comfortable ~12 m around the origin
+          viewport.fit(
+            -6,
+            -6,
+            6,
+            6,
+            container.clientWidth,
+            container.clientHeight,
+          );
+          return;
+        }
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        for (const entity of entities) {
+          const b = entity.getBounds();
+          if (b.minX < minX) minX = b.minX;
+          if (b.minY < minY) minY = b.minY;
+          if (b.maxX > maxX) maxX = b.maxX;
+          if (b.maxY > maxY) maxY = b.maxY;
+        }
+        viewport.fit(
+          minX,
+          minY,
+          maxX,
+          maxY,
+          container.clientWidth,
+          container.clientHeight,
+        );
+      }),
     ];
     tools.worldTolerance = pickPixels / viewport.scale;
 

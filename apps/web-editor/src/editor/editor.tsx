@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
+import { IconMaximize } from '@tabler/icons-react';
 import { SessionProvider, useSession } from './session-context';
 import { RuntimeContext, createRuntime, useRuntime } from './runtime';
 import { useStoreValue } from './store';
@@ -94,6 +95,7 @@ function EditorShell() {
           <ToolPalette />
           <div className="viewport-area">
             <ViewportArea />
+            <FitControl />
             <UnderlayControls />
             <EstimateSheet />
             <AgentChat />
@@ -116,5 +118,22 @@ function ViewportArea() {
     <Suspense fallback={<div className="viewport" />}>
       <Viewer3D />
     </Suspense>
+  );
+}
+
+/** floating zoom-to-fit, plan tab only — keeps the drawing findable */
+function FitControl() {
+  const { ui } = useRuntime();
+  const tab = useStoreValue(ui.viewTab);
+  if (tab !== 'plan') return null;
+  return (
+    <button
+      type="button"
+      className="viewport-fit"
+      title="Zoom to fit (frame the whole plan)"
+      onClick={() => ui.requestFit()}
+    >
+      <IconMaximize size={18} stroke={1.75} />
+    </button>
   );
 }

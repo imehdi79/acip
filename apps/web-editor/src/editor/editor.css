@@ -469,6 +469,30 @@ body,
   animation: agent-pulse 1.2s ease-in-out infinite;
 }
 
+/* ── floating zoom-to-fit (bottom-left, clear of the bubbles) ── */
+.viewport-fit {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid #2c313a;
+  background: #14161a;
+  color: #8fa3b8;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 4;
+}
+
+.viewport-fit:hover {
+  color: #cfe0f5;
+  border-color: #4da3ff;
+}
+
 /* ── underlay controls (floating card while a plan image is loaded) ── */
 .underlay-card {
   position: absolute;

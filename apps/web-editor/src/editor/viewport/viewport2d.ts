@@ -53,6 +53,35 @@ export class Viewport2D {
     this.notify();
   }
 
+  /**
+   * Frame a world bounding box in the viewport (zoom-to-fit). Used by the Fit
+   * control — mobile users lose the plan off-screen constantly. An empty or
+   * point box falls back to a comfortable default scale, centered on it.
+   */
+  fit(
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number,
+    width: number,
+    height: number,
+  ): void {
+    const w = maxX - minX;
+    const h = maxY - minY;
+    const margin = 0.85; // fraction of the viewport the content fills
+    const sx = w > 1e-6 ? (width * margin) / w : Infinity;
+    const sy = h > 1e-6 ? (height * margin) / h : Infinity;
+    let scale = Math.min(sx, sy);
+    if (!Number.isFinite(scale)) scale = 60; // nothing to frame — default zoom
+    this.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    this.offsetX = width / 2 - cx * this.scale;
+    this.offsetY = height / 2 + cy * this.scale;
+    this.centered = true;
+    this.notify();
+  }
+
   subscribe(fn: () => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);

@@ -88,6 +88,13 @@ export class EditorUi {
   readonly starterMode = new ValueStore<StarterMode>('replace');
   /** plan image traced under the drawing; null = none loaded */
   readonly underlay = new ValueStore<UnderlayState | null>(null);
+  /** bumped to ask the 2D viewport to zoom-to-fit the drawing */
+  readonly fitTick = new ValueStore<number>(0);
+
+  /** request a zoom-to-fit (the viewport owns the camera + container size) */
+  requestFit(): void {
+    this.fitTick.set(this.fitTick.get() + 1);
+  }
 
   appendLog(text: string, kind: LogEntry['kind'] = 'info'): void {
     this.log.set([...this.log.get().slice(-99), { text, kind }]);
