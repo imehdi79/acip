@@ -8,9 +8,11 @@ import type {
 import {
   bboxExpand,
   bboxFromPoints,
+  detectSpaces,
   distance,
   hasGrips,
   isEntityInteractive,
+  pointInLoop,
   sub,
   transformGeometry,
   translation,
@@ -178,6 +180,20 @@ export class SelectTool implements Tool {
     return hits[hits.length - 1] ?? null;
   }
 
+  /** boundary walls of the detected room containing the point, or null */
+  private roomWallsAt(point: Point): EntityId[] | null {
+    const ctx = this.ctx;
+    if (!ctx) return null;
+    for (const space of detectSpaces(ctx.doc, null)) {
+      if (
+        space.boundaryWallIds.length > 0 &&
+        pointInLoop(point, space.boundary)
+      )
+        return [...space.boundaryWallIds];
+    }
+    return null;
+  }
+
   private gripAt(
     point: Point,
     tolerance: number,
@@ -215,8 +231,11 @@ export class SelectTool implements Tool {
     if (!ctx) return;
     const tiny = distance(end, mode.start) <= this.getTolerance();
     if (tiny) {
-      // click on empty space
+      // click on empty space — inside a room? select that room's walls, so a
+      // single tap gives the numeric room editor something to edit
+      const roomWalls = this.roomWallsAt(mode.start);
       if (!mode.additive) ctx.selection.clear();
+      if (roomWalls) for (const id of roomWalls) ctx.selection.add(id);
       return;
     }
     const box = bboxFromPoints([mode.start, end]);

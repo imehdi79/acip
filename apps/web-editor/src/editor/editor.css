@@ -469,6 +469,59 @@ body,
   animation: agent-pulse 1.2s ease-in-out infinite;
 }
 
+/* ── room numeric editor (shared: desktop panel + mobile sheet) ── */
+.room-label {
+  margin: 0 0 6px;
+  color: #8fd0a8;
+  font-weight: 500;
+}
+
+.room-dims {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.room-dim {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.room-dim span {
+  font-size: 11px;
+  color: #7d8794;
+}
+
+.room-dim input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #1b1e23;
+  color: #e8ecf1;
+  border: 1px solid #2c313a;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 14px;
+  outline: none;
+}
+
+.room-dim input:focus {
+  border-color: #4da3ff;
+}
+
+.room-dim-unit {
+  padding-bottom: 7px;
+  color: #7d8794;
+  font-size: 12px;
+}
+
+/* mobile bottom sheet — hidden on desktop (Properties panel shows it there) */
+.room-sheet {
+  display: none;
+}
+
 /* ── floating zoom-to-fit (bottom-left, clear of the bubbles) ── */
 .viewport-fit {
   position: absolute;
@@ -1030,5 +1083,44 @@ body,
   .estimate-bubble,
   .estimate-panel {
     display: flex;
+  }
+
+  /* room editor as a bottom sheet, above the floating bubbles */
+  .room-sheet {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 72px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #14161a;
+    border: 1px solid #2c313a;
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    z-index: 5;
+  }
+
+  .room-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .room-sheet-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #8fd0a8;
+  }
+
+  .room-sheet-head button {
+    display: inline-flex;
+    padding: 3px;
+    background: none;
+    border: none;
+    color: #8b95a2;
+    cursor: pointer;
   }
 }

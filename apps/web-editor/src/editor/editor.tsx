@@ -18,6 +18,7 @@ import { AgentChat } from './components/agent-chat';
 import { EstimateSheet } from './components/estimate-sheet';
 import { UnderlayControls } from './components/underlay-controls';
 import { StarterModal } from './components/starter-modal';
+import { RoomSheet } from './components/room-dimensions';
 import { loadServerRates } from './rates';
 import { serverUrl } from './agent';
 import './editor.css';
@@ -97,6 +98,7 @@ function EditorShell() {
             <ViewportArea />
             <FitControl />
             <UnderlayControls />
+            <RoomSheet />
             <EstimateSheet />
             <AgentChat />
           </div>

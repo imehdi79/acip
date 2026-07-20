@@ -14,6 +14,7 @@ import { assembleBoq, defaultRules } from '@acip/estimator';
 import { ratesStore } from '../rates';
 import { materialDisplayColor } from '../material-color';
 import { formatLength, lengthUnit } from '../units';
+import { RoomDimensions, useRectRoom } from './room-dimensions';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useDocRevision, useSelectionIds } from '../hooks';
@@ -25,6 +26,7 @@ export function Panels() {
   useDocRevision(session);
   const unit = useStoreValue(lengthUnit);
   const selection = useSelectionIds(session);
+  const room = useRectRoom();
 
   const single = selection.length === 1 ? session.doc.get(selection[0]) : null;
   const singleLength = single ? session.measure.lengthOf(single.id) : null;
@@ -62,7 +64,15 @@ export function Panels() {
       <section>
         <h3>Properties</h3>
         {selection.length === 0 && <p className="muted">No selection</p>}
-        {selection.length > 1 && <p>{selection.length} entities selected</p>}
+        {room && (
+          <>
+            <p className="room-label">Rectangular room</p>
+            <RoomDimensions room={room} />
+          </>
+        )}
+        {selection.length > 1 && !room && (
+          <p>{selection.length} entities selected</p>
+        )}
         {single && (
           <dl>
             <dt>Type</dt>
