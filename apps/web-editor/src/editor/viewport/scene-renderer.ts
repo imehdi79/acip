@@ -17,6 +17,7 @@ import {
 } from '@acip/editor-core';
 import type { Viewport2D } from './viewport2d';
 import type { OverlayState, UnderlayState } from '../ui-state';
+import { formatLength } from '../units';
 
 const COLORS = {
   background: '#1b1e23',
@@ -534,7 +535,7 @@ export function drawOverlay(
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(
-        worldLen.toFixed(2),
+        formatLength(worldLen),
         (a.x + b.x) / 2 + nx * 12,
         (a.y + b.y) / 2 + ny * 12,
       );

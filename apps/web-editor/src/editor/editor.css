@@ -573,13 +573,20 @@ body,
   gap: 6px;
 }
 
-.level-picker select {
+.level-picker select,
+.unit-picker select {
   background: #262b33;
   color: #cfd3da;
   border: 1px solid #333a44;
   border-radius: 4px;
   padding: 1px 4px;
   font-size: 12px;
+}
+
+.unit-picker {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
 }
 
 .panels .cost-total,

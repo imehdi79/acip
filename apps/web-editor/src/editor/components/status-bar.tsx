@@ -4,12 +4,21 @@ import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useDocRevision } from '../hooks';
 import { useStoreValue } from '../store';
+import {
+  LENGTH_UNITS,
+  formatLength,
+  formatLengthValue,
+  lengthUnit,
+  setLengthUnit,
+} from '../units';
+import type { LengthUnit } from '../units';
 
 export function StatusBar() {
   const session = useSession();
   const { ui } = useRuntime();
   const coords = useStoreValue(ui.coords);
   const activeLevelId = useStoreValue(ui.activeLevelId);
+  const unit = useStoreValue(lengthUnit);
   useDocRevision(session);
 
   const levels = session.doc.levels.list();
@@ -18,7 +27,9 @@ export function StatusBar() {
     <footer className="status-bar">
       <span className="coords">
         <IconCrosshair size={14} stroke={1.75} />
-        {coords ? `${coords.x.toFixed(2)}, ${coords.y.toFixed(2)}` : '—'}
+        {coords
+          ? `${formatLengthValue(coords.x, unit)}, ${formatLengthValue(coords.y, unit)} ${unit}`
+          : '—'}
       </span>
       <span className="status-item">
         <IconMagnet size={14} stroke={1.75} />
@@ -36,12 +47,23 @@ export function StatusBar() {
           <option value="">All</option>
           {levels.map((level) => (
             <option key={level.id} value={level.id}>
-              {level.name} ({level.elevation.toFixed(2)}m)
+              {level.name} ({formatLength(level.elevation, unit)})
             </option>
           ))}
         </select>
       </label>
-      <span>m</span>
+      <label className="unit-picker" title="Display unit for lengths">
+        <select
+          value={unit}
+          onChange={(e) => setLengthUnit(e.target.value as LengthUnit)}
+        >
+          {LENGTH_UNITS.map((u) => (
+            <option key={u} value={u}>
+              {u}
+            </option>
+          ))}
+        </select>
+      </label>
     </footer>
   );
 }

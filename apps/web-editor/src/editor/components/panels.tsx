@@ -13,6 +13,7 @@ import type { AssemblyLayer, EntityTypeDef, Layer } from '@acip/editor-core';
 import { assembleBoq, defaultRules } from '@acip/estimator';
 import { ratesStore } from '../rates';
 import { materialDisplayColor } from '../material-color';
+import { formatLength, lengthUnit } from '../units';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useDocRevision, useSelectionIds } from '../hooks';
@@ -22,6 +23,7 @@ export function Panels() {
   const session = useSession();
   const { ui } = useRuntime();
   useDocRevision(session);
+  const unit = useStoreValue(lengthUnit);
   const selection = useSelectionIds(session);
 
   const single = selection.length === 1 ? session.doc.get(selection[0]) : null;
@@ -72,7 +74,7 @@ export function Panels() {
             {singleLength !== null && (
               <>
                 <dt>Length</dt>
-                <dd>{singleLength.toFixed(3)} m</dd>
+                <dd>{formatLength(singleLength, unit)}</dd>
               </>
             )}
           </dl>
@@ -124,6 +126,7 @@ export function Panels() {
 export function QuantitiesSection() {
   const session = useSession();
   useDocRevision(session);
+  const unit = useStoreValue(lengthUnit);
   const report = computeQuantities(session.doc);
 
   if (report.walls.length === 0) {
@@ -142,7 +145,7 @@ export function QuantitiesSection() {
         <dt>Walls</dt>
         <dd>{report.walls.length}</dd>
         <dt>Length</dt>
-        <dd>{report.totals.wallLength.toFixed(2)} m</dd>
+        <dd>{formatLength(report.totals.wallLength, unit)}</dd>
         <dt>Face area</dt>
         <dd>{report.totals.wallNetFaceArea.toFixed(2)} m²</dd>
         <dt>Volume</dt>
