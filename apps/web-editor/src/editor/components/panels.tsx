@@ -5,6 +5,7 @@ import {
   IconEyeOff,
   IconLock,
   IconLockOpen,
+  IconSquarePlus,
   IconTrash,
 } from '@tabler/icons-react';
 import { DEFAULT_LAYER_ID, computeQuantities } from '@acip/editor-core';
@@ -42,6 +43,20 @@ export function Panels() {
 
   return (
     <aside className="panels">
+      <section>
+        <button
+          type="button"
+          className="add-room-btn"
+          title="Add a prebuilt room to the current plan"
+          onClick={() => {
+            ui.starterMode.set('add');
+            ui.starterOpen.set(true);
+          }}
+        >
+          <IconSquarePlus size={15} stroke={1.75} />
+          Add a room
+        </button>
+      </section>
       <section>
         <h3>Properties</h3>
         {selection.length === 0 && <p className="muted">No selection</p>}

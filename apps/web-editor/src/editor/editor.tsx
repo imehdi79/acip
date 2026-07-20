@@ -40,7 +40,10 @@ function EditorShell() {
 
   // first load with nothing restored → offer the starter presets
   useEffect(() => {
-    if (session.doc.count === 0) runtime.ui.starterOpen.set(true);
+    if (session.doc.count === 0) {
+      runtime.ui.starterMode.set('replace');
+      runtime.ui.starterOpen.set(true);
+    }
   }, [session, runtime]);
 
   useEffect(() => {

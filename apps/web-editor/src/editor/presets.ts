@@ -111,3 +111,72 @@ export function applyBlank(session: EditorSession): void {
   session.newDocument();
   seedCatalog(session);
 }
+
+interface Bounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+function presetBounds(walls: PresetWall[]): Bounds {
+  const pts = walls.flatMap((w) => [w.a, w.b]);
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  };
+}
+
+/** union of every entity's bounds, or null for an empty document */
+function documentBounds(session: EditorSession): Bounds | null {
+  const entities = session.doc.all();
+  if (entities.length === 0) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const entity of entities) {
+    const b = entity.getBounds();
+    if (b.minX < minX) minX = b.minX;
+    if (b.minY < minY) minY = b.minY;
+    if (b.maxX > maxX) maxX = b.maxX;
+    if (b.maxY > maxY) maxY = b.maxY;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+/**
+ * Drop a preset into the CURRENT document without resetting it, placed just
+ * to the right of whatever is already drawn (vertically centered on it) so it
+ * never lands on top of existing walls. One undo step, typed like the rest.
+ */
+export function addPreset(session: EditorSession, preset: RoomPreset): void {
+  const existing = documentBounds(session);
+  const pb = presetBounds(preset.walls);
+  let dx = 0;
+  let dy = 0;
+  if (existing) {
+    const gap = 2; // meters between the existing plan and the new room
+    dx = existing.maxX + gap - pb.minX;
+    dy = (existing.minY + existing.maxY) / 2 - (pb.minY + pb.maxY) / 2;
+  }
+  const wallType = session.doc.types.list('wall')[0]?.id;
+  session.history.beginGroup();
+  try {
+    for (const w of preset.walls) {
+      session.dispatch('WALL.ADD', {
+        a: { x: w.a.x + dx, y: w.a.y + dy },
+        b: { x: w.b.x + dx, y: w.b.y + dy },
+        thickness: 0.3,
+        height: 3,
+        ...(wallType ? { typeId: wallType } : {}),
+      });
+    }
+  } finally {
+    session.history.endGroup();
+  }
+}

@@ -801,6 +801,25 @@ body,
   border-color: #3a414d;
 }
 
+/* ── "add a room" sidebar button ── */
+.panels .add-room-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  background: #23324a;
+  border: 1px solid #33507a;
+  color: #cfe0f5;
+  font-weight: 500;
+}
+
+.panels .add-room-btn:hover {
+  background: #2b3d5a;
+  border-color: #4da3ff;
+}
+
 /* ── starter modal (preset picker) ── */
 .starter-overlay {
   position: fixed;

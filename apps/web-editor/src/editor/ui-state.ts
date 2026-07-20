@@ -9,6 +9,8 @@ import { ValueStore } from './store';
 
 export type ViewTab = 'plan' | '3d';
 
+export type StarterMode = 'replace' | 'add';
+
 export interface LogEntry {
   readonly text: string;
   readonly kind: 'info' | 'error' | 'echo';
@@ -82,6 +84,8 @@ export class EditorUi {
   readonly showMarks = new ValueStore<boolean>(false);
   /** starter modal (preset picker) — shown on first empty load and on New */
   readonly starterOpen = new ValueStore<boolean>(false);
+  /** 'replace' = New/first-load resets the doc; 'add' = drop into current plan */
+  readonly starterMode = new ValueStore<StarterMode>('replace');
   /** plan image traced under the drawing; null = none loaded */
   readonly underlay = new ValueStore<UnderlayState | null>(null);
 

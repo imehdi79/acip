@@ -2,26 +2,34 @@ import { IconX } from '@tabler/icons-react';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { useStoreValue } from '../store';
-import { ROOM_PRESETS, applyBlank, applyPreset } from '../presets';
+import { ROOM_PRESETS, addPreset, applyBlank, applyPreset } from '../presets';
 import type { PresetWall, RoomPreset } from '../presets';
 
 /**
- * First-run / New-file starter: pick a prebuilt room layout (or blank) from
- * visual previews. The thumbnails are rendered from the presets' real wall
- * geometry, so what you see is what you get.
+ * Preset picker with two modes: 'replace' (first run / New — resets the doc,
+ * offers a Blank option) and 'add' (sidebar — drops the room into the current
+ * plan). The thumbnails are rendered from the presets' real wall geometry, so
+ * what you see is what you get.
  */
 export function StarterModal() {
   const session = useSession();
   const { ui } = useRuntime();
   const open = useStoreValue(ui.starterOpen);
+  const mode = useStoreValue(ui.starterMode);
   if (!open) return null;
 
+  const adding = mode === 'add';
   const close = () => ui.starterOpen.set(false);
 
   const choose = (preset: RoomPreset) => {
-    applyPreset(session, preset);
-    ui.activeLevelId.set(null);
-    ui.appendLog(`Started from preset: ${preset.name}.`);
+    if (adding) {
+      addPreset(session, preset);
+      ui.appendLog(`Added room: ${preset.name}.`);
+    } else {
+      applyPreset(session, preset);
+      ui.activeLevelId.set(null);
+      ui.appendLog(`Started from preset: ${preset.name}.`);
+    }
     close();
   };
 
@@ -41,13 +49,15 @@ export function StarterModal() {
         onClick={(e) => e.stopPropagation()}
       >
         <header className="starter-head">
-          <h2>Start a new drawing</h2>
+          <h2>{adding ? 'Add a room to the plan' : 'Start a new drawing'}</h2>
           <button type="button" title="Close" onClick={close}>
             <IconX size={18} stroke={1.75} />
           </button>
         </header>
         <p className="starter-sub">
-          Pick a starting layout — edit it or keep building right away.
+          {adding
+            ? 'The room is placed next to your existing walls — one undo step.'
+            : 'Pick a starting layout — edit it or keep building right away.'}
         </p>
         <div className="starter-grid">
           {ROOM_PRESETS.map((preset) => (
@@ -62,11 +72,13 @@ export function StarterModal() {
               <span className="preset-dims">{preset.dims}</span>
             </button>
           ))}
-          <button type="button" className="preset-card" onClick={blank}>
-            <BlankPreview />
-            <span className="preset-name">Blank</span>
-            <span className="preset-dims">Empty canvas</span>
-          </button>
+          {!adding && (
+            <button type="button" className="preset-card" onClick={blank}>
+              <BlankPreview />
+              <span className="preset-name">Blank</span>
+              <span className="preset-dims">Empty canvas</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

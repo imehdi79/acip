@@ -39,7 +39,10 @@ export function TopBar() {
         <button
           type="button"
           title="New drawing — pick a starting layout"
-          onClick={() => ui.starterOpen.set(true)}
+          onClick={() => {
+            ui.starterMode.set('replace');
+            ui.starterOpen.set(true);
+          }}
         >
           <IconFile size={16} stroke={1.75} />
           New
