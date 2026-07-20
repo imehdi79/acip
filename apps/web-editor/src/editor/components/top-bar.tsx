@@ -13,7 +13,7 @@ import type { Icon } from '@tabler/icons-react';
 import { useRef } from 'react';
 import { loadUnderlayFromFile } from '../underlay';
 import { useSession } from '../session-context';
-import { useRuntime, seedCatalog } from '../runtime';
+import { useRuntime } from '../runtime';
 import { useDocRevision } from '../hooks';
 import { useStoreValue } from '../store';
 import { openFromFile, saveToFile } from '../files';
@@ -38,21 +38,8 @@ export function TopBar() {
       <div className="top-bar-group">
         <button
           type="button"
-          title="New drawing"
-          onClick={() => {
-            if (
-              session.doc.count > 0 &&
-              !window.confirm(
-                'Start a new drawing? The current one stays in autosave until you draw.',
-              )
-            ) {
-              return;
-            }
-            session.newDocument();
-            seedCatalog(session);
-            ui.activeLevelId.set(null);
-            ui.appendLog('New drawing.');
-          }}
+          title="New drawing — pick a starting layout"
+          onClick={() => ui.starterOpen.set(true)}
         >
           <IconFile size={16} stroke={1.75} />
           New

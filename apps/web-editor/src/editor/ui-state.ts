@@ -80,6 +80,8 @@ export class EditorUi {
   readonly agentMode = new ValueStore<AgentMode>('drafter');
   /** entity mark labels ("W3") in the plan — auto-enabled when chat opens */
   readonly showMarks = new ValueStore<boolean>(false);
+  /** starter modal (preset picker) — shown on first empty load and on New */
+  readonly starterOpen = new ValueStore<boolean>(false);
   /** plan image traced under the drawing; null = none loaded */
   readonly underlay = new ValueStore<UnderlayState | null>(null);
 

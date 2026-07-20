@@ -16,6 +16,7 @@ import { Panels } from './components/panels';
 import { AgentChat } from './components/agent-chat';
 import { EstimateSheet } from './components/estimate-sheet';
 import { UnderlayControls } from './components/underlay-controls';
+import { StarterModal } from './components/starter-modal';
 import { loadServerRates } from './rates';
 import { serverUrl } from './agent';
 import './editor.css';
@@ -36,6 +37,11 @@ function EditorShell() {
   useEffect(() => {
     void loadServerRates(serverUrl());
   }, []);
+
+  // first load with nothing restored → offer the starter presets
+  useEffect(() => {
+    if (session.doc.count === 0) runtime.ui.starterOpen.set(true);
+  }, [session, runtime]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -94,6 +100,7 @@ function EditorShell() {
         <CommandLine />
         <StatusBar />
       </div>
+      <StarterModal />
     </RuntimeContext.Provider>
   );
 }
