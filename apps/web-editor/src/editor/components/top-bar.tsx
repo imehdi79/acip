@@ -7,6 +7,7 @@ import {
   IconFolderOpen,
   IconGrid4x4,
   IconHash,
+  IconMenu2,
   IconPhoto,
 } from '@tabler/icons-react';
 import type { Icon } from '@tabler/icons-react';
@@ -34,6 +35,14 @@ export function TopBar() {
 
   return (
     <header className="top-bar">
+      <button
+        type="button"
+        className="mobile-only menu-btn"
+        title="Panels (layers, levels, catalog)"
+        onClick={() => ui.panelsOpen.set(!ui.panelsOpen.get())}
+      >
+        <IconMenu2 size={18} stroke={1.75} />
+      </button>
       <span className="brand">acip editor</span>
       <div className="top-bar-group">
         <button

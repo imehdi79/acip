@@ -91,6 +91,8 @@ export class EditorUi {
   readonly showMarks = new ValueStore<boolean>(false);
   /** starter modal (preset picker) — shown on first empty load and on New */
   readonly starterOpen = new ValueStore<boolean>(false);
+  /** side panels open as a drawer on mobile (desktop always shows them) */
+  readonly panelsOpen = new ValueStore<boolean>(false);
   /** 'replace' = New/first-load resets the doc; 'add' = drop into current plan */
   readonly starterMode = new ValueStore<StarterMode>('replace');
   /** plan image traced under the drawing; null = none loaded */

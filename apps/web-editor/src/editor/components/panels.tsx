@@ -7,6 +7,7 @@ import {
   IconLockOpen,
   IconSquarePlus,
   IconTrash,
+  IconX,
 } from '@tabler/icons-react';
 import {
   DEFAULT_LAYER_ID,
@@ -43,6 +44,7 @@ export function Panels() {
   const selection = useSelectionIds(session);
   const room = useRectRoom();
   const opening = useSelectedOpening();
+  const panelsOpen = useStoreValue(ui.panelsOpen);
 
   const single = selection.length === 1 ? session.doc.get(selection[0]) : null;
   const singleLength = single ? session.measure.lengthOf(single.id) : null;
@@ -62,7 +64,15 @@ export function Panels() {
   const commonRef = refs.size === 1 ? [...refs][0] : '';
 
   return (
-    <aside className="panels">
+    <aside className={panelsOpen ? 'panels open' : 'panels'}>
+      <button
+        type="button"
+        className="mobile-only panels-close"
+        title="Close panels"
+        onClick={() => ui.panelsOpen.set(false)}
+      >
+        <IconX size={16} stroke={1.75} />
+      </button>
       <section>
         <button
           type="button"

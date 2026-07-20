@@ -1,5 +1,10 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { IconMaximize } from '@tabler/icons-react';
+import {
+  IconArrowBackUp,
+  IconArrowForwardUp,
+  IconCheck,
+  IconMaximize,
+} from '@tabler/icons-react';
 import { SessionProvider, useSession } from './session-context';
 import { RuntimeContext, createRuntime, useRuntime } from './runtime';
 import { useStoreValue } from './store';
@@ -97,6 +102,7 @@ function EditorShell() {
           <div className="viewport-area">
             <ViewportArea />
             <FitControl />
+            <ToolControls />
             <UnderlayControls />
             <RoomSheet />
             <EstimateSheet />
@@ -137,5 +143,43 @@ function FitControl() {
     >
       <IconMaximize size={18} stroke={1.75} />
     </button>
+  );
+}
+
+/**
+ * Mobile-only on-screen controls: undo/redo (no Ctrl+Z on a phone) and, while
+ * a drawing tool is active, a Done button to stop it — so a stray tap doesn't
+ * keep dropping walls with no way out.
+ */
+function ToolControls() {
+  const session = useSession();
+  const { ui, tools } = useRuntime();
+  const tab = useStoreValue(ui.viewTab);
+  const activeToolId = useStoreValue(ui.activeToolId);
+  if (tab !== 'plan') return null;
+  const drawing = activeToolId !== 'select';
+  return (
+    <div className="tool-controls mobile-only">
+      <button type="button" title="Undo" onClick={() => session.undo()}>
+        <IconArrowBackUp size={18} stroke={1.75} />
+      </button>
+      <button type="button" title="Redo" onClick={() => session.redo()}>
+        <IconArrowForwardUp size={18} stroke={1.75} />
+      </button>
+      {drawing && (
+        <button
+          type="button"
+          className="tool-done"
+          title="Done — stop drawing"
+          onClick={() => {
+            tools.key('Escape');
+            tools.useById('select');
+          }}
+        >
+          <IconCheck size={18} stroke={2} />
+          Done
+        </button>
+      )}
+    </div>
   );
 }

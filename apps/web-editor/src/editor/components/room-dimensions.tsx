@@ -1,4 +1,5 @@
-import { IconX } from '@tabler/icons-react';
+import { useRef } from 'react';
+import { IconCheck, IconX } from '@tabler/icons-react';
 import { DoorEntity, WindowEntity } from '@acip/editor-core';
 import { useSession } from '../session-context';
 import { useDocRevision, useSelectionIds } from '../hooks';
@@ -36,32 +37,37 @@ export function useSelectedOpening(): SelectedOpening | null {
   return null;
 }
 
-const commitOnEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-  e.stopPropagation();
-};
-
 /**
  * Numeric width/length editor for a rectangular room — the numbers-first way
- * to draw on a phone. Shared by the desktop Properties panel and the mobile
- * bottom sheet; every edit resizes the room in one undo step, in the active
- * unit (m/cm/mm, or an inline suffix).
+ * to draw on a phone. Typing does NOT commit (no reliable blur/Enter on
+ * touch); the ✓ button (or Enter) applies both fields in one undo step, in
+ * the active unit (m/cm/mm, or an inline suffix).
  */
 export function RoomDimensions({ room }: { room: RectRoom }) {
   const session = useSession();
   const unit = useStoreValue(lengthUnit);
   const width = room.maxX - room.minX;
   const height = room.maxY - room.minY;
+  const widthRef = useRef<HTMLInputElement>(null);
+  const heightRef = useRef<HTMLInputElement>(null);
 
-  const commit = (which: 'w' | 'h', text: string) => {
-    const meters = parseLength(text, unit);
-    if (meters === null || meters < 0.2) return; // ignore junk / too small
-    resizeRectRoom(
-      (name, params) => session.dispatch(name, params),
-      room,
-      which === 'w' ? meters : width,
-      which === 'h' ? meters : height,
-    );
+  const apply = () => {
+    const wm = parseLength(widthRef.current?.value ?? '', unit);
+    const hm = parseLength(heightRef.current?.value ?? '', unit);
+    const nw = wm !== null && wm >= 0.2 ? wm : width;
+    const nh = hm !== null && hm >= 0.2 ? hm : height;
+    if (Math.abs(nw - width) > 1e-6 || Math.abs(nh - height) > 1e-6) {
+      resizeRectRoom(
+        (name, params) => session.dispatch(name, params),
+        room,
+        nw,
+        nh,
+      );
+    }
+  };
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') apply();
+    e.stopPropagation();
   };
 
   return (
@@ -69,47 +75,61 @@ export function RoomDimensions({ room }: { room: RectRoom }) {
       <label className="room-dim">
         <span>Width</span>
         <input
+          ref={widthRef}
           key={`w:${width}`}
           defaultValue={formatLengthValue(width, unit)}
           inputMode="decimal"
-          onKeyDown={commitOnEnter}
-          onBlur={(e) => commit('w', e.target.value)}
+          onKeyDown={onKeyDown}
         />
       </label>
       <label className="room-dim">
         <span>Length</span>
         <input
+          ref={heightRef}
           key={`h:${height}`}
           defaultValue={formatLengthValue(height, unit)}
           inputMode="decimal"
-          onKeyDown={commitOnEnter}
-          onBlur={(e) => commit('h', e.target.value)}
+          onKeyDown={onKeyDown}
         />
       </label>
       <span className="room-dim-unit">{unit}</span>
+      <button type="button" className="dim-apply" title="Apply" onClick={apply}>
+        <IconCheck size={16} stroke={2} />
+      </button>
     </div>
   );
 }
 
 /**
  * Numeric width + position editor for a selected window/door — openings by
- * numbers. Width dispatches OPENING.RESIZE (meters, active unit); position is
- * a 0–100% slot along the wall via OPENING.MOVE. One undo step each.
+ * numbers. Width → OPENING.RESIZE (meters, active unit); position → a 0–100%
+ * slot via OPENING.MOVE. Applied by the ✓ button (or Enter), not on change.
  */
 export function OpeningDimensions({ opening }: { opening: SelectedOpening }) {
   const session = useSession();
   const unit = useStoreValue(lengthUnit);
+  const widthRef = useRef<HTMLInputElement>(null);
+  const posRef = useRef<HTMLInputElement>(null);
 
-  const commitWidth = (text: string) => {
-    const meters = parseLength(text, unit);
-    if (meters === null || meters < 0.1) return;
-    session.dispatch('OPENING.RESIZE', { id: opening.id, width: meters });
+  const apply = () => {
+    const meters = parseLength(widthRef.current?.value ?? '', unit);
+    if (
+      meters !== null &&
+      meters >= 0.1 &&
+      Math.abs(meters - opening.width) > 1e-6
+    ) {
+      session.dispatch('OPENING.RESIZE', { id: opening.id, width: meters });
+    }
+    const pct = Number(posRef.current?.value ?? '');
+    if (Number.isFinite(pct)) {
+      const t = Math.min(1, Math.max(0, pct / 100));
+      if (Math.abs(t - opening.t) > 1e-6)
+        session.dispatch('OPENING.MOVE', { id: opening.id, t });
+    }
   };
-  const commitPos = (text: string) => {
-    const pct = Number(text);
-    if (!Number.isFinite(pct)) return;
-    const t = Math.min(1, Math.max(0, pct / 100));
-    session.dispatch('OPENING.MOVE', { id: opening.id, t });
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') apply();
+    e.stopPropagation();
   };
 
   return (
@@ -117,24 +137,27 @@ export function OpeningDimensions({ opening }: { opening: SelectedOpening }) {
       <label className="room-dim">
         <span>Width</span>
         <input
+          ref={widthRef}
           key={`w:${opening.width}`}
           defaultValue={formatLengthValue(opening.width, unit)}
           inputMode="decimal"
-          onKeyDown={commitOnEnter}
-          onBlur={(e) => commitWidth(e.target.value)}
+          onKeyDown={onKeyDown}
         />
       </label>
       <label className="room-dim">
         <span>Pos %</span>
         <input
+          ref={posRef}
           key={`p:${opening.t}`}
           defaultValue={(opening.t * 100).toFixed(0)}
           inputMode="decimal"
-          onKeyDown={commitOnEnter}
-          onBlur={(e) => commitPos(e.target.value)}
+          onKeyDown={onKeyDown}
         />
       </label>
       <span className="room-dim-unit">{unit}</span>
+      <button type="button" className="dim-apply" title="Apply" onClick={apply}>
+        <IconCheck size={16} stroke={2} />
+      </button>
     </div>
   );
 }
