@@ -130,10 +130,11 @@ export function Viewport2DView() {
        Tool input is only forwarded on a clean tap (pointerup within slop),
        so gestures never leak half-strokes into the active tool. */
     const touches = new Map<number, { x: number; y: number }>();
-    let touchMode: 'tap' | 'pan' | 'pinch' | null = null;
+    let touchMode: 'tap' | 'pan' | 'pinch' | 'tool-drag' | null = null;
     let tapStart = { x: 0, y: 0 };
     let pinchDist = 0;
     let pinchMid = { x: 0, y: 0 };
+    let lastToolPoint = { x: 0, y: 0 };
 
     const forward = (fn: () => void) => {
       try {
@@ -150,13 +151,45 @@ export function Viewport2DView() {
       return snap ? snap.point : raw;
     };
 
+    /* snapped world point for a touch, using client coords + a wider radius */
+    const touchWorld = (e: PointerEvent) => {
+      const rect = overlay.getBoundingClientRect();
+      const raw = viewport.toWorld(e.clientX - rect.left, e.clientY - rect.top);
+      const snap = session.snap.snap(raw, TOUCH_SNAP_PIXELS / viewport.scale);
+      ui.setSnap(snap);
+      return snap ? snap.point : raw;
+    };
+
     const onTouchDown = (e: PointerEvent) => {
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (touches.size === 1) {
-        touchMode = 'tap';
         tapStart = { x: e.clientX, y: e.clientY };
         lastPan = { x: e.clientX, y: e.clientY };
+        // grip / room-handle / selected entity under the finger → drag it,
+        // otherwise this is a tap-or-pan
+        pickPixels = TOUCH_PICK_PIXELS;
+        tools.worldTolerance = pickPixels / viewport.scale;
+        const point = touchWorld(e);
+        if (tools.hitDraggable(point, tools.worldTolerance)) {
+          touchMode = 'tool-drag';
+          lastToolPoint = point;
+          forward(() =>
+            tools.pointerDown({ point, modifiers: modifiersOf(e) }),
+          );
+        } else {
+          touchMode = 'tap';
+        }
       } else if (touches.size === 2) {
+        // a second finger ends any in-progress drag, then starts a pinch
+        if (touchMode === 'tool-drag') {
+          forward(() =>
+            tools.pointerUp({
+              point: lastToolPoint,
+              modifiers: modifiersOf(e),
+            }),
+          );
+          ui.setSnap(null);
+        }
         touchMode = 'pinch';
         const [a, b] = [...touches.values()];
         pinchDist = Math.hypot(b.x - a.x, b.y - a.y);
@@ -171,6 +204,12 @@ export function Viewport2DView() {
       if (!touch) return;
       touch.x = e.clientX;
       touch.y = e.clientY;
+      if (touchMode === 'tool-drag') {
+        const point = touchWorld(e);
+        lastToolPoint = point;
+        forward(() => tools.pointerMove({ point, modifiers: modifiersOf(e) }));
+        return;
+      }
       if (touchMode === 'tap') {
         if (
           Math.hypot(e.clientX - tapStart.x, e.clientY - tapStart.y) >
@@ -202,16 +241,16 @@ export function Viewport2DView() {
 
     const onTouchEnd = (e: PointerEvent, cancelled: boolean) => {
       if (!touches.delete(e.pointerId)) return;
-      if (touchMode === 'tap' && !cancelled) {
+      if (touchMode === 'tool-drag') {
+        const modifiers = modifiersOf(e);
+        if (cancelled) forward(() => tools.key('Escape'));
+        else
+          forward(() => tools.pointerUp({ point: touchWorld(e), modifiers }));
+        ui.setSnap(null);
+      } else if (touchMode === 'tap' && !cancelled) {
         pickPixels = TOUCH_PICK_PIXELS;
         tools.worldTolerance = pickPixels / viewport.scale;
-        const rect = overlay.getBoundingClientRect();
-        const raw = viewport.toWorld(
-          e.clientX - rect.left,
-          e.clientY - rect.top,
-        );
-        const snap = session.snap.snap(raw, TOUCH_SNAP_PIXELS / viewport.scale);
-        const point = snap ? snap.point : raw;
+        const point = touchWorld(e);
         const modifiers = modifiersOf(e);
         forward(() => {
           tools.pointerDown({ point, modifiers });

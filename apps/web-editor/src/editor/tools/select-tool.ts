@@ -229,6 +229,25 @@ export class SelectTool implements Tool {
     this.ctx?.selection.clear();
   }
 
+  /**
+   * Whether a drag started here would grab something (a room corner handle,
+   * an entity grip, or a selected entity to move) rather than pan. Lets touch
+   * input pick drag vs pan on one finger.
+   */
+  hitDraggable(point: Point, tolerance: number): boolean {
+    const ctx = this.ctx;
+    if (!ctx) return false;
+    const room = detectRectRoom(ctx.doc, ctx.selection.list());
+    if (room) {
+      for (const c of rectRoomCorners(room)) {
+        if (distance(c, point) <= tolerance * 1.5) return true;
+      }
+    }
+    if (this.gripAt(point, tolerance * 1.5)) return true;
+    const hit = this.topHit(point, tolerance);
+    return !!hit && ctx.selection.has(hit.id);
+  }
+
   private topHit(point: Point, tolerance: number): Entity | null {
     const ctx = this.ctx;
     if (!ctx) return null;

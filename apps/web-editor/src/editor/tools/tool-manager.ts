@@ -1,5 +1,15 @@
-import type { Tool, ToolContext, ToolInputEvent } from '@acip/editor-core';
+import type {
+  Point,
+  Tool,
+  ToolContext,
+  ToolInputEvent,
+} from '@acip/editor-core';
 import type { EditorUi } from '../ui-state';
+
+/** a tool that can be dragged at a point (grips, room handles, moving) */
+interface Draggable {
+  hitDraggable(point: Point, tolerance: number): boolean;
+}
 
 /**
  * Owns the active tool and forwards abstract input to it. Tools receive
@@ -45,5 +55,15 @@ export class ToolManager {
 
   key(key: string): void {
     this.active?.onKey(key);
+  }
+
+  /**
+   * Would the active tool grab a drag at this point? Used by touch input to
+   * choose between dragging (move/resize) and panning the canvas — only the
+   * select tool opts in; drawing tools stay tap-to-place so one finger pans.
+   */
+  hitDraggable(point: Point, tolerance: number): boolean {
+    const tool = this.active as (Tool & Partial<Draggable>) | null;
+    return tool?.hitDraggable?.(point, tolerance) ?? false;
   }
 }
