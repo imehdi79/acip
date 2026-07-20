@@ -1,10 +1,13 @@
 import type {
   Entity,
+  Geometry,
   Point,
   Tool,
   ToolContext,
   ToolInputEvent,
 } from '@acip/editor-core';
+import { detectRectRoom, rectRoomCorners, resizeRectRoomTo } from '../rooms';
+import type { RectRoom } from '../rooms';
 import {
   bboxExpand,
   bboxFromPoints,
@@ -25,7 +28,27 @@ type Mode =
   | { kind: 'maybe-drag'; start: Point; ids: EntityId[] }
   | { kind: 'drag'; start: Point; ids: EntityId[] }
   | { kind: 'grip'; entityId: EntityId; index: number; start: Point }
+  | { kind: 'room-resize'; room: RectRoom; fixed: Point }
   | { kind: 'box'; start: Point; additive: boolean };
+
+/** smallest room a drag can shrink to (meters) */
+const MIN_ROOM = 0.5;
+
+/** axis-aligned rect from a fixed corner and the dragged corner, min-clamped */
+function rectFrom(fixed: Point, cursor: Point) {
+  let nx = cursor.x;
+  let ny = cursor.y;
+  if (Math.abs(nx - fixed.x) < MIN_ROOM)
+    nx = fixed.x + (nx >= fixed.x ? MIN_ROOM : -MIN_ROOM);
+  if (Math.abs(ny - fixed.y) < MIN_ROOM)
+    ny = fixed.y + (ny >= fixed.y ? MIN_ROOM : -MIN_ROOM);
+  return {
+    minX: Math.min(fixed.x, nx),
+    minY: Math.min(fixed.y, ny),
+    maxX: Math.max(fixed.x, nx),
+    maxY: Math.max(fixed.y, ny),
+  };
+}
 
 /**
  * Default tool: click select (shift toggles), drag selected entities with a
@@ -62,6 +85,20 @@ export class SelectTool implements Tool {
     const ctx = this.ctx;
     if (!ctx) return;
     const tolerance = this.getTolerance();
+
+    // 0) a selected rectangular room: dragging a corner resizes the whole
+    // room (takes priority over the coincident individual wall grips)
+    const room = detectRectRoom(ctx.doc, ctx.selection.list());
+    if (room) {
+      const cs = rectRoomCorners(room);
+      for (let i = 0; i < cs.length; i++) {
+        if (distance(cs[i], e.point) <= tolerance * 1.5) {
+          this.mode = { kind: 'room-resize', room, fixed: cs[(i + 2) % 4] };
+          this.ui.prompt.set('Drag to resize the room');
+          return;
+        }
+      }
+    }
 
     // 1) grips of selected entities take priority
     const grip = this.gripAt(e.point, tolerance * 1.5);
@@ -111,6 +148,21 @@ export class SelectTool implements Tool {
       case 'grip':
         this.ui.setRubber({ a: this.mode.start, b: e.point });
         break;
+      case 'room-resize': {
+        const r = rectFrom(this.mode.fixed, e.point);
+        const outline: Geometry = {
+          kind: 'polyline',
+          points: [
+            { x: r.minX, y: r.minY },
+            { x: r.maxX, y: r.minY },
+            { x: r.maxX, y: r.maxY },
+            { x: r.minX, y: r.maxY },
+          ],
+          closed: true,
+        };
+        this.ui.setGhost([outline]);
+        break;
+      }
       case 'box':
         this.ui.setBox({
           a: this.mode.start,
@@ -146,6 +198,16 @@ export class SelectTool implements Tool {
           index: mode.index,
           to: e.point,
         });
+        this.ui.prompt.set(
+          'Select (Shift = toggle, drag = move/box, grips = stretch)',
+        );
+        break;
+      case 'room-resize':
+        resizeRectRoomTo(
+          (name, params) => ctx.dispatch(name, params),
+          mode.room,
+          rectFrom(mode.fixed, e.point),
+        );
         this.ui.prompt.set(
           'Select (Shift = toggle, drag = move/box, grips = stretch)',
         );

@@ -186,7 +186,7 @@ function coincides(
  * One undo step, typed like the rest.
  */
 export function addPreset(session: EditorSession, preset: RoomPreset): void {
-  const selected = detectRectRoom(session, session.selection.list());
+  const selected = detectRectRoom(session.doc, session.selection.list());
   const pb = presetBounds(preset.walls);
   let dx = 0;
   let dy = 0;

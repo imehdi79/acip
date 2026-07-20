@@ -182,9 +182,70 @@ export const GripMoveCommand: Command<GripMoveParams, void> = {
   },
 };
 
+export interface GripMoveManyParams {
+  moves: { id: EntityId; index: number; to: Point }[];
+}
+
+/**
+ * Move several grips at once in one transaction (one undo). The room editor
+ * uses this to reposition a rectangle's four shared corners atomically — eight
+ * endpoint moves that must land together, not as eight undo steps.
+ */
+export const GripMoveManyCommand: Command<GripMoveManyParams, number> = {
+  name: 'GRIP.MOVEMANY',
+  description:
+    'Move several entity grips atomically (one undo) — e.g. resize a room by its shared wall corners.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const rawMoves = raw['moves'];
+      if (!Array.isArray(rawMoves) || rawMoves.length === 0) {
+        throw new ValidationError('moves must be a non-empty array');
+      }
+      const moves = rawMoves.map((m, i) => {
+        const r = (m ?? {}) as Record<string, unknown>;
+        return {
+          id: asId(r['id'], `moves[${i}].id`),
+          index: asNumber(r['index'], `moves[${i}].index`),
+          to: asPoint(r['to'], `moves[${i}].to`),
+        };
+      });
+      return { moves };
+    },
+    () =>
+      S.object(
+        {
+          moves: S.array(
+            S.object(
+              {
+                id: S.id('entity id'),
+                index: S.number('grip index'),
+                to: S.point('new grip position'),
+              },
+              ['id', 'index', 'to'],
+            ),
+            'grip moves to apply together',
+          ),
+        },
+        ['moves'],
+      ),
+  ),
+  execute(ctx, params) {
+    let moved = 0;
+    for (const move of params.moves) {
+      const entity = ctx.doc.get(move.id);
+      if (!entity || !hasGrips(entity)) continue;
+      entity.moveGrip(move.index, move.to, ctx.tx);
+      moved += 1;
+    }
+    return moved;
+  },
+};
+
 export function registerBuiltinCommands(registry: CommandRegistry): void {
   registry.register(AddLineCommand);
   registry.register(MoveCommand);
   registry.register(EraseCommand);
   registry.register(GripMoveCommand);
+  registry.register(GripMoveManyCommand);
 }

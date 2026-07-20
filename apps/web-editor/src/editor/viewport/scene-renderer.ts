@@ -18,6 +18,7 @@ import {
 import type { Viewport2D } from './viewport2d';
 import type { OverlayState, UnderlayState } from '../ui-state';
 import { formatLength } from '../units';
+import { detectRectRoom, rectRoomCorners } from '../rooms';
 
 const COLORS = {
   background: '#1b1e23',
@@ -46,7 +47,12 @@ const COLORS = {
   assemblyHatch: 'rgba(224, 224, 224, 0.28)',
   mark: '#8fb4d8',
   markHalo: '#16181d',
+  roomHandle: '#8fd0a8',
+  roomHandleBorder: '#0e1116',
 };
+
+/** room resize handle half-size in px (bigger than grips — a touch target) */
+export const ROOM_HANDLE_PIXELS = 6;
 
 /**
  * Mark label prefixes — architectural entities only, so drafting geometry
@@ -420,8 +426,33 @@ export function drawScene(
     }
   }
 
+  // a selected rectangular room shows corner resize handles instead of the
+  // four individual wall grips — drag a corner to resize the whole room
+  const room = detectRectRoom(doc, [...selection] as EntityId[]);
+  if (room) {
+    for (const corner of rectRoomCorners(room)) {
+      const s = viewport.toScreen(corner);
+      ctx.fillStyle = COLORS.roomHandle;
+      ctx.strokeStyle = COLORS.roomHandleBorder;
+      ctx.lineWidth = 1;
+      ctx.fillRect(
+        s.x - ROOM_HANDLE_PIXELS,
+        s.y - ROOM_HANDLE_PIXELS,
+        ROOM_HANDLE_PIXELS * 2,
+        ROOM_HANDLE_PIXELS * 2,
+      );
+      ctx.strokeRect(
+        s.x - ROOM_HANDLE_PIXELS,
+        s.y - ROOM_HANDLE_PIXELS,
+        ROOM_HANDLE_PIXELS * 2,
+        ROOM_HANDLE_PIXELS * 2,
+      );
+    }
+  }
+
   // grips for selected entities — fixed pixel size, drawn in screen space
-  for (const id of selection) {
+  // (skip when a room is selected: its corner handles replace the wall grips)
+  for (const id of room ? [] : selection) {
     const entity = doc.get(id as EntityId);
     if (!entity || !hasGrips(entity)) continue;
     for (const grip of entity.getGrips()) {

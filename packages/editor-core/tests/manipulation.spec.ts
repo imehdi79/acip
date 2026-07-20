@@ -72,6 +72,38 @@ describe('grips', () => {
     expect(bboxCenter(win.getBounds()).y).toBeCloseTo(0);
   });
 
+  test('GRIP.MOVEMANY moves several grips as one undo step', () => {
+    const session = new EditorSession();
+    const l1 = session.dispatch<EntityId>('LINE.ADD', {
+      a: point(0, 0),
+      b: point(10, 0),
+    });
+    const l2 = session.dispatch<EntityId>('LINE.ADD', {
+      a: point(0, 0),
+      b: point(0, 10),
+    });
+    const moved = session.dispatch<number>('GRIP.MOVEMANY', {
+      moves: [
+        { id: l1, index: 0, to: point(1, 1) },
+        { id: l2, index: 0, to: point(1, 1) },
+      ],
+    });
+    expect(moved).toBe(2);
+    expect((session.doc.get(l1) as LineEntity).getBaseGeometry()).toMatchObject(
+      {
+        a: { x: 1, y: 1 },
+      },
+    );
+
+    session.undo(); // both revert together
+    expect((session.doc.get(l1) as LineEntity).getBaseGeometry()).toMatchObject(
+      { a: { x: 0, y: 0 } },
+    );
+    expect((session.doc.get(l2) as LineEntity).getBaseGeometry()).toMatchObject(
+      { a: { x: 0, y: 0 } },
+    );
+  });
+
   test('GRIP.MOVE on a gripless target is rejected and rolls back', () => {
     const session = new EditorSession();
     expect(() =>

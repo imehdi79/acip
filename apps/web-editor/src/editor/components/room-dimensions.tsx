@@ -12,7 +12,7 @@ export function useRectRoom(): RectRoom | null {
   const session = useSession();
   useDocRevision(session);
   const ids = useSelectionIds(session);
-  return detectRectRoom(session, ids);
+  return detectRectRoom(session.doc, ids);
 }
 
 export interface SelectedOpening {
@@ -57,7 +57,7 @@ export function RoomDimensions({ room }: { room: RectRoom }) {
     const meters = parseLength(text, unit);
     if (meters === null || meters < 0.2) return; // ignore junk / too small
     resizeRectRoom(
-      session,
+      (name, params) => session.dispatch(name, params),
       room,
       which === 'w' ? meters : width,
       which === 'h' ? meters : height,
