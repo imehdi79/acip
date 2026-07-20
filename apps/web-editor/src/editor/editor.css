@@ -469,6 +469,30 @@ body,
   animation: agent-pulse 1.2s ease-in-out infinite;
 }
 
+/* ── per-room estimate breakdown ── */
+.rooms-breakdown .room-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid #23272e;
+}
+
+.room-row-name {
+  color: #cfd3da;
+}
+
+.room-row-meta {
+  color: #7d8794;
+  font-size: 11px;
+}
+
+.room-row-cost {
+  color: #8fd08f;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── room numeric editor (shared: desktop panel + mobile sheet) ── */
 .room-label {
   margin: 0 0 6px;

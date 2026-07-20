@@ -8,8 +8,17 @@ import {
   IconSquarePlus,
   IconTrash,
 } from '@tabler/icons-react';
-import { DEFAULT_LAYER_ID, computeQuantities } from '@acip/editor-core';
-import type { AssemblyLayer, EntityTypeDef, Layer } from '@acip/editor-core';
+import {
+  DEFAULT_LAYER_ID,
+  computeQuantities,
+  detectSpaces,
+} from '@acip/editor-core';
+import type {
+  AssemblyLayer,
+  EntityTypeDef,
+  Layer,
+  Point,
+} from '@acip/editor-core';
 import { assembleBoq, defaultRules } from '@acip/estimator';
 import { ratesStore } from '../rates';
 import { materialDisplayColor } from '../material-color';
@@ -180,8 +189,86 @@ export function QuantitiesSection() {
           </dl>
         </>
       )}
+      <RoomsBreakdown />
       <CostSection />
     </section>
+  );
+}
+
+function loopPerimeter(points: readonly Point[]): number {
+  let sum = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    sum += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return sum;
+}
+
+/**
+ * Shape-by-shape estimate: one line per detected room with its area,
+ * perimeter (the numbers the user typed, cashed out), and a floor cost from
+ * the live rate table. Floor is genuinely per-room; shared wall assemblies
+ * stay in the document Cost total, not split here.
+ */
+function RoomsBreakdown() {
+  const session = useSession();
+  const { ui } = useRuntime();
+  useDocRevision(session);
+  const unit = useStoreValue(lengthUnit);
+  const activeLevelId = useStoreValue(ui.activeLevelId);
+  const rates = useStoreValue(ratesStore);
+
+  const spaces = detectSpaces(session.doc, activeLevelId);
+  if (spaces.length === 0) return null;
+
+  const floorRate =
+    rates.rates['floor-tile']?.unitCost ??
+    rates.rates['finish-area']?.unitCost ??
+    null;
+  let totalArea = 0;
+  let totalFloor = 0;
+
+  const rows = spaces.map((space, i) => {
+    const area = space.netArea;
+    const perimeter = loopPerimeter(space.boundary);
+    const floor = floorRate !== null ? area * floorRate : null;
+    totalArea += area;
+    if (floor !== null) totalFloor += floor;
+    return { key: space.key, label: `Room ${i + 1}`, area, perimeter, floor };
+  });
+
+  return (
+    <>
+      <h3>Rooms ({rows.length})</h3>
+      <ul className="plain-list rooms-breakdown">
+        {rows.map((row) => (
+          <li key={row.key} className="room-row">
+            <span className="room-row-name">{row.label}</span>
+            <span className="room-row-meta">
+              {row.area.toFixed(2)} m² · {formatLength(row.perimeter, unit)}
+            </span>
+            {row.floor !== null && (
+              <span className="room-row-cost">
+                {row.floor.toFixed(0)} {rates.currency}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <dl>
+        <dt>Total floor area</dt>
+        <dd>{totalArea.toFixed(2)} m²</dd>
+        {floorRate !== null && (
+          <>
+            <dt>Floor finish</dt>
+            <dd>
+              {totalFloor.toFixed(0)} {rates.currency}
+            </dd>
+          </>
+        )}
+      </dl>
+    </>
   );
 }
 
