@@ -9,11 +9,6 @@ import { SessionProvider, useSession } from './session-context';
 import { RuntimeContext, createRuntime, useRuntime } from './runtime';
 import { useStoreValue } from './store';
 import { Viewport2DView } from './viewport/viewport2d-view';
-
-// three.js only loads when the 3D tab is first opened
-const Viewer3D = lazy(() =>
-  import('./viewport/viewer3d').then((m) => ({ default: m.Viewer3D })),
-);
 import { TopBar } from './components/top-bar';
 import { ToolPalette } from './components/tool-palette';
 import { CommandLine } from './components/command-line';
@@ -26,10 +21,16 @@ import { StarterModal } from './components/starter-modal';
 import { SketchControls } from './components/sketch-controls';
 import { SketchDimensions } from './components/sketch-dimensions';
 import { DynamicInput } from './components/dynamic-input';
+import { RoomMarks } from './components/room-marks';
 import { RoomSheet } from './components/room-dimensions';
 import { loadServerRates } from './rates';
 import { serverUrl } from './agent';
 import './editor.css';
+
+// three.js only loads when the 3D tab is first opened
+const Viewer3D = lazy(() =>
+  import('./viewport/viewer3d').then((m) => ({ default: m.Viewer3D })),
+);
 
 export function Editor() {
   return (
@@ -122,6 +123,7 @@ function EditorShell() {
             <SketchControls />
             <SketchDimensions />
             <DynamicInput />
+            <RoomMarks />
             <UnderlayControls />
             <RoomSheet />
             <EstimateSheet />

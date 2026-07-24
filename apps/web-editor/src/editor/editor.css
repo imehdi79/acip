@@ -770,6 +770,56 @@ input.room-row-name:focus {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
+/* ── room marks (editable R1/R2… labels on the plan, with the Marks toggle) ── */
+.room-marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.room-mark {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.room-mark-btn {
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid #3a5a4c;
+  background: rgba(20, 28, 24, 0.9);
+  color: #8fd0a8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+}
+
+.room-mark-btn:hover {
+  border-color: #6fd0a0;
+  color: #b7e6cf;
+}
+
+.room-mark-btn.named {
+  background: rgba(24, 34, 28, 0.95);
+  color: #b7e6cf;
+}
+
+.room-mark-input {
+  width: 92px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 1px solid #6fd0a0;
+  background: #10161a;
+  color: #e8ecf1;
+  font-size: 12px;
+  text-align: center;
+  outline: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
 /* ── dynamic input (length typed while drawing, follows the cursor) ── */
 .dynamic-input {
   position: absolute;

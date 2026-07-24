@@ -97,7 +97,7 @@ export function TopBar() {
         <button
           type="button"
           className={showMarks ? 'active' : ''}
-          title="Show entity marks (W3, D1) — how you and the agent name things"
+          title="Show marks — walls/doors (W3, D1) and editable room labels (R1…)"
           onClick={() => ui.showMarks.set(!showMarks)}
         >
           <IconHash size={16} stroke={1.75} />
