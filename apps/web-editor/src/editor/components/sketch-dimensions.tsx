@@ -6,7 +6,7 @@ import { useRuntime } from '../runtime';
 import { useDocRevision, useSelectionIds } from '../hooks';
 import { useStoreValue } from '../store';
 import { formatLength, formatLengthValue, lengthUnit, parseLength } from '../units';
-import { detectRectRoom, resizeRectRoom, setWallLength } from '../rooms';
+import { resizeWallLength } from '../rooms';
 
 /** most walls a single sketch shows chips for — a guard against clutter */
 const MAX_CHIPS = 16;
@@ -14,16 +14,16 @@ const MAX_CHIPS = 16;
 interface WallChip {
   id: EntityId;
   mid: Point;
+  /** the wall's own length — the number shown and edited */
   length: number;
-  horizontal: boolean;
 }
 
 /**
  * "A floating button on each detected wall." After free-draw, each recognized
- * wall gets a small length chip at its midpoint; tap it to type an exact
- * length. For a clean rectangular room the edit resizes the room (keeps it
- * square); otherwise it slides that wall's far endpoint, dragging joined
- * corners along. Positioned from the live camera, so chips track pan/zoom.
+ * wall gets a chip at its midpoint showing its length. Editing it resizes the
+ * wall CENTERED: the walls joined at each end slide out/in symmetrically so the
+ * length changes without the shape shifting or skewing (angles preserved, the
+ * facing wall follows). Positioned from the live camera, so chips track pan/zoom.
  */
 export function SketchDimensions() {
   const session = useSession();
@@ -56,7 +56,6 @@ export function SketchDimensions() {
       id: e.id,
       mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
       length: e.getLength(),
-      horizontal: Math.abs(a.y - b.y) <= Math.abs(a.x - b.x),
     });
   }
   if (chips.length === 0) return null;
@@ -72,22 +71,18 @@ export function SketchDimensions() {
     if (!state || state.committed || state.cancelled) return;
     state.committed = true;
     const meters = parseLength(draft, unit);
-    if (meters === null || meters < 0.1 || Math.abs(meters - chip.length) < 1e-4) {
+    if (
+      meters === null ||
+      meters < 0.1 ||
+      Math.abs(meters - chip.length) < 1e-4
+    ) {
       return;
     }
     const dispatch = (name: string, params: unknown) =>
       session.dispatch(name, params);
     try {
-      const room = detectRectRoom(session.doc, session.selection.list());
-      if (room && room.walls.some((w) => w.id === chip.id)) {
-        // keep the room a rectangle: one dimension follows the wall's axis
-        const width = room.maxX - room.minX;
-        const height = room.maxY - room.minY;
-        if (chip.horizontal) resizeRectRoom(dispatch, room, meters, height);
-        else resizeRectRoom(dispatch, room, width, meters);
-      } else {
-        setWallLength(dispatch, session.doc, chip.id, meters);
-      }
+      // resize the wall centered — the shape keeps its angles and stays put
+      resizeWallLength(dispatch, session.doc, chip.id, meters);
     } catch (err) {
       ui.appendLog(err instanceof Error ? err.message : String(err), 'error');
     }
@@ -124,7 +119,7 @@ export function SketchDimensions() {
             ) : (
               <button
                 type="button"
-                title="Set this wall's length"
+                title="Set this wall's length (resizes centered)"
                 onClick={() => {
                   setDraft(formatLengthValue(chip.length, unit));
                   edit.current = { committed: false, cancelled: false };

@@ -6,7 +6,12 @@ import type {
   ToolContext,
   ToolInputEvent,
 } from '@acip/editor-core';
-import { detectRectRoom, rectRoomCorners, resizeRectRoomTo } from '../rooms';
+import {
+  detectRectRoom,
+  planStickyWallMove,
+  rectRoomCorners,
+  resizeRectRoomTo,
+} from '../rooms';
 import type { RectRoom } from '../rooms';
 import { alignGuides, constrainAngle, cornerAngles } from './drafting';
 import type { AlignGuide } from './drafting';
@@ -240,7 +245,11 @@ export class SelectTool implements Tool {
       case 'drag': {
         const delta = sub(e.point, mode.start);
         if (delta.x !== 0 || delta.y !== 0) {
-          ctx.dispatch('ENTITY.MOVE', { ids: mode.ids, delta });
+          // moving whole walls carries their joins: attached walls stretch to
+          // follow (one undo). Any non-wall in the selection → plain translate.
+          const plan = planStickyWallMove(ctx.doc, mode.ids, delta);
+          if (plan) ctx.dispatch('GRIP.MOVEMANY', { moves: plan.moves });
+          else ctx.dispatch('ENTITY.MOVE', { ids: mode.ids, delta });
         }
         break;
       }
@@ -448,11 +457,17 @@ export class SelectTool implements Tool {
   private updateGhost(cursor: Point): void {
     const ctx = this.ctx;
     if (!ctx || this.mode.kind !== 'drag') return;
-    const m = translation(sub(cursor, this.mode.start));
-    const ghost = this.mode.ids
+    const delta = sub(cursor, this.mode.start);
+    const m = translation(delta);
+    const ghost: Geometry[] = this.mode.ids
       .map((id) => ctx.doc.get(id))
       .filter((ent): ent is Entity => ent !== null)
       .map((ent) => transformGeometry(ent.getEffectiveGeometry(), m));
+    // attached walls stretching to follow the move
+    const plan = planStickyWallMove(ctx.doc, this.mode.ids, delta);
+    if (plan) {
+      for (const g of plan.ghosts) ghost.push({ kind: 'segment', a: g.a, b: g.b });
+    }
     this.ui.setGhost(ghost);
   }
 

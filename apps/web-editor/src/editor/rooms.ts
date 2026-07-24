@@ -2,6 +2,8 @@ import type { DrawingDocument, EntityId, Point } from '@acip/editor-core';
 import { WallEntity } from '@acip/editor-core';
 
 const TOL = 1e-3;
+/** two directions count as parallel when the sine of their angle is below this (~5°) */
+const PARALLEL_SIN = 0.09;
 
 /** dispatch signature both a session and a tool context satisfy */
 export type Dispatch = (name: string, params: unknown) => unknown;
@@ -99,12 +101,14 @@ export function resizeRectRoomTo(
 }
 
 /**
- * Set a single wall to an explicit length by sliding its far endpoint (b)
- * along the wall direction, dragging any wall endpoints welded to that corner
- * with it so joins stay intact. One undo step (GRIP.MOVEMANY). The near
- * endpoint (a) stays put.
+ * Set a wall to an explicit length, CENTERED: the walls joined to each end are
+ * pushed out/in symmetrically along the wall's axis so its length becomes
+ * `newLength` without shifting the shape sideways or skewing its angles. The
+ * facing (parallel) wall follows because it rides on those joined walls, so a
+ * hand-drawn room keeps its shape and grows/shrinks about the wall's midpoint.
+ * One undo step (GRIP.MOVEMANY).
  */
-export function setWallLength(
+export function resizeWallLength(
   dispatch: Dispatch,
   doc: DrawingDocument,
   wallId: EntityId,
@@ -113,20 +117,93 @@ export function setWallLength(
   const wall = doc.get(wallId);
   if (!(wall instanceof WallEntity) || newLength <= 0) return;
   const { a, b } = wall.getBaseline();
-  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
   if (len < TOL) return;
-  const to: Point = {
-    x: a.x + ((b.x - a.x) / len) * newLength,
-    y: a.y + ((b.y - a.y) / len) * newLength,
+  const ux = dx / len;
+  const uy = dy / len;
+  const half = (newLength - len) / 2;
+  const dA = { x: -ux * half, y: -uy * half }; // the 'a' end backs off along u
+  const dB = { x: ux * half, y: uy * half }; //  the 'b' end reaches out along u
+
+  const moves = new Map<string, { id: EntityId; index: number; to: Point }>();
+  const put = (m: { id: EntityId; index: number; to: Point }) =>
+    moves.set(`${m.id}:${m.index}`, m);
+  // the wall itself grows symmetrically about its midpoint
+  put({ id: wallId, index: 0, to: { x: a.x + dA.x, y: a.y + dA.y } });
+  put({ id: wallId, index: 1, to: { x: b.x + dB.x, y: b.y + dB.y } });
+
+  // translate each cross wall joined at an end (skip collinear continuations),
+  // dragging its far neighbours — this carries the parallel wall along too
+  const shiftCross = (corner: Point, delta: Point) => {
+    for (const o of doc.all()) {
+      if (!(o instanceof WallEntity) || o.id === wallId) continue;
+      const bl = o.getBaseline();
+      const ol = Math.hypot(bl.b.x - bl.a.x, bl.b.y - bl.a.y);
+      if (ol < TOL) continue;
+      if (!samePt(bl.a, corner) && !samePt(bl.b, corner)) continue;
+      const ox = (bl.b.x - bl.a.x) / ol;
+      const oy = (bl.b.y - bl.a.y) / ol;
+      if (Math.abs(ux * oy - uy * ox) <= PARALLEL_SIN) continue; // collinear → skip
+      const plan = planStickyWallMove(doc, [o.id], delta);
+      if (plan) for (const m of plan.moves) put(m);
+    }
   };
+  shiftCross(a, dA);
+  shiftCross(b, dB);
+
+  dispatch('GRIP.MOVEMANY', { moves: [...moves.values()] });
+}
+
+export interface StickyWallMovePlan {
+  /** grip moves to dispatch (GRIP.MOVEMANY), one undo step */
+  moves: { id: EntityId; index: number; to: Point }[];
+  /** preview segments for attached walls stretching (fixed end → moved corner) */
+  ghosts: { a: Point; b: Point }[];
+}
+
+/**
+ * Plan a whole-wall move that carries its joins: the selected walls translate
+ * by `delta`, and any wall welded to one of their corners has that endpoint
+ * follow (stretching, its far end fixed) so junctions stay intact. Returns
+ * null unless every selected entity is a wall — other selections fall back to
+ * a plain translate.
+ */
+export function planStickyWallMove(
+  doc: DrawingDocument,
+  ids: readonly EntityId[],
+  delta: Point,
+): StickyWallMovePlan | null {
+  if (ids.length === 0) return null;
+  const idSet = new Set(ids);
   const moves: { id: EntityId; index: number; to: Point }[] = [];
-  for (const other of doc.all()) {
-    if (!(other instanceof WallEntity)) continue;
-    const bl = other.getBaseline();
-    if (samePt(bl.a, b)) moves.push({ id: other.id, index: 0, to });
-    if (samePt(bl.b, b)) moves.push({ id: other.id, index: 1, to });
+  const movingCorners: Point[] = [];
+  for (const id of ids) {
+    const e = doc.get(id);
+    if (!(e instanceof WallEntity)) return null; // sticky move is wall-only
+    const { a, b } = e.getBaseline();
+    moves.push({ id, index: 0, to: { x: a.x + delta.x, y: a.y + delta.y } });
+    moves.push({ id, index: 1, to: { x: b.x + delta.x, y: b.y + delta.y } });
+    movingCorners.push(a, b);
   }
-  if (moves.length > 0) dispatch('GRIP.MOVEMANY', { moves });
+  const ghosts: { a: Point; b: Point }[] = [];
+  const onCorner = (p: Point) => movingCorners.some((c) => samePt(c, p));
+  for (const e of doc.all()) {
+    if (!(e instanceof WallEntity) || idSet.has(e.id)) continue;
+    const { a, b } = e.getBaseline();
+    if (onCorner(a)) {
+      const to = { x: a.x + delta.x, y: a.y + delta.y };
+      moves.push({ id: e.id, index: 0, to });
+      ghosts.push({ a: b, b: to });
+    }
+    if (onCorner(b)) {
+      const to = { x: b.x + delta.x, y: b.y + delta.y };
+      moves.push({ id: e.id, index: 1, to });
+      ghosts.push({ a, b: to });
+    }
+  }
+  return { moves, ghosts };
 }
 
 /** resize to new outer dimensions, anchored at the bottom-left corner */
