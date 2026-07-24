@@ -30,11 +30,13 @@ export type {
   AddWallParams,
   AddWindowParams,
   AddDoorParams,
+  SetWallPropsParams,
 } from './architecture.js';
 export {
   AddWallCommand,
   AddWindowCommand,
   AddDoorCommand,
+  SetWallPropsCommand,
   registerArchitectureCommands,
 } from './architecture.js';
 export type { AddSlabParams, AutoSlabParams } from './slabs.js';

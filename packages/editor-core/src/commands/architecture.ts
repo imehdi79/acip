@@ -10,7 +10,7 @@ import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
 import type { CommandRegistry } from './command-registry.js';
 import { S } from './schema.js';
-import { asId, asNumber, asPoint, asPositive } from './validate.js';
+import { asId, asIdArray, asNumber, asPoint, asPositive } from './validate.js';
 
 export interface AddWallParams {
   a: Point;
@@ -281,10 +281,73 @@ export const ResizeOpeningCommand: Command<ResizeOpeningParams, void> = {
   },
 };
 
+export interface SetWallPropsParams {
+  ids: EntityId[];
+  thickness?: number;
+  height?: number;
+}
+
+/**
+ * Set the raw thickness and/or height of walls. Height is always local.
+ * Thickness only shows when the wall has no assembly type (a typed wall derives
+ * thickness from its layers), so setting thickness clears the assigned type —
+ * the direct number wins over the assembly.
+ */
+export const SetWallPropsCommand: Command<SetWallPropsParams, number> = {
+  name: 'WALL.SETPROPS',
+  description:
+    'Set the thickness and/or height in meters of one or more walls. Setting ' +
+    'thickness clears any assigned type so the raw thickness applies (a typed ' +
+    'wall otherwise derives thickness from its assembly). Returns how many ' +
+    'walls changed.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: SetWallPropsParams = { ids: asIdArray(raw['ids'], 'ids') };
+      if (raw['thickness'] !== undefined) {
+        params.thickness = asPositive(raw['thickness'], 'thickness');
+      }
+      if (raw['height'] !== undefined) {
+        params.height = asPositive(raw['height'], 'height');
+      }
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          ids: S.array(S.id('wall id'), 'walls to update'),
+          thickness: S.number('wall thickness in meters (clears the assigned type)'),
+          height: S.number('wall height in meters'),
+        },
+        ['ids'],
+      ),
+  ),
+  execute(ctx, params) {
+    let count = 0;
+    for (const id of params.ids) {
+      const entity = ctx.doc.get(id);
+      if (!(entity instanceof WallEntity)) continue;
+      ctx.tx.update(entity, (e) => {
+        const wall = e as WallEntity;
+        if (params.thickness !== undefined) {
+          wall.thickness = params.thickness;
+          wall.typeRef = undefined; // raw thickness only applies without a type
+        }
+        if (params.height !== undefined) {
+          wall.vertical = { height: params.height };
+        }
+      });
+      count += 1;
+    }
+    return count;
+  },
+};
+
 export function registerArchitectureCommands(registry: CommandRegistry): void {
   registry.register(AddWallCommand);
   registry.register(AddWindowCommand);
   registry.register(AddDoorCommand);
   registry.register(MoveOpeningCommand);
   registry.register(ResizeOpeningCommand);
+  registry.register(SetWallPropsCommand);
 }

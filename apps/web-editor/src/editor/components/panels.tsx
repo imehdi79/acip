@@ -28,8 +28,10 @@ import { roomNameKey, roomNames, setRoomName } from '../room-names';
 import {
   OpeningDimensions,
   RoomDimensions,
+  WallProps,
   useRectRoom,
   useSelectedOpening,
+  useSelectedWalls,
 } from './room-dimensions';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
@@ -44,6 +46,7 @@ export function Panels() {
   const selection = useSelectionIds(session);
   const room = useRectRoom();
   const opening = useSelectedOpening();
+  const walls = useSelectedWalls();
   const panelsOpen = useStoreValue(ui.panelsOpen);
 
   const single = selection.length === 1 ? session.doc.get(selection[0]) : null;
@@ -102,7 +105,15 @@ export function Panels() {
             <OpeningDimensions opening={opening} />
           </>
         )}
-        {selection.length > 1 && !room && (
+        {walls && (
+          <>
+            <p className="room-label">
+              {walls.ids.length > 1 ? `${walls.ids.length} walls` : 'Wall'}
+            </p>
+            <WallProps walls={walls} />
+          </>
+        )}
+        {selection.length > 1 && !room && !walls && (
           <p>{selection.length} entities selected</p>
         )}
         {single && (

@@ -58,6 +58,26 @@ describe('WallEntity', () => {
     expect(session.measure.areaOf(id)).toBeCloseTo(3.0); // 10m × 0.3m
   });
 
+  test('WALL.SETPROPS sets thickness + height and clears the type', () => {
+    const session = new EditorSession();
+    const id = addWall(session, 0, 0, 10, 0);
+    const n = session.dispatch<number>('WALL.SETPROPS', {
+      ids: [id],
+      thickness: 0.2,
+      height: 2.7,
+    });
+    expect(n).toBe(1);
+    const wall = session.doc.get(id) as WallEntity;
+    expect(wall.getThickness()).toBeCloseTo(0.2);
+    expect(wall.getHeight()).toBeCloseTo(2.7);
+    expect(wall.typeRef).toBeUndefined();
+    // one undo restores both
+    session.undo();
+    const back = session.doc.get(id) as WallEntity;
+    expect(back.getThickness()).toBeCloseTo(0.3);
+    expect(back.getHeight()).toBeCloseTo(3);
+  });
+
   test('wall extrudes to a mesh', () => {
     const session = new EditorSession();
     const id = addWall(session, 0, 0, 10, 0);

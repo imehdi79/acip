@@ -1,7 +1,9 @@
 import { useRef } from 'react';
 import { IconCheck, IconX } from '@tabler/icons-react';
-import { DoorEntity, WindowEntity } from '@acip/editor-core';
+import { DoorEntity, WallEntity, WindowEntity } from '@acip/editor-core';
+import type { EntityId } from '@acip/editor-core';
 import { useSession } from '../session-context';
+import { useRuntime } from '../runtime';
 import { useDocRevision, useSelectionIds } from '../hooks';
 import { useStoreValue } from '../store';
 import { formatLengthValue, lengthUnit, parseLength } from '../units';
@@ -35,6 +37,108 @@ export function useSelectedOpening(): SelectedOpening | null {
     return { id: e.id, kind: e.type, t: e.t, width: e.width };
   }
   return null;
+}
+
+export interface SelectedWalls {
+  ids: EntityId[];
+  /** common height across the selection, or null when they differ */
+  height: number | null;
+  /** common thickness across the selection, or null when they differ */
+  thickness: number | null;
+}
+
+/** the wall selection (all selected must be walls), recomputed per commit */
+export function useSelectedWalls(): SelectedWalls | null {
+  const session = useSession();
+  useDocRevision(session);
+  const ids = useSelectionIds(session);
+  if (ids.length === 0) return null;
+  const walls: WallEntity[] = [];
+  for (const id of ids) {
+    const e = session.doc.get(id);
+    if (!(e instanceof WallEntity)) return null; // mixed / non-wall
+    walls.push(e);
+  }
+  const uniform = (vals: number[]) =>
+    vals.every((v) => Math.abs(v - vals[0]) < 1e-6) ? vals[0] : null;
+  return {
+    ids: walls.map((w) => w.id),
+    height: uniform(walls.map((w) => w.getHeight())),
+    thickness: uniform(walls.map((w) => w.getThickness())),
+  };
+}
+
+/**
+ * Height + thickness editor for the selected wall(s). Numbers-first, applied by
+ * the ✓ button (or Enter) in one undo step via WALL.SETPROPS. Setting thickness
+ * detaches the wall from its assembly type (the raw number then wins); height
+ * is always local. A mixed selection shows blank fields until you type a value.
+ */
+export function WallProps({ walls }: { walls: SelectedWalls }) {
+  const session = useSession();
+  const { ui } = useRuntime();
+  const unit = useStoreValue(lengthUnit);
+  const heightRef = useRef<HTMLInputElement>(null);
+  const thickRef = useRef<HTMLInputElement>(null);
+
+  const apply = () => {
+    const params: Record<string, unknown> = { ids: walls.ids };
+    const h = parseLength(heightRef.current?.value ?? '', unit);
+    if (h !== null && h >= 0.1 && (walls.height === null || Math.abs(h - walls.height) > 1e-6)) {
+      params['height'] = h;
+    }
+    const t = parseLength(thickRef.current?.value ?? '', unit);
+    if (t !== null && t >= 0.01 && (walls.thickness === null || Math.abs(t - walls.thickness) > 1e-6)) {
+      params['thickness'] = t;
+    }
+    if (params['height'] === undefined && params['thickness'] === undefined) {
+      return;
+    }
+    try {
+      session.dispatch('WALL.SETPROPS', params);
+    } catch (err) {
+      ui.appendLog(err instanceof Error ? err.message : String(err), 'error');
+    }
+  };
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') apply();
+    e.stopPropagation();
+  };
+
+  const hVal = walls.height !== null ? formatLengthValue(walls.height, unit) : '';
+  const tVal =
+    walls.thickness !== null ? formatLengthValue(walls.thickness, unit) : '';
+
+  return (
+    <div className="room-dims">
+      <label className="room-dim">
+        <span>Height</span>
+        <input
+          ref={heightRef}
+          key={`h:${hVal}`}
+          defaultValue={hVal}
+          placeholder="—"
+          inputMode="decimal"
+          onKeyDown={onKeyDown}
+        />
+      </label>
+      <label className="room-dim">
+        <span>Thickness</span>
+        <input
+          ref={thickRef}
+          key={`t:${tVal}`}
+          defaultValue={tVal}
+          placeholder="—"
+          inputMode="decimal"
+          onKeyDown={onKeyDown}
+        />
+      </label>
+      <span className="room-dim-unit">{unit}</span>
+      <button type="button" className="dim-apply" title="Apply" onClick={apply}>
+        <IconCheck size={16} stroke={2} />
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -171,13 +275,14 @@ export function RoomSheet() {
   const session = useSession();
   const room = useRectRoom();
   const opening = useSelectedOpening();
-  if (!room && !opening) return null;
+  const walls = useSelectedWalls();
+  if (!room && !opening && !walls) return null;
 
   return (
     <div className="room-sheet">
       <div className="room-sheet-head">
         <span className="room-sheet-title">
-          {room ? 'Room' : opening?.kind}
+          {room ? 'Room' : opening ? opening.kind : 'Wall'}
         </span>
         <button
           type="button"
@@ -187,11 +292,10 @@ export function RoomSheet() {
           <IconX size={15} stroke={1.75} />
         </button>
       </div>
-      {room ? (
-        <RoomDimensions room={room} />
-      ) : (
-        opening && <OpeningDimensions opening={opening} />
-      )}
+      {room && <RoomDimensions room={room} />}
+      {opening && <OpeningDimensions opening={opening} />}
+      {/* height/thickness for a wall selection (also under a room's 4 walls) */}
+      {walls && <WallProps walls={walls} />}
     </div>
   );
 }
