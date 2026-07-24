@@ -54,6 +54,8 @@ export type {
   IntersectFn,
   Mesh3D,
   MeshDetail,
+  WallSegment,
+  RecognizeWallsOptions,
 } from './geometry/index.js';
 export { transformGeometry } from './geometry/shapes.js';
 export {
@@ -95,6 +97,8 @@ export {
   distanceToArc,
   isAngleInArc,
   distanceToPolyline,
+  simplifyStroke,
+  recognizeWalls,
   EMPTY_MESH,
   extrudeQuad,
   extrudePolygon,

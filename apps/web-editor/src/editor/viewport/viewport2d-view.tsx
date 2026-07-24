@@ -80,6 +80,11 @@ export function Viewport2DView() {
       session.selection.events.on('changed', redrawBase),
       viewport.subscribe(() => {
         tools.worldTolerance = pickPixels / viewport.scale;
+        ui.camera.set({
+          scale: viewport.scale,
+          offsetX: viewport.offsetX,
+          offsetY: viewport.offsetY,
+        });
         redrawBase();
         redrawOverlay();
       }),
@@ -122,6 +127,11 @@ export function Viewport2DView() {
       }),
     ];
     tools.worldTolerance = pickPixels / viewport.scale;
+    ui.camera.set({
+      scale: viewport.scale,
+      offsetX: viewport.offsetX,
+      offsetY: viewport.offsetY,
+    });
 
     let panning = false;
     let lastPan = { x: 0, y: 0 };

@@ -15,7 +15,9 @@ import { DimensionTool } from './tools/dim-tool';
 import { SlabTool } from './tools/slab-tool';
 import { StairTool } from './tools/stair-tool';
 import { CalibrateTool, TraceTool } from './tools/underlay-tools';
+import { SketchTool } from './tools/sketch-tool';
 import { traceRegion } from './underlay';
+import type { WallSegment } from '@acip/editor-core';
 
 export interface EditorRuntime {
   readonly ui: EditorUi;
@@ -206,6 +208,42 @@ export function createRuntime(session: EditorSession): EditorRuntime {
   tools.register(
     new TraceTool(ui, finish, (a, b) => traceRegion(session, ui, a, b)),
   );
+  // free-draw: recognized segments become walls in one grouped undo step,
+  // typed to the seeded wall assembly, then selected + framed so the numeric
+  // room/wall editors have something to act on immediately
+  const placeSketchWalls = (segments: WallSegment[]): void => {
+    const levelId = ui.activeLevelId.get();
+    const wallTypes = session.doc.types.list('wall');
+    const extra = {
+      ...activeLayer(),
+      ...(levelId ? { levelId } : {}),
+      ...(wallTypes.length > 0 ? { typeId: wallTypes[0].id } : {}),
+    };
+    const ids: string[] = [];
+    session.history.beginGroup();
+    try {
+      for (const seg of segments) {
+        const id = session.dispatch<string>('WALL.ADD', {
+          a: seg.a,
+          b: seg.b,
+          thickness: 0.3,
+          height: 3,
+          ...extra,
+        });
+        ids.push(id);
+      }
+    } finally {
+      session.history.endGroup();
+    }
+    session.selection.clear();
+    for (const id of ids) session.selection.add(id as never);
+    ui.sketchWalls.set(ids);
+    ui.requestFit();
+    ui.appendLog(
+      `Free draw: recognized ${ids.length} wall${ids.length === 1 ? '' : 's'} — set sizes on each wall or in the panel.`,
+    );
+  };
+  tools.register(new SketchTool(ui, finish, placeSketchWalls));
   tools.useById('select');
   return { ui, tools };
 }

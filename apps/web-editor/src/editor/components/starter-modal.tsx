@@ -13,7 +13,7 @@ import type { PresetWall, RoomPreset } from '../presets';
  */
 export function StarterModal() {
   const session = useSession();
-  const { ui } = useRuntime();
+  const { ui, tools } = useRuntime();
   const open = useStoreValue(ui.starterOpen);
   const mode = useStoreValue(ui.starterMode);
   if (!open) return null;
@@ -37,6 +37,14 @@ export function StarterModal() {
     applyBlank(session);
     ui.activeLevelId.set(null);
     ui.appendLog('New blank drawing.');
+    close();
+  };
+
+  const freeDraw = () => {
+    applyBlank(session);
+    ui.activeLevelId.set(null);
+    tools.useById('sketch');
+    ui.appendLog('Free draw — sketch your walls, then press Done.');
     close();
   };
 
@@ -72,6 +80,13 @@ export function StarterModal() {
               <span className="preset-dims">{preset.dims}</span>
             </button>
           ))}
+          {!adding && (
+            <button type="button" className="preset-card" onClick={freeDraw}>
+              <FreeDrawPreview />
+              <span className="preset-name">Free draw</span>
+              <span className="preset-dims">Sketch walls by hand</span>
+            </button>
+          )}
           {!adding && (
             <button type="button" className="preset-card" onClick={blank}>
               <BlankPreview />
@@ -121,6 +136,22 @@ function BlankPreview() {
       <rect x="1" y="1" width="8" height="6" rx="0.3" className="blank-rect" />
       <line x1="5" y1="3" x2="5" y2="5" />
       <line x1="4" y1="4" x2="6" y2="4" />
+    </svg>
+  );
+}
+
+/** a hand-drawn scribble that resolves into a room — the free-draw promise */
+function FreeDrawPreview() {
+  return (
+    <svg
+      className="preset-svg sketch"
+      viewBox="0 0 10 8"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      <path
+        className="sketch-ink"
+        d="M1.6 1.4 C3 1.1 6.5 1.3 8.3 1.5 C8.5 3 8.6 5 8.4 6.6 C6 6.8 3.4 6.7 1.7 6.5 C1.5 4.8 1.5 3.1 1.6 1.4 Z"
+      />
     </svg>
   );
 }

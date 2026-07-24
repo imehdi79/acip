@@ -2,6 +2,7 @@ import {
   IconCircle,
   IconDoor,
   IconLine,
+  IconPencil,
   IconPointer,
   IconRectangle,
   IconRuler2,
@@ -17,6 +18,7 @@ import { useStoreValue } from '../store';
 
 const TOOLS: { id: string; icon: Icon; title: string }[] = [
   { id: 'select', icon: IconPointer, title: 'Select' },
+  { id: 'sketch', icon: IconPencil, title: 'Free draw (SKETCH)' },
   { id: 'line', icon: IconLine, title: 'Line (LINE)' },
   { id: 'circle', icon: IconCircle, title: 'Circle (CIRCLE)' },
   { id: 'arc', icon: IconVectorSpline, title: 'Arc (ARC)' },

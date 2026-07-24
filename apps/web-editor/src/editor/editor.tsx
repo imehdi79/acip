@@ -23,6 +23,8 @@ import { AgentChat } from './components/agent-chat';
 import { EstimateSheet } from './components/estimate-sheet';
 import { UnderlayControls } from './components/underlay-controls';
 import { StarterModal } from './components/starter-modal';
+import { SketchControls } from './components/sketch-controls';
+import { SketchDimensions } from './components/sketch-dimensions';
 import { RoomSheet } from './components/room-dimensions';
 import { loadServerRates } from './rates';
 import { serverUrl } from './agent';
@@ -103,6 +105,8 @@ function EditorShell() {
             <ViewportArea />
             <FitControl />
             <ToolControls />
+            <SketchControls />
+            <SketchDimensions />
             <UnderlayControls />
             <RoomSheet />
             <EstimateSheet />
@@ -157,7 +161,8 @@ function ToolControls() {
   const tab = useStoreValue(ui.viewTab);
   const activeToolId = useStoreValue(ui.activeToolId);
   if (tab !== 'plan') return null;
-  const drawing = activeToolId !== 'select';
+  // free-draw has its own Done/Cancel (SketchControls); don't double it up
+  const drawing = activeToolId !== 'select' && activeToolId !== 'sketch';
   return (
     <div className="tool-controls mobile-only">
       <button type="button" title="Undo" onClick={() => session.undo()}>

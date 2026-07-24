@@ -660,6 +660,116 @@ input.room-row-name:focus {
   font-weight: 500;
 }
 
+/* ── free-draw mode banner (top-center, desktop + mobile) ── */
+.sketch-controls {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px 6px 14px;
+  background: rgba(20, 22, 26, 0.94);
+  border: 1px solid #2c313a;
+  border-radius: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 6;
+  max-width: calc(100% - 24px);
+}
+
+.sketch-hint {
+  font-size: 12px;
+  color: #9fb0c0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sketch-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sketch-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0 10px;
+  border-radius: 17px;
+  border: 1px solid #2c313a;
+  background: #14161a;
+  color: #cfd3da;
+  cursor: pointer;
+}
+
+.sketch-controls .sketch-done {
+  background: #1d3a30;
+  border-color: #2f6a54;
+  color: #b7e6d2;
+  font-weight: 500;
+}
+
+.sketch-controls .sketch-done:hover:not(:disabled) {
+  background: #234636;
+  border-color: #6fd0b0;
+}
+
+.sketch-controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ── per-wall length chips (floating over each freshly-drawn wall) ── */
+.sketch-dims {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.sketch-dim-chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.sketch-dim-chip button {
+  padding: 3px 8px;
+  border-radius: 12px;
+  border: 1px solid #2f6a54;
+  background: rgba(20, 30, 26, 0.94);
+  color: #b7e6d2;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.sketch-dim-chip button:hover {
+  border-color: #6fd0b0;
+  background: rgba(28, 42, 36, 0.96);
+}
+
+.sketch-dim-input {
+  width: 66px;
+  padding: 3px 6px;
+  border-radius: 12px;
+  border: 1px solid #6fd0b0;
+  background: #10161a;
+  color: #e8ecf1;
+  font-size: 12px;
+  text-align: center;
+  outline: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
 /* ── underlay controls (floating card while a plan image is loaded) ── */
 .underlay-card {
   position: absolute;
@@ -1123,6 +1233,15 @@ input.room-row-name:focus {
   stroke: #3a414d;
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.preset-svg.sketch .sketch-ink {
+  fill: none;
+  stroke: #6fd0e0;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
 

@@ -98,6 +98,37 @@ export function resizeRectRoomTo(
   dispatch('GRIP.MOVEMANY', { moves });
 }
 
+/**
+ * Set a single wall to an explicit length by sliding its far endpoint (b)
+ * along the wall direction, dragging any wall endpoints welded to that corner
+ * with it so joins stay intact. One undo step (GRIP.MOVEMANY). The near
+ * endpoint (a) stays put.
+ */
+export function setWallLength(
+  dispatch: Dispatch,
+  doc: DrawingDocument,
+  wallId: EntityId,
+  newLength: number,
+): void {
+  const wall = doc.get(wallId);
+  if (!(wall instanceof WallEntity) || newLength <= 0) return;
+  const { a, b } = wall.getBaseline();
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len < TOL) return;
+  const to: Point = {
+    x: a.x + ((b.x - a.x) / len) * newLength,
+    y: a.y + ((b.y - a.y) / len) * newLength,
+  };
+  const moves: { id: EntityId; index: number; to: Point }[] = [];
+  for (const other of doc.all()) {
+    if (!(other instanceof WallEntity)) continue;
+    const bl = other.getBaseline();
+    if (samePt(bl.a, b)) moves.push({ id: other.id, index: 0, to });
+    if (samePt(bl.b, b)) moves.push({ id: other.id, index: 1, to });
+  }
+  if (moves.length > 0) dispatch('GRIP.MOVEMANY', { moves });
+}
+
 /** resize to new outer dimensions, anchored at the bottom-left corner */
 export function resizeRectRoom(
   dispatch: Dispatch,

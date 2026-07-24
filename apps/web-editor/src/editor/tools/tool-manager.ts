@@ -31,6 +31,11 @@ export class ToolManager {
     this.tools.set(tool.id, tool);
   }
 
+  /** the live tool, for chrome that drives a specific tool (e.g. free-draw) */
+  get current(): Tool | null {
+    return this.active;
+  }
+
   useById(id: string): void {
     const tool = this.tools.get(id);
     if (!tool || tool === this.active) return;

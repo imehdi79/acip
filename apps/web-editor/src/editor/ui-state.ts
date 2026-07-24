@@ -46,6 +46,15 @@ export interface OverlayState {
   /** translated preview geometry while drag-moving */
   readonly ghost: readonly Geometry[] | null;
   readonly box: SelectionBox | null;
+  /** freehand pen strokes (world points) while the free-draw tool is live */
+  readonly ink: readonly (readonly Point[])[] | null;
+}
+
+/** 2D camera snapshot so React overlays can place chrome at world points */
+export interface CameraState {
+  readonly scale: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
 }
 
 /**
@@ -67,6 +76,7 @@ const EMPTY_OVERLAY: OverlayState = {
   rubber: null,
   ghost: null,
   box: null,
+  ink: null,
 };
 
 /** Chrome-facing UI state; the viewport and tools write, React chrome subscribes. */
@@ -97,6 +107,16 @@ export class EditorUi {
   readonly starterMode = new ValueStore<StarterMode>('replace');
   /** plan image traced under the drawing; null = none loaded */
   readonly underlay = new ValueStore<UnderlayState | null>(null);
+  /** finished freehand strokes waiting to be recognized (free-draw tool) */
+  readonly sketchStrokes = new ValueStore<number>(0);
+  /** walls just produced by free-draw — get floating per-wall length chips */
+  readonly sketchWalls = new ValueStore<readonly string[]>([]);
+  /** live 2D camera, published by the viewport for world→screen overlays */
+  readonly camera = new ValueStore<CameraState>({
+    scale: 60,
+    offsetX: 0,
+    offsetY: 0,
+  });
   /** bumped to ask the 2D viewport to zoom-to-fit */
   readonly fitTick = new ValueStore<number>(0);
   /** optional target for the next fit; null = fit the whole drawing */
@@ -136,6 +156,10 @@ export class EditorUi {
 
   setBox(box: OverlayState['box']): void {
     this.overlay.set({ ...this.overlay.get(), box });
+  }
+
+  setInk(ink: OverlayState['ink']): void {
+    this.overlay.set({ ...this.overlay.get(), ink });
   }
 
   clearOverlay(): void {

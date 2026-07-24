@@ -49,6 +49,7 @@ const COLORS = {
   markHalo: '#16181d',
   roomHandle: '#8fd0a8',
   roomHandleBorder: '#0e1116',
+  ink: '#6fd0e0',
 };
 
 /** room resize handle half-size in px (bigger than grips — a touch target) */
@@ -518,6 +519,33 @@ export function drawOverlay(
     for (const g of overlay.ghost) pathGeometry(ctx, g);
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  if (overlay.ink) {
+    // freehand pen strokes, world space, in the pen accent — a live trace of
+    // what the drafter has drawn before it's recognized into walls
+    ctx.setTransform(
+      dpr * viewport.scale,
+      0,
+      0,
+      -dpr * viewport.scale,
+      dpr * viewport.offsetX,
+      dpr * viewport.offsetY,
+    );
+    ctx.strokeStyle = COLORS.ink;
+    ctx.lineWidth = 2 / viewport.scale;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    for (const stroke of overlay.ink) {
+      if (stroke.length === 0) continue;
+      ctx.moveTo(stroke[0].x, stroke[0].y);
+      for (let i = 1; i < stroke.length; i++) ctx.lineTo(stroke[i].x, stroke[i].y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
