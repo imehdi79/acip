@@ -158,7 +158,7 @@ export function Viewport2DView() {
       const raw = viewport.toWorld(e.offsetX, e.offsetY);
       const snap = session.snap.snap(raw, SNAP_PIXELS / viewport.scale);
       ui.setSnap(snap);
-      return snap ? snap.point : raw;
+      return { point: snap ? snap.point : raw, snapped: !!snap };
     };
 
     /* snapped world point for a touch, using client coords + a wider radius */
@@ -167,7 +167,7 @@ export function Viewport2DView() {
       const raw = viewport.toWorld(e.clientX - rect.left, e.clientY - rect.top);
       const snap = session.snap.snap(raw, TOUCH_SNAP_PIXELS / viewport.scale);
       ui.setSnap(snap);
-      return snap ? snap.point : raw;
+      return { point: snap ? snap.point : raw, snapped: !!snap };
     };
 
     const onTouchDown = (e: PointerEvent) => {
@@ -179,12 +179,12 @@ export function Viewport2DView() {
         // otherwise this is a tap-or-pan
         pickPixels = TOUCH_PICK_PIXELS;
         tools.worldTolerance = pickPixels / viewport.scale;
-        const point = touchWorld(e);
+        const { point, snapped } = touchWorld(e);
         if (tools.hitDraggable(point, tools.worldTolerance)) {
           touchMode = 'tool-drag';
           lastToolPoint = point;
           forward(() =>
-            tools.pointerDown({ point, modifiers: modifiersOf(e) }),
+            tools.pointerDown({ point, modifiers: modifiersOf(e), snapped }),
           );
         } else {
           touchMode = 'tap';
@@ -215,9 +215,11 @@ export function Viewport2DView() {
       touch.x = e.clientX;
       touch.y = e.clientY;
       if (touchMode === 'tool-drag') {
-        const point = touchWorld(e);
+        const { point, snapped } = touchWorld(e);
         lastToolPoint = point;
-        forward(() => tools.pointerMove({ point, modifiers: modifiersOf(e) }));
+        forward(() =>
+          tools.pointerMove({ point, modifiers: modifiersOf(e), snapped }),
+        );
         return;
       }
       if (touchMode === 'tap') {
@@ -254,17 +256,19 @@ export function Viewport2DView() {
       if (touchMode === 'tool-drag') {
         const modifiers = modifiersOf(e);
         if (cancelled) forward(() => tools.key('Escape'));
-        else
-          forward(() => tools.pointerUp({ point: touchWorld(e), modifiers }));
+        else {
+          const { point, snapped } = touchWorld(e);
+          forward(() => tools.pointerUp({ point, modifiers, snapped }));
+        }
         ui.setSnap(null);
       } else if (touchMode === 'tap' && !cancelled) {
         pickPixels = TOUCH_PICK_PIXELS;
         tools.worldTolerance = pickPixels / viewport.scale;
-        const point = touchWorld(e);
+        const { point, snapped } = touchWorld(e);
         const modifiers = modifiersOf(e);
         forward(() => {
-          tools.pointerDown({ point, modifiers });
-          tools.pointerUp({ point, modifiers });
+          tools.pointerDown({ point, modifiers, snapped });
+          tools.pointerUp({ point, modifiers, snapped });
         });
       }
       if (touches.size === 1) {
@@ -292,8 +296,10 @@ export function Viewport2DView() {
         return;
       }
       if (e.button !== 0) return;
-      const point = toolPoint(e);
-      forward(() => tools.pointerDown({ point, modifiers: modifiersOf(e) }));
+      const { point, snapped } = toolPoint(e);
+      forward(() =>
+        tools.pointerDown({ point, modifiers: modifiersOf(e), snapped }),
+      );
     };
 
     const onPointerMove = (e: PointerEvent) => {
@@ -306,9 +312,11 @@ export function Viewport2DView() {
         lastPan = { x: e.clientX, y: e.clientY };
         return;
       }
-      const point = toolPoint(e);
+      const { point, snapped } = toolPoint(e);
       ui.coords.set(point);
-      forward(() => tools.pointerMove({ point, modifiers: modifiersOf(e) }));
+      forward(() =>
+        tools.pointerMove({ point, modifiers: modifiersOf(e), snapped }),
+      );
     };
 
     const onPointerUp = (e: PointerEvent) => {
@@ -321,8 +329,10 @@ export function Viewport2DView() {
         return;
       }
       if (e.button !== 0) return;
-      const point = toolPoint(e);
-      forward(() => tools.pointerUp({ point, modifiers: modifiersOf(e) }));
+      const { point, snapped } = toolPoint(e);
+      forward(() =>
+        tools.pointerUp({ point, modifiers: modifiersOf(e), snapped }),
+      );
     };
 
     const onPointerCancel = (e: PointerEvent) => {

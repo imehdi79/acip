@@ -17,6 +17,12 @@ export interface InputModifiers {
 export interface ToolInputEvent {
   readonly point: Point;
   readonly modifiers: InputModifiers;
+  /**
+   * True when `point` was pulled onto an object snap (an existing endpoint,
+   * midpoint, …). Tools that impose their own constraints — angle/ortho snap —
+   * yield to it, so landing exactly on a real point always wins.
+   */
+  readonly snapped?: boolean;
 }
 
 export interface ToolContext {

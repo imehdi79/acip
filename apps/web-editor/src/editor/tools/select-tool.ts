@@ -8,7 +8,10 @@ import type {
 } from '@acip/editor-core';
 import { detectRectRoom, rectRoomCorners, resizeRectRoomTo } from '../rooms';
 import type { RectRoom } from '../rooms';
+import { alignGuides, constrainAngle, cornerAngles } from './drafting';
+import type { AlignGuide } from './drafting';
 import {
+  JOIN_TOLERANCE,
   bboxExpand,
   bboxFromPoints,
   detectSpaces,
@@ -27,7 +30,18 @@ type Mode =
   | { kind: 'idle' }
   | { kind: 'maybe-drag'; start: Point; ids: EntityId[] }
   | { kind: 'drag'; start: Point; ids: EntityId[] }
-  | { kind: 'grip'; entityId: EntityId; index: number; start: Point }
+  | {
+      kind: 'grip';
+      entityId: EntityId;
+      index: number;
+      start: Point;
+      /** the corner's real world position (grip point, not the click) */
+      anchor: Point;
+      /** the dragged wall/line's OTHER endpoint — angle-snap reference (else null) */
+      fixed: Point | null;
+      /** move every endpoint stuck to this corner together, not just this one */
+      stick: boolean;
+    }
   | { kind: 'room-resize'; room: RectRoom; fixed: Point }
   | { kind: 'box'; start: Point; additive: boolean };
 
@@ -79,6 +93,8 @@ export class SelectTool implements Tool {
     this.mode = { kind: 'idle' };
     this.ui.setGhost(null);
     this.ui.setBox(null);
+    this.ui.setAngles(null);
+    this.ui.setGuides(null);
   }
 
   onPointerDown(e: ToolInputEvent): void {
@@ -103,8 +119,27 @@ export class SelectTool implements Tool {
     // 1) grips of selected entities take priority
     const grip = this.gripAt(e.point, tolerance * 1.5);
     if (grip) {
-      this.mode = { kind: 'grip', ...grip, start: e.point };
-      this.ui.prompt.set('Specify new grip position');
+      // anchor at the grip's real position so coincident corners are found
+      // exactly, not at the click point (which may be up to tolerance off)
+      const entity = ctx.doc.get(grip.entityId);
+      const grips = entity && hasGrips(entity) ? entity.getGrips() : [];
+      const gp = grips.find((g) => g.index === grip.index)?.point;
+      // a two-grip wall/line gives an angle-snap reference: its fixed end
+      const fixed =
+        grips.length === 2
+          ? (grips.find((g) => g.index !== grip.index)?.point ?? null)
+          : null;
+      this.mode = {
+        kind: 'grip',
+        ...grip,
+        start: e.point,
+        anchor: gp ?? e.point,
+        fixed,
+        stick: !e.modifiers.alt, // Alt = detach this corner, move it alone
+      };
+      this.ui.prompt.set(
+        'Drag the corner (Shift = 90°, Alt = detach)',
+      );
       return;
     }
 
@@ -145,9 +180,24 @@ export class SelectTool implements Tool {
       case 'drag':
         this.updateGhost(e.point);
         break;
-      case 'grip':
-        this.ui.setRubber({ a: this.mode.start, b: e.point });
+      case 'grip': {
+        const m = this.mode;
+        const to = this.resolveGrip(m, e);
+        // dragged wall = dashed HUD line (its length + angle); the other walls
+        // stuck to the corner = ghosts; live angle arcs at the affected corners
+        this.ui.setRubber({
+          a: m.fixed ?? m.anchor,
+          b: to.point,
+          angleLocked: to.locked,
+        });
+        const ghost = this.gripGhost(m, to.point, m.entityId);
+        this.ui.setGhost(ghost.length > 0 ? ghost : null);
+        this.ui.setGuides(to.guides.length > 0 ? to.guides : null);
+        this.ui.setAngles(
+          m.stick ? cornerAngles(ctx.doc, m.anchor, to.point) : null,
+        );
         break;
+      }
       case 'room-resize': {
         const r = rectFrom(this.mode.fixed, e.point);
         const outline: Geometry = {
@@ -183,6 +233,8 @@ export class SelectTool implements Tool {
     this.ui.setGhost(null);
     this.ui.setBox(null);
     this.ui.setRubber(null);
+    this.ui.setAngles(null);
+    this.ui.setGuides(null);
 
     switch (mode.kind) {
       case 'drag': {
@@ -192,16 +244,30 @@ export class SelectTool implements Tool {
         }
         break;
       }
-      case 'grip':
-        ctx.dispatch('GRIP.MOVE', {
-          id: mode.entityId,
-          index: mode.index,
-          to: e.point,
-        });
+      case 'grip': {
+        // sticky corners: every endpoint welded to this one follows, so a
+        // joined wall junction stretches together instead of tearing apart.
+        // Alt at grab time detaches — then only this grip moves.
+        const to = this.resolveGrip(mode, e).point;
+        const grips = mode.stick
+          ? this.coincidentGrips(mode.anchor)
+          : [{ id: mode.entityId, index: mode.index }];
+        if (grips.length > 1) {
+          ctx.dispatch('GRIP.MOVEMANY', {
+            moves: grips.map((g) => ({ ...g, to })),
+          });
+        } else {
+          ctx.dispatch('GRIP.MOVE', {
+            id: mode.entityId,
+            index: mode.index,
+            to,
+          });
+        }
         this.ui.prompt.set(
           'Select (Shift = toggle, drag = move/box, grips = stretch)',
         );
         break;
+      }
       case 'room-resize':
         resizeRectRoomTo(
           (name, params) => ctx.dispatch(name, params),
@@ -226,7 +292,42 @@ export class SelectTool implements Tool {
     this.ui.setGhost(null);
     this.ui.setBox(null);
     this.ui.setRubber(null);
+    this.ui.setAngles(null);
+    this.ui.setGuides(null);
     this.ctx?.selection.clear();
+  }
+
+  /**
+   * Resolve the dragged corner's target: object snap wins, then Shift-ortho,
+   * then object-snap tracking to other corners (dashed guides), then soft polar
+   * angle snap relative to the wall's fixed end.
+   */
+  private resolveGrip(
+    mode: Extract<Mode, { kind: 'grip' }>,
+    e: ToolInputEvent,
+  ): { point: Point; locked: boolean; guides: AlignGuide[] } {
+    if (e.snapped) return { point: e.point, locked: false, guides: [] };
+    if (mode.fixed && e.modifiers.shift) {
+      const r = constrainAngle(mode.fixed, e.point, true);
+      return { point: r.point, locked: r.locked, guides: [] };
+    }
+    const ctx = this.ctx;
+    if (ctx) {
+      const align = alignGuides(
+        ctx.doc,
+        e.point,
+        this.getTolerance(),
+        mode.anchor,
+      );
+      if (align.guides.length > 0) {
+        return { point: align.point, locked: false, guides: align.guides };
+      }
+    }
+    if (mode.fixed) {
+      const r = constrainAngle(mode.fixed, e.point, e.modifiers.shift);
+      return { point: r.point, locked: r.locked, guides: [] };
+    }
+    return { point: e.point, locked: false, guides: [] };
   }
 
   /**
@@ -273,6 +374,57 @@ export class SelectTool implements Tool {
         return [...space.boundaryWallIds];
     }
     return null;
+  }
+
+  /**
+   * Dashed preview of the corner drag: each two-grip entity (wall/line) whose
+   * endpoint follows the dragged corner, redrawn from its fixed end to the
+   * cursor. Empty for other entities (the caller falls back to a rubber line).
+   */
+  private gripGhost(
+    mode: Extract<Mode, { kind: 'grip' }>,
+    cursor: Point,
+    excludeId?: EntityId,
+  ): Geometry[] {
+    const ctx = this.ctx;
+    if (!ctx) return [];
+    const grips = mode.stick
+      ? this.coincidentGrips(mode.anchor)
+      : [{ id: mode.entityId, index: mode.index }];
+    const ghost: Geometry[] = [];
+    for (const { id, index } of grips) {
+      if (excludeId && id === excludeId) continue;
+      const entity = ctx.doc.get(id);
+      if (!entity || !hasGrips(entity)) continue;
+      const gs = entity.getGrips();
+      if (gs.length !== 2) continue; // walls, lines — a clean single stretch
+      const fixed = gs[index === 0 ? 1 : 0].point;
+      ghost.push({ kind: 'segment', a: fixed, b: cursor });
+    }
+    return ghost;
+  }
+
+  /**
+   * Every grippable endpoint sitting on the given corner (within the wall
+   * join tolerance), across ALL entities — not just the selected one. Dragging
+   * that corner moves them together so a joined junction stays joined.
+   */
+  private coincidentGrips(
+    anchor: Point,
+  ): { id: EntityId; index: number }[] {
+    const ctx = this.ctx;
+    if (!ctx) return [];
+    const out: { id: EntityId; index: number }[] = [];
+    const area = bboxExpand(bboxFromPoints([anchor]), JOIN_TOLERANCE);
+    for (const entity of ctx.doc.queryBBox(area)) {
+      if (!hasGrips(entity)) continue;
+      for (const grip of entity.getGrips()) {
+        if (distance(grip.point, anchor) <= JOIN_TOLERANCE) {
+          out.push({ id: entity.id, index: grip.index });
+        }
+      }
+    }
+    return out;
   }
 
   private gripAt(

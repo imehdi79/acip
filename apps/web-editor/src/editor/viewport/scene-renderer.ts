@@ -50,6 +50,10 @@ const COLORS = {
   roomHandle: '#8fd0a8',
   roomHandleBorder: '#0e1116',
   ink: '#6fd0e0',
+  angleLock: '#7ee0a0',
+  angleArc: '#d9c069',
+  angleRight: '#7ee0a0',
+  guide: '#6f8fd0',
 };
 
 /** room resize handle half-size in px (bigger than grips — a touch target) */
@@ -502,6 +506,27 @@ export function drawOverlay(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
 
+  if (overlay.guides) {
+    // object-snap tracking lines: dashed, drawn under everything else, with a
+    // small tick at the corner they track from
+    ctx.strokeStyle = COLORS.guide;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    for (const g of overlay.guides) {
+      const a = viewport.toScreen(g.a);
+      const b = viewport.toScreen(g.b);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const g of overlay.guides) {
+      const a = viewport.toScreen(g.a);
+      ctx.strokeRect(a.x - 3, a.y - 3, 6, 6);
+    }
+  }
+
   if (overlay.ghost) {
     // dashed preview of geometry being drag-moved, in world space
     ctx.setTransform(
@@ -572,15 +597,17 @@ export function drawOverlay(
   if (overlay.rubber) {
     const a = viewport.toScreen(overlay.rubber.a);
     const b = viewport.toScreen(overlay.rubber.b);
-    ctx.strokeStyle = COLORS.rubber;
-    ctx.lineWidth = 1;
+    const locked = overlay.rubber.angleLocked === true;
+    ctx.strokeStyle = locked ? COLORS.angleLock : COLORS.rubber;
+    ctx.lineWidth = locked ? 1.5 : 1;
     ctx.setLineDash([6, 4]);
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
     ctx.setLineDash([]);
-    // live length readout while drawing — world meters, lifted off the line
+    // live length + bearing readout while drawing — world meters, lifted off
+    // the line; the angle turns green while it's snapped to a clean bearing
     const worldLen = Math.hypot(
       overlay.rubber.b.x - overlay.rubber.a.x,
       overlay.rubber.b.y - overlay.rubber.a.y,
@@ -589,14 +616,49 @@ export function drawOverlay(
     if (worldLen > 1e-6 && screenLen > 24) {
       const nx = -(b.y - a.y) / screenLen;
       const ny = (b.x - a.x) / screenLen;
-      ctx.fillStyle = COLORS.measure;
+      const cx = (a.x + b.x) / 2 + nx * 12;
+      const cy = (a.y + b.y) / 2 + ny * 12;
+      let deg =
+        (Math.atan2(
+          overlay.rubber.b.y - overlay.rubber.a.y,
+          overlay.rubber.b.x - overlay.rubber.a.x,
+        ) *
+          180) /
+        Math.PI;
+      deg = ((deg % 360) + 360) % 360;
       ctx.font = '11px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      ctx.fillStyle = COLORS.measure;
+      ctx.fillText(formatLength(worldLen), cx, cy);
+      ctx.fillStyle = locked ? COLORS.angleLock : COLORS.rubber;
+      ctx.fillText(`${deg.toFixed(0)}°`, cx, cy + 14);
+    }
+  }
+
+  if (overlay.angles) {
+    // live corner-angle arcs while a corner is dragged — a clean right angle
+    // reads green so 90° is obvious
+    ctx.lineWidth = 1.25;
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const R = 20;
+    for (const mark of overlay.angles) {
+      const c = viewport.toScreen(mark.at);
+      const right = Math.abs(mark.deg - 90) < 0.75;
+      const color = right ? COLORS.angleRight : COLORS.angleArc;
+      ctx.strokeStyle = color;
+      // world bearings are CCW; screen y is flipped, so negate to draw
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, R, -mark.from, -mark.to, true);
+      ctx.stroke();
+      const mid = (mark.from + mark.to) / 2;
+      ctx.fillStyle = color;
       ctx.fillText(
-        formatLength(worldLen),
-        (a.x + b.x) / 2 + nx * 12,
-        (a.y + b.y) / 2 + ny * 12,
+        `${mark.deg.toFixed(0)}°`,
+        c.x + (R + 12) * Math.cos(mid),
+        c.y - (R + 12) * Math.sin(mid),
       );
     }
   }

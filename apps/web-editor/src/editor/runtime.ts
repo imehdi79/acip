@@ -141,13 +141,21 @@ export function createRuntime(session: EditorSession): EditorRuntime {
   };
   tools.register(new SelectTool(ui, tolerance));
   tools.register(
-    new ChainedDrawTool('line', 'LINE', 'LINE.ADD', ui, finish, activeLayer),
+    new ChainedDrawTool(
+      'line',
+      'LINE',
+      'LINE.ADD',
+      ui,
+      finish,
+      tolerance,
+      activeLayer,
+    ),
   );
   tools.register(new CircleTool(ui, finish, activeLayer));
   tools.register(new ArcTool(ui, finish, activeLayer));
   tools.register(new PolylineTool(ui, tolerance, finish, activeLayer));
   tools.register(
-    new ChainedDrawTool('wall', 'WALL', 'WALL.ADD', ui, finish, () => {
+    new ChainedDrawTool('wall', 'WALL', 'WALL.ADD', ui, finish, tolerance, () => {
       const levelId = ui.activeLevelId.get();
       // resolved live — New/Open replace the catalog under a running session
       const wallTypes = session.doc.types.list('wall');

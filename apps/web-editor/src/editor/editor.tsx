@@ -25,6 +25,7 @@ import { UnderlayControls } from './components/underlay-controls';
 import { StarterModal } from './components/starter-modal';
 import { SketchControls } from './components/sketch-controls';
 import { SketchDimensions } from './components/sketch-dimensions';
+import { DynamicInput } from './components/dynamic-input';
 import { RoomSheet } from './components/room-dimensions';
 import { loadServerRates } from './rates';
 import { serverUrl } from './agent';
@@ -74,6 +75,19 @@ function EditorShell() {
         session.redo();
         return;
       }
+      // dynamic input: while a drawing tool is active, digits/backspace set an
+      // exact length (Backspace here instead of erasing the empty selection)
+      if (
+        runtime.ui.activeToolId.get() !== 'select' &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.metaKey &&
+        (/^[0-9.]$/.test(e.key) || e.key === 'Backspace')
+      ) {
+        e.preventDefault();
+        runtime.tools.key(e.key);
+        return;
+      }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const ids = session.selection.list();
         if (ids.length > 0) {
@@ -107,6 +121,7 @@ function EditorShell() {
             <ToolControls />
             <SketchControls />
             <SketchDimensions />
+            <DynamicInput />
             <UnderlayControls />
             <RoomSheet />
             <EstimateSheet />

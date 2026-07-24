@@ -5,6 +5,7 @@ import type {
   Point,
   SnapPoint,
 } from '@acip/editor-core';
+import type { AlignGuide, AngleMark } from './tools/drafting';
 import { ValueStore } from './store';
 
 export type ViewTab = 'plan' | '3d';
@@ -42,12 +43,17 @@ export interface SelectionBox {
 
 export interface OverlayState {
   readonly snap: SnapPoint | null;
-  readonly rubber: { a: Point; b: Point } | null;
+  /** live rubber-band line; angleLocked = its bearing is snapped to a clean angle */
+  readonly rubber: { a: Point; b: Point; angleLocked?: boolean } | null;
   /** translated preview geometry while drag-moving */
   readonly ghost: readonly Geometry[] | null;
   readonly box: SelectionBox | null;
   /** freehand pen strokes (world points) while the free-draw tool is live */
   readonly ink: readonly (readonly Point[])[] | null;
+  /** live corner-angle arcs while a corner is dragged */
+  readonly angles: readonly AngleMark[] | null;
+  /** dashed alignment/tracking lines to existing corners */
+  readonly guides: readonly AlignGuide[] | null;
 }
 
 /** 2D camera snapshot so React overlays can place chrome at world points */
@@ -77,6 +83,8 @@ const EMPTY_OVERLAY: OverlayState = {
   ghost: null,
   box: null,
   ink: null,
+  angles: null,
+  guides: null,
 };
 
 /** Chrome-facing UI state; the viewport and tools write, React chrome subscribes. */
@@ -111,6 +119,8 @@ export class EditorUi {
   readonly sketchStrokes = new ValueStore<number>(0);
   /** walls just produced by free-draw — get floating per-wall length chips */
   readonly sketchWalls = new ValueStore<readonly string[]>([]);
+  /** typed length while drawing (dynamic input); null = not typing */
+  readonly draftLength = new ValueStore<string | null>(null);
   /** live 2D camera, published by the viewport for world→screen overlays */
   readonly camera = new ValueStore<CameraState>({
     scale: 60,
@@ -160,6 +170,14 @@ export class EditorUi {
 
   setInk(ink: OverlayState['ink']): void {
     this.overlay.set({ ...this.overlay.get(), ink });
+  }
+
+  setAngles(angles: OverlayState['angles']): void {
+    this.overlay.set({ ...this.overlay.get(), angles });
+  }
+
+  setGuides(guides: OverlayState['guides']): void {
+    this.overlay.set({ ...this.overlay.get(), guides });
   }
 
   clearOverlay(): void {
