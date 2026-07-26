@@ -5,6 +5,9 @@ Companion to [docs/editor-core](../editor-core/README.md) — read that first; t
 core's golden rules (headless core, command-bus-only mutation, views not raw
 document) bind everything here.
 
+> Looking for **how to *use* the app** (end-user, feature-by-feature)? See the
+> [User Guide](guide/README.md).
+
 | File                                           | Contents                                                                  |
 | ---------------------------------------------- | ------------------------------------------------------------------------- |
 | [01-rendering-stack.md](01-rendering-stack.md) | Canvas 2D (not Konva), Three.js (not R3F) — decisions + rationale         |
