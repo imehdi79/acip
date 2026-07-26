@@ -27,6 +27,21 @@ export function smallOpeningRule(minArea = 0.5): MeasurementRule {
   };
 }
 
+/**
+ * Solid (توپر) wall measurement: NO opening is deducted, so a wall is priced
+ * as its full gross volume/area. Pair with the standalone opening lines
+ * (`computeOpeningTakeoff`) so doors and windows are costed separately instead
+ * of being folded into the wall. Overrides `smallOpeningRule` — once any rule
+ * says an opening does not deduct, it does not deduct.
+ */
+export function solidWallRule(): MeasurementRule {
+  return {
+    id: 'solid-wall',
+    description: 'walls measured solid — openings are not deducted',
+    deducts: () => false,
+  };
+}
+
 /** flat waste allowance applied to every line quantity */
 export function wasteFactorRule(percent: number): MeasurementRule {
   return {

@@ -25,6 +25,7 @@ import type {
   PlacementParams,
 } from '../base/capabilities.js';
 import { isHost } from '../base/capabilities.js';
+import type { Phase } from './phase.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
 import type { Transaction } from '../../document/history/transaction.js';
 
@@ -56,6 +57,8 @@ export abstract class HostedOpeningEntity
   t = 0.5;
   width = 1.0;
   height = 1.2;
+  /** `new` = install; `demolish` = existing opening to be removed (renovation) */
+  phase: Phase = 'new';
 
   /** bottom of the opening above the host's base (0 for doors) */
   abstract getSillHeight(): number;

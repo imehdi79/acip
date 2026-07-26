@@ -1001,6 +1001,35 @@ input.room-row-name:focus {
   font-weight: 600;
 }
 
+.panels .cost-subtotal,
+.estimate-body .cost-subtotal {
+  padding-top: 2px;
+  color: #9aa4b0;
+  font-weight: 600;
+}
+
+/* demolition phase reads in the same warning red as the plan overlay */
+.panels h4,
+.estimate-body h4 {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  color: #cfd3da;
+}
+
+.cost-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 6px;
+  font-size: 12px;
+  color: #aab2bd;
+  cursor: pointer;
+}
+
+.cost-toggle input {
+  cursor: pointer;
+}
+
 /* ── layers panel ── */
 .layers-list .layer-row {
   display: flex;

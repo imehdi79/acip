@@ -18,6 +18,8 @@ import type {
 import { isHost } from '../base/capabilities.js';
 import { WallEntity } from './wall-entity.js';
 import { SlabEntity } from './slab-entity.js';
+import type { Phase } from './phase.js';
+import { asPhase } from './phase.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
 import type { Transaction } from '../../document/history/transaction.js';
 
@@ -49,6 +51,8 @@ export class FinishEntity extends Entity implements IHosted {
   t1 = 1;
   /** nominal build-up thickness — only the m³ unit uses it */
   thickness = DEFAULT_THICKNESS;
+  /** `new` = build (supply+install); `demolish` = strip existing, priced to remove */
+  phase: Phase = 'new';
   /** created by an AUTO macro — replaced on the next regeneration */
   auto = false;
 
@@ -216,6 +220,7 @@ export class FinishEntity extends Entity implements IHosted {
     copy.t0 = this.t0;
     copy.t1 = this.t1;
     copy.thickness = this.thickness;
+    copy.phase = this.phase;
     copy.auto = this.auto;
     return copy;
   }
@@ -228,6 +233,7 @@ export class FinishEntity extends Entity implements IHosted {
       t0: this.t0,
       t1: this.t1,
       thickness: this.thickness,
+      phase: this.phase,
       auto: this.auto,
     };
   }
@@ -252,6 +258,7 @@ export class FinishEntity extends Entity implements IHosted {
     this.t0 = t0;
     this.t1 = t1;
     this.thickness = thickness;
+    this.phase = asPhase(props['phase']);
     this.auto = props['auto'] === true;
   }
 }

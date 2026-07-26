@@ -37,6 +37,7 @@ const COLORS = {
   spaceLabel: '#6fa898',
   measure: '#d9c069',
   finish: '#c78f4a',
+  demolition: '#e0603a',
   ghost: '#8fd0ff',
   boxWindow: 'rgba(77, 163, 255, 0.12)',
   boxWindowBorder: '#4da3ff',
@@ -280,6 +281,7 @@ export function drawScene(
   selection: ReadonlySet<string>,
   showMarks = false,
   underlay: UnderlayState | null = null,
+  showDemolition = false,
 ): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -350,6 +352,13 @@ export function drawScene(
       ctx.fill('evenodd');
     }
     const entity = doc.get(item.entityId as EntityId);
+    // demolition (tear-out) phase: a finish to strip or an opening to remove.
+    // Finishes marked for demolition are a separate overlay — hidden until the
+    // Demolition button reveals them, so the build plan stays uncluttered.
+    const isDemolition =
+      (entity as { phase?: string } | undefined)?.phase === 'demolish';
+    const isFinish = entity?.type === 'finish';
+    if (isDemolition && isFinish && !showDemolition) continue;
     // typed walls expose their assembly build-up once zoomed in enough to read
     if (
       entity instanceof WallEntity &&
@@ -359,23 +368,26 @@ export function drawScene(
       if (assembly) drawAssemblyStrips(ctx, doc, assembly, viewport.scale);
     }
     // finishes render as a dashed band hugging the wall face, so they read
-    // apart from wall linework
-    const isFinish = entity?.type === 'finish';
+    // apart from wall linework; demolition items burn through in a warning red
+    const drawDemolition = isDemolition && showDemolition;
     const color = isSelected
       ? COLORS.selected
-      : isFinish
-        ? COLORS.finish
-        : (item.style.stroke ?? '#e0e0e0');
+      : drawDemolition
+        ? COLORS.demolition
+        : isFinish
+          ? COLORS.finish
+          : (item.style.stroke ?? '#e0e0e0');
     ctx.strokeStyle = color;
     // divide by scale so line weights stay zoom-independent
     ctx.lineWidth =
-      ((item.style.width ?? 1) * (isSelected ? 2.5 : isFinish ? 2 : 1.5)) /
+      ((item.style.width ?? 1) *
+        (isSelected ? 2.5 : drawDemolition ? 2.5 : isFinish ? 2 : 1.5)) /
       viewport.scale;
-    if (isFinish) ctx.setLineDash([0.15, 0.1]);
+    if (isFinish || drawDemolition) ctx.setLineDash([0.15, 0.1]);
     ctx.beginPath();
     pathGeometry(ctx, item.geometry);
     ctx.stroke();
-    if (isFinish) ctx.setLineDash([]);
+    if (isFinish || drawDemolition) ctx.setLineDash([]);
     const found: TextShape[] = [];
     collectTexts(item.geometry, found);
     for (const shape of found) texts.push({ shape, color });

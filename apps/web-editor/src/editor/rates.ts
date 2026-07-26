@@ -18,7 +18,21 @@ export const DEMO_RATES: RateTable = {
     'wall-tile': { unit: 'count', unitCost: 2.4 },
     'floor-tile': { unit: 'm2', unitCost: 32 },
     'finish-area': { unit: 'm2', unitCost: 25 },
+    paint: { unit: 'm2', unitCost: 12 },
+    cement: { unit: 'm3', unitCost: 190 },
     stair: { unit: 'count', unitCost: 1500 },
+    // openings as standalone items (pair with "Solid walls")
+    window: { unit: 'count', unitCost: 320 },
+    door: { unit: 'count', unitCost: 260 },
+    // demolition (strip-out) rates — priced independently of supply/install
+    'demo-wall-tile': { unit: 'm2', unitCost: 9 },
+    'demo-floor-tile': { unit: 'm2', unitCost: 8 },
+    'demo-plaster': { unit: 'm2', unitCost: 6 },
+    'demo-cement': { unit: 'm2', unitCost: 7 },
+    'demo-paint': { unit: 'm2', unitCost: 4 },
+    'demo-finish': { unit: 'm2', unitCost: 6 },
+    'demo-window': { unit: 'count', unitCost: 25 },
+    'demo-door': { unit: 'count', unitCost: 20 },
   },
 };
 

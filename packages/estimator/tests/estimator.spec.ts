@@ -8,6 +8,7 @@ import {
   computeSlabTakeoff,
   computeWallTakeoff,
   smallOpeningRule,
+  solidWallRule,
   wasteFactorRule,
 } from '../src/index.js';
 import type { RateTable } from '../src/index.js';
@@ -79,7 +80,10 @@ describe('assembleBoq — facts through policy to money', () => {
       block.quantity * 120 + plaster.quantity * 300,
     );
     expect(boq.currency).toBe('EUR');
-    expect(boq.missingRates).toEqual([]);
+    // the window is now a standalone item; RATES prices only block/plaster,
+    // so it surfaces as a missing rate (and adds 0 to the total)
+    expect(boq.missingRates).toEqual(['window']);
+    expect(boq.lines.find((l) => l.costCode === 'window')!.quantity).toBe(1);
   });
 
   test('mixed-unit assembly: m² by area, count by coverage, priced per unit', () => {
@@ -145,8 +149,8 @@ describe('assembleBoq — facts through policy to money', () => {
     const plain = assembleBoq(session.doc);
     const wasted = assembleBoq(session.doc, { rules: [wasteFactorRule(10)] });
     expect(wasted.lines[0].quantity).toBeCloseTo(plain.lines[0].quantity * 1.1);
-    // no rates at all: everything flagged, total 0
-    expect(plain.missingRates.sort()).toEqual(['block', 'plaster']);
+    // no rates at all: everything flagged, total 0 (window is its own line now)
+    expect(plain.missingRates.sort()).toEqual(['block', 'plaster', 'window']);
     expect(plain.total).toBe(0);
   });
 
@@ -256,6 +260,83 @@ describe('finishes — priced by the material unit', () => {
     expect(line.unit).toBe('m2');
     expect(line.quantity).toBeCloseTo(20, 6); // 5 × 4 footprint
     expect(boq.total).toBeCloseTo(20 * 40, 4);
+  });
+});
+
+describe('phases — demolition is finish in reverse; solid walls', () => {
+  test('a demolish finish bills its area against a demo- code (no tile count)', () => {
+    const session = new EditorSession();
+    const wallId = session.dispatch<EntityId>('WALL.ADD', {
+      a: point(0, 0),
+      b: point(10, 0),
+      height: 3,
+    });
+    const tile = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Wall tile',
+      unit: 'count',
+      costCode: 'wall-tile',
+      coverage: 0.09,
+    });
+    // strip the existing tile up to 2 m — a demolition band
+    session.dispatch('FINISH.ADD', {
+      wallId,
+      side: 'face+',
+      materialId: tile,
+      topHeight: 2,
+      phase: 'demolish',
+    });
+    const rates: RateTable = {
+      currency: 'EUR',
+      rates: { 'demo-wall-tile': { unit: 'm2', unitCost: 9 } },
+    };
+    const boq = assembleBoq(session.doc, { rates });
+    const line = boq.lines.find((l) => l.costCode === 'demo-wall-tile')!;
+    expect(line.unit).toBe('m2');
+    expect(line.quantity).toBeCloseTo(20, 6); // 10 × 2 band, measured as area
+    expect(boq.total).toBeCloseTo(20 * 9, 4);
+    // it did NOT produce a supply tile line
+    expect(boq.lines.some((l) => l.costCode === 'wall-tile')).toBe(false);
+  });
+
+  test('solidWallRule prices the wall gross; openings carry their own lines', () => {
+    const { session } = buildDoc(); // 10×3 typed wall + one 2×1.2 window
+    const rates: RateTable = {
+      currency: 'EUR',
+      rates: {
+        block: { unit: 'm3', unitCost: 120 },
+        plaster: { unit: 'm3', unitCost: 300 },
+        window: { unit: 'count', unitCost: 320 },
+      },
+    };
+    const net = assembleBoq(session.doc, { rates });
+    const solid = assembleBoq(session.doc, {
+      rules: [solidWallRule()],
+      rates,
+    });
+    const blockNet = net.lines.find((l) => l.costCode === 'block')!.quantity;
+    const blockSolid = solid.lines.find((l) => l.costCode === 'block')!.quantity;
+    // gross (no window deduction) > net
+    expect(blockSolid).toBeGreaterThan(blockNet);
+    expect(blockSolid).toBeCloseTo(10 * 3 * 0.25 * (0.2 / 0.25), 6);
+    // the window is a standalone priced item in both
+    expect(solid.lines.find((l) => l.costCode === 'window')!.amount).toBe(320);
+  });
+
+  test('a window marked demolish becomes a removal line', () => {
+    const { session } = buildDoc();
+    const win = session.doc
+      .all()
+      .find((e) => e.type === 'window')!.id;
+    session.dispatch('PHASE.SET', { ids: [win], phase: 'demolish' });
+    const rates: RateTable = {
+      currency: 'EUR',
+      rates: { 'demo-window': { unit: 'count', unitCost: 25 } },
+    };
+    const boq = assembleBoq(session.doc, { rates });
+    expect(boq.lines.some((l) => l.costCode === 'window')).toBe(false);
+    const removal = boq.lines.find((l) => l.costCode === 'demo-window')!;
+    expect(removal.quantity).toBe(1);
+    expect(removal.amount).toBe(25);
   });
 });
 

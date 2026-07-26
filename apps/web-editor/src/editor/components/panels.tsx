@@ -20,7 +20,7 @@ import type {
   Layer,
   Point,
 } from '@acip/editor-core';
-import { assembleBoq, defaultRules } from '@acip/estimator';
+import { assembleBoq, defaultRules, solidWallRule } from '@acip/estimator';
 import { ratesStore } from '../rates';
 import { materialDisplayColor } from '../material-color';
 import { formatLength, lengthUnit } from '../units';
@@ -337,30 +337,81 @@ function RoomsBreakdown() {
   );
 }
 
-/** live BOQ: default measurement rules + the live rate table, per commit */
+/**
+ * Live BOQ, per commit. Splits into two phases the way a renovation quote reads:
+ * demolition (strip-out + openings to remove) first, then the rebuild. The
+ * "Solid walls" toggle prices walls توپر — openings are not deducted from the
+ * wall volume and instead carry their own line items.
+ */
 function CostSection() {
   const session = useSession();
+  const { ui } = useRuntime();
   const rates = useStoreValue(ratesStore);
+  const solidWalls = useStoreValue(ui.solidWalls);
   const boq = assembleBoq(session.doc, {
-    rules: defaultRules(),
+    rules: solidWalls ? [...defaultRules(), solidWallRule()] : defaultRules(),
     rates,
   });
   if (boq.lines.length === 0) return null;
+
+  const demoLines = boq.lines.filter((l) => l.costCode.startsWith('demo-'));
+  const buildLines = boq.lines.filter((l) => !l.costCode.startsWith('demo-'));
+  const sum = (lines: typeof boq.lines) =>
+    lines.reduce((s, l) => s + (l.amount ?? 0), 0);
+
+  const renderLines = (lines: typeof boq.lines) =>
+    lines.map((line) => (
+      <CostRow
+        key={line.costCode}
+        label={line.description}
+        value={
+          line.amount !== null
+            ? `${line.amount.toFixed(0)} ${boq.currency}`
+            : `${line.quantity.toFixed(2)} ${line.unit} (no rate)`
+        }
+      />
+    ));
+
   return (
     <>
       <h3>Cost</h3>
+      <label className="cost-toggle">
+        <input
+          type="checkbox"
+          checked={solidWalls}
+          onChange={(e) => ui.solidWalls.set(e.target.checked)}
+        />
+        Solid walls (openings priced separately)
+      </label>
+      {demoLines.length > 0 && (
+        <>
+          <h4>Demolition</h4>
+          <dl>
+            {renderLines(demoLines)}
+            <dt className="cost-subtotal">Demolition subtotal</dt>
+            <dd className="cost-subtotal">
+              {sum(demoLines).toFixed(0)} {boq.currency}
+            </dd>
+          </dl>
+        </>
+      )}
+      {buildLines.length > 0 && (
+        <>
+          {demoLines.length > 0 && <h4>Rebuild</h4>}
+          <dl>
+            {renderLines(buildLines)}
+            {demoLines.length > 0 && (
+              <>
+                <dt className="cost-subtotal">Rebuild subtotal</dt>
+                <dd className="cost-subtotal">
+                  {sum(buildLines).toFixed(0)} {boq.currency}
+                </dd>
+              </>
+            )}
+          </dl>
+        </>
+      )}
       <dl>
-        {boq.lines.map((line) => (
-          <CostRow
-            key={line.costCode}
-            label={line.description}
-            value={
-              line.amount !== null
-                ? `${line.amount.toFixed(0)} ${boq.currency}`
-                : `${line.quantity.toFixed(2)} ${line.unit} (no rate)`
-            }
-          />
-        ))}
         <dt className="cost-total">Total</dt>
         <dd className="cost-total">
           {boq.total.toFixed(0)} {boq.currency}

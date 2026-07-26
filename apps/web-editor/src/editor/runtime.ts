@@ -95,6 +95,23 @@ export function seedCatalog(session: EditorSession): TypeId | null {
         costCode: 'floor-tile',
       });
     }
+    // finishing materials for wall bands: paint (over plaster) and the cement
+    // render behind wet-area tiling — so gypsum+paint and cement+tile schemes
+    // (and their demolition) have materials to price against
+    if (!session.doc.materials.list().some((m) => m.costCode === 'paint')) {
+      session.dispatch<MaterialId>('MATERIAL.ADD', {
+        name: 'Paint',
+        unit: 'm2',
+        costCode: 'paint',
+      });
+    }
+    if (!session.doc.materials.list().some((m) => m.costCode === 'cement')) {
+      session.dispatch<MaterialId>('MATERIAL.ADD', {
+        name: 'Cement render',
+        unit: 'm3',
+        costCode: 'cement',
+      });
+    }
     if (session.doc.types.list('roof').length === 0) {
       const structure = session.dispatch<MaterialId>('MATERIAL.ADD', {
         name: 'Roof structure',

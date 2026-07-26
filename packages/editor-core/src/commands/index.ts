@@ -105,6 +105,8 @@ export {
   SetTypeCommand,
   registerDocumentStoreCommands,
 } from './document-stores.js';
+export type { SetPhaseParams } from './phases.js';
+export { SetPhaseCommand, registerPhaseCommands } from './phases.js';
 export type { LogRequestParams, RequestKind } from './requests.js';
 export {
   LogRequestCommand,

@@ -3,6 +3,7 @@ import { layerQuantity } from '@acip/editor-core';
 import type { AssemblyLayerFact } from './takeoff.js';
 import {
   computeFinishTakeoff,
+  computeOpeningTakeoff,
   computeRoofTakeoff,
   computeSlabTakeoff,
   computeStairTakeoff,
@@ -39,6 +40,17 @@ const GENERIC_WALL_CODE = 'wall-volume';
 const GENERIC_SLAB_CODE = 'slab-volume';
 const GENERIC_ROOF_CODE = 'roof-volume';
 const GENERIC_FINISH_CODE = 'finish-area';
+const GENERIC_DEMO_FINISH_CODE = 'demo-finish';
+
+/**
+ * Cost code for the demolition (strip-out) of a built cost code — the
+ * "demolition is finish in reverse" convention. `wall-tile` → `demo-wall-tile`,
+ * so a rate table can price removal independently of supply. Falls back to the
+ * generic strip-out code when the finish has no material.
+ */
+function demoCode(baseCode: string | null): string {
+  return baseCode ? `demo-${baseCode}` : GENERIC_DEMO_FINISH_CODE;
+}
 
 /**
  * Facts → policy → money, in one pass:
@@ -143,6 +155,20 @@ export function assembleBoq(
   }
 
   for (const finish of computeFinishTakeoff(doc)) {
+    // demolition is finish in reverse: the SAME area, priced as an m² strip-out
+    // against a demo-* code — no tile counting, coverage is irrelevant when you
+    // are tearing a surface off
+    if (finish.phase === 'demolish') {
+      if (finish.area > 0) {
+        accumulate(
+          demoCode(finish.layer?.costCode ?? null),
+          finish.layer ? `Demolish ${finish.layer.name}` : 'Demolish finish',
+          'm2',
+          finish.area,
+        );
+      }
+      continue;
+    }
     const refs: LayerRefs = {
       volume: finish.area * finish.thickness,
       area: finish.area,
@@ -169,6 +195,23 @@ export function assembleBoq(
         'm2',
         finish.area,
       );
+    }
+  }
+
+  // openings as standalone items: a `new` window/door is a supply+install unit,
+  // a `demolish` one is a removal. Independent of wall measurement — with solid
+  // (توپر) walls the opening is not deducted from the wall and is costed here.
+  for (const opening of computeOpeningTakeoff(doc)) {
+    const label = opening.kind === 'window' ? 'Window' : 'Door';
+    if (opening.phase === 'demolish') {
+      accumulate(
+        `demo-${opening.kind}`,
+        `Remove ${opening.kind}`,
+        'count',
+        1,
+      );
+    } else {
+      accumulate(opening.kind, label, 'count', 1);
     }
   }
 

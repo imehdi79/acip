@@ -1,14 +1,17 @@
 import {
+  DoorEntity,
   FinishEntity,
   RoofEntity,
   SlabEntity,
   StairEntity,
   WallEntity,
+  WindowEntity,
 } from '@acip/editor-core';
 import type {
   DrawingDocument,
   EntityId,
   MaterialUnit,
+  Phase,
   TypeId,
 } from '@acip/editor-core';
 
@@ -139,6 +142,8 @@ export interface FinishTakeoff {
   /** covered length along the wall — reference for m materials */
   readonly length: number;
   readonly thickness: number;
+  /** `new` = install (priced by material unit); `demolish` = strip-out (m² removal) */
+  readonly phase: Phase;
   /** the single applied material, resolved as a layer fact; null if unset/missing */
   readonly layer: AssemblyLayerFact | null;
 }
@@ -169,7 +174,49 @@ export function computeFinishTakeoff(doc: DrawingDocument): FinishTakeoff[] {
       area: entity.getNetArea(),
       length: entity.getCoveredLength(),
       thickness: entity.getThickness(),
+      phase: entity.phase,
       layer,
+    });
+  }
+  return result;
+}
+
+export interface OpeningTakeoff {
+  readonly entityId: EntityId;
+  readonly kind: 'window' | 'door';
+  /** `new` = supply/install; `demolish` = existing opening to be removed */
+  readonly phase: Phase;
+  readonly width: number;
+  readonly height: number;
+  /** elevation face area (width × height) — for area-priced opening rates */
+  readonly area: number;
+}
+
+/**
+ * Windows and doors as standalone priced items — the counterpart to solid
+ * (توپر) wall measurement: when the wall is priced gross (no opening
+ * deduction), the openings carry their own cost here instead of being folded
+ * into the wall. Each opening also carries its phase, so a window marked for
+ * removal becomes a demolition line.
+ */
+export function computeOpeningTakeoff(doc: DrawingDocument): OpeningTakeoff[] {
+  const result: OpeningTakeoff[] = [];
+  for (const entity of doc.all()) {
+    const kind =
+      entity instanceof WindowEntity
+        ? 'window'
+        : entity instanceof DoorEntity
+          ? 'door'
+          : null;
+    if (kind === null) continue;
+    const opening = entity as WindowEntity | DoorEntity;
+    result.push({
+      entityId: opening.id,
+      kind,
+      phase: opening.phase,
+      width: opening.width,
+      height: opening.height,
+      area: opening.width * opening.height,
     });
   }
   return result;

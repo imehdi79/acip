@@ -1,3 +1,5 @@
+export type { Phase } from './phase.js';
+export { PHASES, isPhase, asPhase } from './phase.js';
 export { HostedOpeningEntity } from './hosted-opening.js';
 export type { OpeningFrame } from './hosted-opening.js';
 export { WallEntity, createWallEntity } from './wall-entity.js';

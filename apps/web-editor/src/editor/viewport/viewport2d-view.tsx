@@ -53,6 +53,7 @@ export function Viewport2DView() {
           new Set(session.selection.list()),
           ui.showMarks.get(),
           ui.underlay.get(),
+          ui.showDemolition.get(),
         );
       });
     };
@@ -91,6 +92,7 @@ export function Viewport2DView() {
       ui.overlay.subscribe(redrawOverlay),
       ui.activeLevelId.subscribe(redrawBase),
       ui.showMarks.subscribe(redrawBase),
+      ui.showDemolition.subscribe(redrawBase),
       ui.underlay.subscribe(redrawBase),
       ui.fitTick.subscribe(() => {
         const w = container.clientWidth;

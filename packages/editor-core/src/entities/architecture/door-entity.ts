@@ -10,6 +10,7 @@ import {
 } from '../../geometry/primitives/point.js';
 import type { Geometry } from '../../geometry/shapes.js';
 import { HostedOpeningEntity, clamp01 } from './hosted-opening.js';
+import { asPhase } from './phase.js';
 
 /**
  * Door: hosted opening with sill 0 (cuts the wall to the floor). Plan symbol
@@ -72,6 +73,7 @@ export class DoorEntity extends HostedOpeningEntity {
     copy.width = this.width;
     copy.height = this.height;
     copy.swing = this.swing;
+    copy.phase = this.phase;
     return copy;
   }
 
@@ -81,6 +83,7 @@ export class DoorEntity extends HostedOpeningEntity {
       width: this.width,
       height: this.height,
       swing: this.swing,
+      phase: this.phase,
     };
   }
 
@@ -98,6 +101,7 @@ export class DoorEntity extends HostedOpeningEntity {
     this.width = width;
     this.height = height;
     this.swing = swing;
+    this.phase = asPhase(props['phase']);
   }
 }
 

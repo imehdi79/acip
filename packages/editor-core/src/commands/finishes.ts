@@ -3,6 +3,8 @@ import { ValidationError } from '../common/errors.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
 import { SlabEntity } from '../entities/architecture/slab-entity.js';
 import { FinishEntity } from '../entities/architecture/finish-entity.js';
+import type { Phase } from '../entities/architecture/phase.js';
+import { PHASES, isPhase } from '../entities/architecture/phase.js';
 import { detectSpaces } from '../measurements/spaces.js';
 import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
@@ -11,6 +13,21 @@ import { S } from './schema.js';
 import { asId, asNumber } from './validate.js';
 
 type FaceSide = 'face+' | 'face-';
+
+/** validate an optional phase param (throws on a bad value; undefined = unset) */
+function asPhaseParam(value: unknown): Phase | undefined {
+  if (value === undefined) return undefined;
+  if (!isPhase(value)) {
+    throw new ValidationError(`phase must be one of ${PHASES.join(', ')}`);
+  }
+  return value;
+}
+
+/** shared schema field so every finish command documents phase identically */
+const phaseField = S.enum(
+  PHASES,
+  "'new' = build/install (default); 'demolish' = strip existing, priced to remove",
+);
 
 /** face+ → anchor 1, face- → anchor 2 in WallEntity.getAnchors() */
 function anchorIndexForSide(side: FaceSide): number {
@@ -31,6 +48,7 @@ export interface AddFinishParams {
   t0?: number;
   t1?: number;
   thickness?: number;
+  phase?: Phase;
 }
 
 export const AddFinishCommand: Command<AddFinishParams, EntityId> = {
@@ -59,6 +77,8 @@ export const AddFinishCommand: Command<AddFinishParams, EntityId> = {
       if (raw['t1'] !== undefined) params.t1 = asNumber(raw['t1'], 't1');
       if (raw['thickness'] !== undefined)
         params.thickness = asNumber(raw['thickness'], 'thickness');
+      const phase = asPhaseParam(raw['phase']);
+      if (phase !== undefined) params.phase = phase;
       return params;
     },
     () =>
@@ -76,6 +96,7 @@ export const AddFinishCommand: Command<AddFinishParams, EntityId> = {
           thickness: S.number(
             'finish build-up thickness in meters (default 0.01; only m³ uses it)',
           ),
+          phase: phaseField,
         },
         ['wallId', 'side', 'materialId'],
       ),
@@ -99,6 +120,7 @@ export const AddFinishCommand: Command<AddFinishParams, EntityId> = {
     if (params.t1 !== undefined)
       finish.t1 = Math.min(1, Math.max(0, params.t1));
     if (params.thickness !== undefined) finish.thickness = params.thickness;
+    if (params.phase !== undefined) finish.phase = params.phase;
     ctx.tx.create(finish);
     ctx.tx.attach(wall.id, finish.id, anchorIndexForSide(params.side), {});
     return finish.id;
@@ -110,6 +132,7 @@ export interface AutoFinishParams {
   levelId?: LevelId;
   sillHeight?: number;
   topHeight?: number;
+  phase?: Phase;
 }
 
 /**
@@ -144,6 +167,8 @@ export const AutoFinishCommand: Command<
         params.sillHeight = asNumber(raw['sillHeight'], 'sillHeight');
       if (raw['topHeight'] !== undefined)
         params.topHeight = asNumber(raw['topHeight'], 'topHeight');
+      const phase = asPhaseParam(raw['phase']);
+      if (phase !== undefined) params.phase = phase;
       return params;
     },
     () =>
@@ -153,6 +178,7 @@ export const AutoFinishCommand: Command<
           levelId: S.id('level to finish (omit for level-unassigned geometry)'),
           sillHeight: S.number('band bottom above the wall base (default 0)'),
           topHeight: S.number('band top in meters (default: full wall height)'),
+          phase: phaseField,
         },
         ['materialId'],
       ),
@@ -162,15 +188,18 @@ export const AutoFinishCommand: Command<
       throw new ValidationError(`material ${params.materialId} does not exist`);
     }
     const levelId = params.levelId ?? null;
+    const phase: Phase = params.phase ?? 'new';
     const onLevel = (wall: WallEntity): boolean =>
       levelId === null ||
       wall.baseLevelId === null ||
       wall.baseLevelId === levelId;
 
-    // remove prior auto finishes whose host wall is on this level
+    // remove prior auto finishes of THIS phase whose host wall is on this
+    // level — a demolish pass and a new pass regenerate independently
     let removed = 0;
     for (const entity of ctx.doc.all()) {
       if (!(entity instanceof FinishEntity) || !entity.auto) continue;
+      if (entity.phase !== phase) continue;
       const relation = ctx.doc.relations.relationOfHosted(entity.id);
       const host = relation ? ctx.doc.get(relation.hostId) : null;
       if (host instanceof WallEntity && onLevel(host)) {
@@ -188,6 +217,7 @@ export const AutoFinishCommand: Command<
         const finish = new FinishEntity();
         finish.materialId = params.materialId;
         finish.auto = true;
+        finish.phase = phase;
         if (params.sillHeight !== undefined)
           finish.sillHeight = params.sillHeight;
         if (params.topHeight !== undefined) finish.topHeight = params.topHeight;
@@ -219,6 +249,7 @@ export interface AddFloorFinishParams {
   materialId: MaterialId;
   surface?: SlabSurface;
   thickness?: number;
+  phase?: Phase;
 }
 
 export const AddFloorFinishCommand: Command<AddFloorFinishParams, EntityId> = {
@@ -240,6 +271,8 @@ export const AddFloorFinishCommand: Command<AddFloorFinishParams, EntityId> = {
       };
       if (raw['thickness'] !== undefined)
         params.thickness = asNumber(raw['thickness'], 'thickness');
+      const phase = asPhaseParam(raw['phase']);
+      if (phase !== undefined) params.phase = phase;
       return params;
     },
     () =>
@@ -254,6 +287,7 @@ export const AddFloorFinishCommand: Command<AddFloorFinishParams, EntityId> = {
           thickness: S.number(
             'finish build-up thickness in meters (default 0.01; only m³ uses it)',
           ),
+          phase: phaseField,
         },
         ['slabId', 'materialId'],
       ),
@@ -271,6 +305,7 @@ export const AddFloorFinishCommand: Command<AddFloorFinishParams, EntityId> = {
     const finish = new FinishEntity();
     finish.materialId = params.materialId;
     if (params.thickness !== undefined) finish.thickness = params.thickness;
+    if (params.phase !== undefined) finish.phase = params.phase;
     ctx.tx.create(finish);
     ctx.tx.attach(
       slab.id,
@@ -286,6 +321,7 @@ export interface AutoFloorFinishParams {
   materialId: MaterialId;
   levelId?: LevelId;
   surface?: SlabSurface;
+  phase?: Phase;
 }
 
 /**
@@ -314,6 +350,8 @@ export const AutoFloorFinishCommand: Command<
       if (raw['levelId'] !== undefined) {
         params.levelId = asId(raw['levelId'], 'levelId') as string as LevelId;
       }
+      const phase = asPhaseParam(raw['phase']);
+      if (phase !== undefined) params.phase = phase;
       return params;
     },
     () =>
@@ -325,6 +363,7 @@ export const AutoFloorFinishCommand: Command<
             ['top', 'bottom'],
             'top = floor, bottom = ceiling (default top)',
           ),
+          phase: phaseField,
         },
         ['materialId'],
       ),
@@ -334,17 +373,20 @@ export const AutoFloorFinishCommand: Command<
       throw new ValidationError(`material ${params.materialId} does not exist`);
     }
     const levelId = params.levelId ?? null;
+    const phase: Phase = params.phase ?? 'new';
     const anchorIdx = anchorIndexForSurface(params.surface ?? 'top');
     const onLevel = (slab: SlabEntity): boolean =>
       levelId === null ||
       slab.baseLevelId === null ||
       slab.baseLevelId === levelId;
 
-    // remove prior auto finishes whose host slab is on this level (and matches
-    // the surface), leaving wall finishes and the other surface untouched
+    // remove prior auto finishes whose host slab is on this level (matching the
+    // surface AND phase), leaving wall finishes, the other surface, and the
+    // other phase untouched
     let removed = 0;
     for (const entity of ctx.doc.all()) {
       if (!(entity instanceof FinishEntity) || !entity.auto) continue;
+      if (entity.phase !== phase) continue;
       const relation = ctx.doc.relations.relationOfHosted(entity.id);
       const host = relation ? ctx.doc.get(relation.hostId) : null;
       if (
@@ -364,6 +406,7 @@ export const AutoFloorFinishCommand: Command<
       const finish = new FinishEntity();
       finish.materialId = params.materialId;
       finish.auto = true;
+      finish.phase = phase;
       ctx.tx.create(finish);
       ctx.tx.attach(slab.id, finish.id, anchorIdx, {});
       created += 1;

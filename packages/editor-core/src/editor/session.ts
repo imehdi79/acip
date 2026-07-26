@@ -12,6 +12,7 @@ import { registerDimensionCommands } from '../commands/dimensions.js';
 import { registerSlabCommands } from '../commands/slabs.js';
 import { registerRoofCommands } from '../commands/roofs.js';
 import { registerFinishCommands } from '../commands/finishes.js';
+import { registerPhaseCommands } from '../commands/phases.js';
 import { registerStairCommands } from '../commands/stairs.js';
 import { registerRequestCommands } from '../commands/requests.js';
 import {
@@ -153,6 +154,7 @@ export class EditorSession {
       registerSlabCommands(this.commands);
       registerRoofCommands(this.commands);
       registerFinishCommands(this.commands);
+      registerPhaseCommands(this.commands);
       registerStairCommands(this.commands);
       registerDimensionCommands(this.commands);
       registerRequestCommands(this.commands);

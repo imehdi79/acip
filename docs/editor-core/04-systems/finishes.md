@@ -1,6 +1,7 @@
 # Surface Finishes
 
-Status: **Decided** (wall-face + floor/ceiling finishes shipped 2026-07-18)
+Status: **Decided** (wall-face + floor/ceiling finishes shipped 2026-07-18;
+build/demolition phases shipped 2026-07-25)
 
 The instance-level half of [materials-and-types.md](materials-and-types.md):
 _"tile THIS wall up to 1.2 m"_ and _"tile the kitchen floor."_ A finish is a
@@ -64,6 +65,28 @@ between two rooms is finished on both sides — one finish per room. Regenerates
 like the other AUTO macros (auto-tagged finishes on the level's walls are
 replaced; hand-placed finishes are untouched). Returns `{removed, created,
 totalArea}`.
+
+## Golden decision 4: demolition is a finish in reverse (a phase flag)
+
+Renovation needs the mirror of building: _"strip the kitchen floor tile,"_
+_"take the tile off this wall up to 2 m,"_ _"remove the bathroom window."_ These
+are the same measurements as building the surface — a band, a footprint, an
+opening — priced to REMOVE instead of install. So instead of a parallel
+demolition model, every finish and every opening (window/door) carries a
+`phase: 'new' | 'demolish'` (`entities/architecture/phase.ts`; `new` is the
+default, so old documents load unchanged). A `demolish` finish keeps its whole
+area/hosting/cascade machinery; only its pricing changes — the estimator bills
+it as an **m² strip-out** against a `demo-<costCode>` code (no tile counting,
+coverage is irrelevant when tearing a surface off). A `demolish` window/door is
+an existing opening to be taken out, billed `demo-<kind>` per unit.
+
+`FINISH.AUTO` / `FLOORFINISH.AUTO` take an optional `phase`, and regenerate
+**per phase**: a demolish pass only replaces prior auto _demolish_ finishes, a
+new pass only its own — the two coexist on the same walls. `PHASE.SET
+{ids, phase}` flips existing finishes and openings between phases (e.g. mark a
+window for removal). web-editor gates demolition-phase finishes behind a
+"Demolition" toggle (they draw in a warning red, hidden otherwise) so the build
+plan stays uncluttered, and splits the BOQ into Demolition + Rebuild subtotals.
 
 ## Integration
 

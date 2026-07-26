@@ -12,6 +12,15 @@ Status: **Shipped** (v1, 2026-07-12) · Last updated: 2026-07-12
 > prices). web-editor shows a Cost section under Quantities with demo rates.
 > The core quantities seed stays as the FACTS layer; this package is POLICY.
 
+> **Renovation update (2026-07-25):** demolition + solid walls. Finishes and
+> openings carry a `phase` (see [finishes.md](../04-systems/finishes.md)); a
+> `demolish` finish bills as an m² strip-out under `demo-<costCode>`, a
+> `demolish` window/door as a `demo-<kind>` removal. Openings are now their own
+> BOQ lines (`window`/`door` counts) so they can be costed apart from the wall.
+> `solidWallRule()` is a measurement rule that deducts NO opening — walls priced
+> توپر (gross), openings carried by their own lines. web-editor splits the BOQ
+> into Demolition and Rebuild subtotals and offers a "Solid walls" toggle.
+
 A separate package (`packages/estimator`), and the reason the semantic model exists:
 quantity takeoff only works if the model knows "this is a wall with 12m² of tile finish."
 The app's identity — **cost-aware building modeler** — is delivered here.

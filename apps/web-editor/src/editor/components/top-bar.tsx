@@ -7,6 +7,7 @@ import {
   IconFolderOpen,
   IconGrid4x4,
   IconHash,
+  IconBulldozer,
   IconMenu2,
   IconPhoto,
 } from '@tabler/icons-react';
@@ -31,6 +32,7 @@ export function TopBar() {
   useDocRevision(session);
   const activeTab = useStoreValue(ui.viewTab);
   const showMarks = useStoreValue(ui.showMarks);
+  const showDemolition = useStoreValue(ui.showDemolition);
   const underlayFileRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -102,6 +104,15 @@ export function TopBar() {
         >
           <IconHash size={16} stroke={1.75} />
           Marks
+        </button>
+        <button
+          type="button"
+          className={showDemolition ? 'active' : ''}
+          title="Demolition — reveal tear-out finishes and openings marked for removal"
+          onClick={() => ui.showDemolition.set(!showDemolition)}
+        >
+          <IconBulldozer size={16} stroke={1.75} />
+          Demolition
         </button>
         <input
           ref={underlayFileRef}

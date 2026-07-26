@@ -107,6 +107,10 @@ export class EditorUi {
   readonly agentMode = new ValueStore<AgentMode>('drafter');
   /** entity mark labels ("W3") in the plan — auto-enabled when chat opens */
   readonly showMarks = new ValueStore<boolean>(false);
+  /** reveal demolition-phase work (tear-out finishes, openings to remove) on the plan */
+  readonly showDemolition = new ValueStore<boolean>(false);
+  /** price walls solid (توپر): openings are not deducted, costed as separate items */
+  readonly solidWalls = new ValueStore<boolean>(false);
   /** starter modal (preset picker) — shown on first empty load and on New */
   readonly starterOpen = new ValueStore<boolean>(false);
   /** side panels open as a drawer on mobile (desktop always shows them) */
