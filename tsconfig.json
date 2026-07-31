@@ -23,6 +23,12 @@
     },
     {
       "path": "./packages/estimator"
+    },
+    {
+      "path": "./apps/editor"
+    },
+    {
+      "path": "./apps/editor-admin"
     }
   ]
 }
