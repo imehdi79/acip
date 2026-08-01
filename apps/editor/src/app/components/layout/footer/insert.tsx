@@ -1,5 +1,3 @@
-'use client';
-
 import { Button, Dropdown, Label } from '@heroui/react';
 import {
   IconBoxMargin,
