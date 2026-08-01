@@ -1,5 +1,12 @@
 {
   "name": "@acip/editor",
   "version": "0.0.1",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "@heroui/react": "^3.2.3",
+    "@heroui/styles": "^3.2.3",
+    "@tabler/icons-react": "^3.46.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  }
 }

@@ -1,11 +1,14 @@
-import './app.css';
-import NxWelcome from './nx-welcome';
+import '@/app/app.css';
+import MainWrapper from '@/app/components/layout/wrapper/MainWrapper';
+import Footer from './components/layout/footer';
 
 export function App() {
   return (
-    <div>
-      <NxWelcome title="@acip/editor" />
-    </div>
+    <MainWrapper>
+      <div className="">
+        <Footer />
+      </div>
+    </MainWrapper>
   );
 }
 export default App;
