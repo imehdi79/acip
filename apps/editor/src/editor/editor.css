@@ -1,0 +1,57 @@
+/* Ported viewport styles from web-editor: the base 2D/3D canvas surface. */
+.editor-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.editor-view .viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #ffffff;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.editor-view .viewport canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* all touch gestures belong to the viewport, not the browser */
+  touch-action: none;
+}
+
+/* floating 2D / 3D switch */
+.view-toggle {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9999px;
+  background: #1f232aee;
+  border: 1px solid #2c313a;
+}
+
+.view-toggle button {
+  border: 0;
+  cursor: pointer;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8fa3b8;
+  background: transparent;
+}
+
+.view-toggle button[data-active='true'] {
+  color: #fff;
+  background: #3a4658;
+}

@@ -3,10 +3,16 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "@acip/editor-core": "workspace:*",
     "@heroui/react": "^3.2.3",
     "@heroui/styles": "^3.2.3",
     "@tabler/icons-react": "^3.46.0",
     "@tailwindcss/vite": "^4.3.3",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "^4.3.3",
+    "three": "^0.170.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0"
   }
 }

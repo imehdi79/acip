@@ -11,6 +11,14 @@ export default defineConfig(() => ({
     alias: {
       '@': resolve(import.meta.dirname, 'src'),
     },
+    // resolve @acip/editor-core to its TypeScript source in dev/build —
+    // no prebuild step (matches customConditions in tsconfig.base.json)
+    conditions: ['@acip/source'],
+  },
+  // HeroUI pulls ~58 react-aria-components subpaths. Pre-bundle it eagerly so
+  // the dev optimizer cannot stall (and full-reload) on first popover open.
+  optimizeDeps: {
+    include: ['@heroui/react'],
   },
   server: {
     port: 4210,
