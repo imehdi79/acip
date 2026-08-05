@@ -1,12 +1,12 @@
 import { IconArrowBackUp, IconCopy, IconTrash } from '@tabler/icons-react';
 import { Insert } from './insert';
 import { Button, ButtonGroup } from '@heroui/react';
-import { useCan } from '@/app/stores/global/settings.store';
+import { useFooterAction } from '@/app/stores/global/settings.store';
 
 const Footer = () => {
-  const canUndo = useCan('footer.undo');
-  const canDuplicate = useCan('footer.duplicate');
-  const canDelete = useCan('footer.delete');
+  const canUndo = useFooterAction('undo');
+  const canDuplicate = useFooterAction('duplicate');
+  const canDelete = useFooterAction('delete');
 
   return (
     <div className="absolute bottom-0 h-14 w-full flex items-center justify-between px-4">

@@ -1,6 +1,7 @@
 import { ReactNode, useId } from 'react';
 import { Card, cn, ListBox, ScrollShadow } from '@heroui/react';
 import { IconChevronRight } from '@tabler/icons-react';
+import { useSettingsStore } from '@/app/stores/global/settings.store';
 
 type Project = {
   id: string;
@@ -180,8 +181,11 @@ const TemplateCard = ({ project, onSelect, compact }: TemplateCardProps) => (
 );
 
 const ProjectSelector = () => {
+  const setView = useSettingsStore((state) => state.setView);
+
   const handleSelect = (id: string) => {
     console.log({ id });
+    setView('editor');
   };
 
   const hasRecentProjects = recentProjects.length > 0;

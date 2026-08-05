@@ -5,13 +5,18 @@ import Footer from './components/layout/footer';
 import { EditorView } from '@/editor';
 import ProjectSelector from './components/layout/views/project-selector';
 import SignIn from './components/layout/views/sign-in';
-import { useSettingsStore } from '@/app/stores/global/settings.store';
+import {
+  useSettingsStore,
+  useShowFooter,
+  useShowHeader,
+} from '@/app/stores/global/settings.store';
 
 export function App() {
-  const showHeader = useSettingsStore((state) => state.showHeader);
-  const showFooter = useSettingsStore((state) => state.showFooter);
+  const showHeader = useShowHeader();
+  const showFooter = useShowFooter();
   const user = useSettingsStore((state) => state.user);
   const signIn = useSettingsStore((state) => state.signIn);
+  const view = useSettingsStore((state) => state.view);
 
   // A null user means they have not chosen how to enter yet — guest is a real
   // choice, so it is stored as a guest-role user rather than left as null.
@@ -33,8 +38,7 @@ export function App() {
     <MainWrapper>
       {showHeader && <Header />}
       <div className="flex-1 min-h-0">
-        <ProjectSelector />
-        {/* <EditorView /> */}
+        {view === 'editor' ? <EditorView /> : <ProjectSelector />}
       </div>
       {showFooter && <Footer />}
     </MainWrapper>

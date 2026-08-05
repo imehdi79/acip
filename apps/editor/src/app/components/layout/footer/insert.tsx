@@ -5,7 +5,7 @@ import {
   IconWall,
   IconWindow,
 } from '@tabler/icons-react';
-import { useCan } from '@/app/stores/global/settings.store';
+import { useFooterAction } from '@/app/stores/global/settings.store';
 
 export type InsertItemType = 'room' | 'wall' | 'window';
 
@@ -40,7 +40,7 @@ type InsertProps = {
 };
 
 export function Insert({ onInsert }: InsertProps) {
-  const canInsert = useCan('footer.insert');
+  const canInsert = useFooterAction('insert');
 
   if (!canInsert) return null;
 
