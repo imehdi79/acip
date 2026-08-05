@@ -2,6 +2,10 @@
   "name": "@acip/editor",
   "version": "0.0.1",
   "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "deploy:pages": "wrangler pages deploy --config wrangler.pages.jsonc"
+  },
   "dependencies": {
     "@acip/editor-core": "workspace:*",
     "@heroui/react": "^3.2.3",
@@ -13,6 +17,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@types/three": "^0.170.0"
+    "@types/three": "^0.170.0",
+    "wrangler": "^4.118.0"
   }
 }
