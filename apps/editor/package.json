@@ -3,8 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy",
-    "deploy:pages": "wrangler pages deploy --config wrangler.pages.jsonc"
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@acip/editor-core": "workspace:*",

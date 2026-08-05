@@ -1,18 +1,43 @@
-{
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "acip-editor",
-  "compatibility_date": "2026-08-05",
+// {
+//   "$schema": "./node_modules/wrangler/config-schema.json",
+//   "name": "acip-editor",
+//   "compatibility_date": "2026-08-05",
 
-  // Assets-only Worker: there is no server code, so `main` is omitted.
-  // `directory` is relative to this file, and matches vite's build.outDir.
+//   // Assets-only Worker: there is no server code, so `main` is omitted.
+//   // `directory` is relative to this file, and matches vite's build.outDir.
+//   "assets": {
+//     "directory": "./dist",
+//     // Client-routed SPA: unmatched paths serve index.html with a 200 rather
+//     // than a 404, so a deep link or a reload does not break.
+//     "not_found_handling": "single-page-application"
+//   },
+
+//   "observability": {
+//     "enabled": true
+//   }
+// }
+
+// Cloudflare Workers deployment — static assets only, no Worker script.
+//
+// Local deploy (build first, then publish — two separate steps):
+//   bunx nx build web-editor
+//   bunx wrangler deploy -c apps/web-editor/wrangler.jsonc
+//
+// Workers Builds (Git integration): build and deploy MUST stay in their own
+// fields. `wrangler deploy` inside the build command publishes a deployment
+// during the build, which trips the build again — that is the loop.
+//   Root directory:  /            (bun workspace: install must run at the repo root)
+//   Build command:   bunx nx build web-editor
+//   Deploy command:  bunx wrangler deploy -c apps/web-editor/wrangler.jsonc
+//
+// When editor-server lands (key proxy for shared deployments), add "main"
+// here and the same Worker serves both the SPA and the API.
+{
+  "name": "editor-vs",
+  "compatibility_date": "2026-08-05",
   "assets": {
     "directory": "./dist",
-    // Client-routed SPA: unmatched paths serve index.html with a 200 rather
-    // than a 404, so a deep link or a reload does not break.
-    "not_found_handling": "single-page-application"
+    // react-router SPA: unknown paths fall back to index.html
+    "not_found_handling": "single-page-application",
   },
-
-  "observability": {
-    "enabled": true
-  }
 }
