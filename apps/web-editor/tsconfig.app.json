@@ -2,7 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
+    // Kept out of dist: everything in dist is uploaded and served publicly.
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/web-editor-app.tsbuildinfo",
     "jsx": "react-jsx",
     "lib": ["es2022", "dom", "dom.iterable"],
     "types": [
