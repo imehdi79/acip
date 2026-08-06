@@ -20,12 +20,15 @@ export default defineConfig(() => ({
   optimizeDeps: {
     include: ['@heroui/react'],
   },
+  // 4210 was inside a Windows reserved TCP range (netsh excludedportrange
+  // covers 4113-4212 here), so binding failed with EACCES even though nothing
+  // was listening. 5210 sits clear of those ranges.
   server: {
-    port: 4210,
+    port: 5210,
     host: 'localhost',
   },
   preview: {
-    port: 4210,
+    port: 5210,
     host: 'localhost',
   },
   plugins: [react(), tailwindcss()],
