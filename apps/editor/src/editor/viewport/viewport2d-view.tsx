@@ -3,7 +3,8 @@ import type { InputModifiers, ViewDefinition } from '@acip/editor-core';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { Viewport2D } from './viewport2d';
-import { drawOverlay, drawScene } from './scene-renderer';
+import { drawOverlay, drawScene, drawWallDimensions } from './scene-renderer';
+import { lengthUnit } from '../units';
 
 const PICK_PIXELS = 8;
 const SNAP_PIXELS = 10;
@@ -55,6 +56,8 @@ export function Viewport2DView() {
           ui.underlay.get(),
           ui.showDemolition.get(),
         );
+        // wall lengths, always on — same canvas, drawn over the finished scene
+        drawWallDimensions(base, viewport, session.doc, planView());
       });
     };
     const redrawOverlay = () =>
@@ -94,6 +97,8 @@ export function Viewport2DView() {
       ui.showMarks.subscribe(redrawBase),
       ui.showDemolition.subscribe(redrawBase),
       ui.underlay.subscribe(redrawBase),
+      // wall dimensions are rendered in the active unit, so redraw when it changes
+      lengthUnit.subscribe(redrawBase),
       ui.fitTick.subscribe(() => {
         const w = container.clientWidth;
         const h = container.clientHeight;

@@ -476,6 +476,112 @@ export function drawScene(
   }
 }
 
+/** dimension line stand-off from the wall, and the minimum length worth labelling */
+const DIM_OFFSET_PX = 18;
+const DIM_TICK_PX = 5;
+const DIM_MIN_PX = 44;
+
+/**
+ * Automatic length labels on every wall. This is a render pass, not document
+ * entities: nothing is created, so there is nothing to undo, keep in sync, or
+ * strip before export — the labels simply follow whatever the walls are.
+ *
+ * Drawn entirely in screen space, so line weights and glyphs stay a fixed size
+ * at any zoom and text is never Y-mirrored by the world transform.
+ */
+export function drawWallDimensions(
+  canvas: HTMLCanvasElement,
+  viewport: Viewport2D,
+  doc: DrawingDocument,
+  view: ViewDefinition,
+): void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  // plan-only pass; the 3D view definition carries no level
+  if (view.kind !== 'plan') return;
+
+  const levelId = view.levelId ?? null;
+  const walls: WallEntity[] = [];
+  for (const entity of doc.all()) {
+    if (!(entity instanceof WallEntity)) continue;
+    if ((entity.baseLevelId ?? null) !== levelId) continue;
+    walls.push(entity);
+  }
+  if (walls.length === 0) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // mean of the wall midpoints — labels are pushed away from it so they sit
+  // outside the plan instead of cluttering the rooms
+  let sumX = 0;
+  let sumY = 0;
+  for (const wall of walls) {
+    const { a, b } = wall.getBaseline();
+    sumX += (a.x + b.x) / 2;
+    sumY += (a.y + b.y) / 2;
+  }
+  const centre = viewport.toScreen({
+    x: sumX / walls.length,
+    y: sumY / walls.length,
+  });
+
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  for (const wall of walls) {
+    const { a, b } = wall.getBaseline();
+    const sa = viewport.toScreen(a);
+    const sb = viewport.toScreen(b);
+    const dx = sb.x - sa.x;
+    const dy = sb.y - sa.y;
+    const px = Math.hypot(dx, dy);
+    // too short on screen to carry a label without colliding with its neighbours
+    if (px < DIM_MIN_PX) continue;
+
+    let nx = -dy / px;
+    let ny = dx / px;
+    const mx = (sa.x + sb.x) / 2;
+    const my = (sa.y + sb.y) / 2;
+    if ((mx - centre.x) * nx + (my - centre.y) * ny < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+
+    const da = { x: sa.x + nx * DIM_OFFSET_PX, y: sa.y + ny * DIM_OFFSET_PX };
+    const db = { x: sb.x + nx * DIM_OFFSET_PX, y: sb.y + ny * DIM_OFFSET_PX };
+
+    ctx.strokeStyle = COLORS.measure;
+    ctx.fillStyle = COLORS.measure;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(da.x, da.y);
+    ctx.lineTo(db.x, db.y);
+    // witness lines running back toward each wall end
+    ctx.moveTo(sa.x + nx * 4, sa.y + ny * 4);
+    ctx.lineTo(da.x + nx * DIM_TICK_PX, da.y + ny * DIM_TICK_PX);
+    ctx.moveTo(sb.x + nx * 4, sb.y + ny * 4);
+    ctx.lineTo(db.x + nx * DIM_TICK_PX, db.y + ny * DIM_TICK_PX);
+    ctx.stroke();
+
+    // keep the label upright: past vertical, flip it rather than read it upside down
+    let angle = Math.atan2(db.y - da.y, db.x - da.x);
+    if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
+
+    const label = formatLength(Math.hypot(b.x - a.x, b.y - a.y));
+    ctx.save();
+    ctx.translate((da.x + db.x) / 2 + nx * 9, (da.y + db.y) / 2 + ny * 9);
+    ctx.rotate(angle);
+    // halo first so the text stays readable over walls and hatching
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = COLORS.background;
+    ctx.strokeText(label, 0, 0);
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+  }
+}
+
 export function drawOverlay(
   canvas: HTMLCanvasElement,
   viewport: Viewport2D,
@@ -548,7 +654,8 @@ export function drawOverlay(
     for (const stroke of overlay.ink) {
       if (stroke.length === 0) continue;
       ctx.moveTo(stroke[0].x, stroke[0].y);
-      for (let i = 1; i < stroke.length; i++) ctx.lineTo(stroke[i].x, stroke[i].y);
+      for (let i = 1; i < stroke.length; i++)
+        ctx.lineTo(stroke[i].x, stroke[i].y);
     }
     ctx.stroke();
     ctx.globalAlpha = 1;
