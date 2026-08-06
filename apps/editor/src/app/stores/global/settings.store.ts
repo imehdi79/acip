@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { PlanTemplateId } from '@/editor/templates';
 
 /* -------------------------------------------------------------------------- */
 /* Access                                                                      */
@@ -89,6 +90,11 @@ type SettingsState = {
   view: AppView;
   setView: (view: AppView) => void;
 
+  /** Starter plan the editor generates on open. */
+  template: PlanTemplateId | null;
+  /** Pick a plan and go straight to the editor. */
+  openTemplate: (template: PlanTemplateId) => void;
+
   /** Per-view patches layered over VIEW_CHROME — for runtime changes. */
   chrome: Partial<Record<AppView, Partial<Chrome>>>;
   setChrome: (view: AppView, patch: Partial<Chrome>) => void;
@@ -99,6 +105,7 @@ type SettingsState = {
 type PersistedSettings = {
   user: User | null;
   view: AppView;
+  template: PlanTemplateId | null;
   chrome: Partial<Record<AppView, Partial<Chrome>>>;
 };
 
@@ -113,6 +120,9 @@ export const useSettingsStore = create<SettingsState>()(
 
       view: 'projects',
       setView: (view) => set({ view }),
+
+      template: null,
+      openTemplate: (template) => set({ template, view: 'editor' }),
 
       chrome: {},
       setChrome: (view, patch) =>
@@ -134,15 +144,17 @@ export const useSettingsStore = create<SettingsState>()(
       partialize: (state): PersistedSettings => ({
         user: state.user,
         view: state.view,
+        template: state.template,
         chrome: state.chrome,
       }),
       migrate: (persisted, version): PersistedSettings => {
-        const { user, view, chrome } = (persisted ??
+        const { user, view, template, chrome } = (persisted ??
           {}) as Partial<PersistedSettings>;
 
         return {
           user: user ?? null,
           view: view ?? 'projects',
+          template: template ?? null,
           // v1 stored showHeader/showFooter flags; chrome comes from the view
           // now, so drop them rather than let stale flags win.
           chrome: version >= 2 ? (chrome ?? {}) : {},

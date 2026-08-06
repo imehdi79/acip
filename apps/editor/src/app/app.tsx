@@ -17,6 +17,7 @@ export function App() {
   const user = useSettingsStore((state) => state.user);
   const signIn = useSettingsStore((state) => state.signIn);
   const view = useSettingsStore((state) => state.view);
+  const template = useSettingsStore((state) => state.template);
 
   // A null user means they have not chosen how to enter yet — guest is a real
   // choice, so it is stored as a guest-role user rather than left as null.
@@ -38,7 +39,11 @@ export function App() {
     <MainWrapper>
       {showHeader && <Header />}
       <div className="flex-1 min-h-0">
-        {view === 'editor' ? <EditorView /> : <ProjectSelector />}
+        {view === 'editor' ? (
+          <EditorView template={template} />
+        ) : (
+          <ProjectSelector />
+        )}
       </div>
       {showFooter && <Footer />}
     </MainWrapper>

@@ -2,9 +2,11 @@ import { ReactNode, useId } from 'react';
 import { Card, cn, ListBox, ScrollShadow } from '@heroui/react';
 import { IconChevronRight } from '@tabler/icons-react';
 import { useSettingsStore } from '@/app/stores/global/settings.store';
+import type { PlanTemplateId } from '@/editor/templates';
 
 type Project = {
-  id: string;
+  /** Doubles as the plan the editor generates when this card is picked. */
+  id: PlanTemplateId;
   title: string;
   component: ReactNode;
 };
@@ -48,7 +50,7 @@ const trim = { strokeWidth: 2.5, strokeOpacity: 0.65 };
 
 const projects: Project[] = [
   {
-    id: 'p11',
+    id: 'blank',
     title: 'Blank',
     component: (
       <Plan>
@@ -66,7 +68,7 @@ const projects: Project[] = [
     ),
   },
   {
-    id: 'p1',
+    id: 'free-draw',
     title: 'Free Draw',
     component: (
       <Plan>
@@ -84,7 +86,7 @@ const projects: Project[] = [
     ),
   },
   {
-    id: 'p2',
+    id: 'square',
     title: 'Square Room',
     component: (
       <Plan>
@@ -95,7 +97,7 @@ const projects: Project[] = [
     ),
   },
   {
-    id: 'p3',
+    id: 'rectangle',
     title: 'Rectangular Room',
     component: (
       <Plan>
@@ -106,7 +108,7 @@ const projects: Project[] = [
     ),
   },
   {
-    id: 'p4',
+    id: 'l-shape',
     title: 'L-Shape Room',
     component: (
       <Plan>
@@ -117,7 +119,7 @@ const projects: Project[] = [
     ),
   },
   {
-    id: 'p5',
+    id: 'two-room',
     title: 'Two Room',
     component: (
       <Plan>
@@ -138,7 +140,7 @@ const recentProjects = Array.from({ length: 0 }, (_, index) => ({
 
 type TemplateCardProps = {
   project: Project;
-  onSelect: (id: string) => void;
+  onSelect: (id: PlanTemplateId) => void;
   /** Compact tiles fill a grid cell; the wide variant rides the carousel. */
   compact?: boolean;
 };
@@ -181,11 +183,10 @@ const TemplateCard = ({ project, onSelect, compact }: TemplateCardProps) => (
 );
 
 const ProjectSelector = () => {
-  const setView = useSettingsStore((state) => state.setView);
+  const openTemplate = useSettingsStore((state) => state.openTemplate);
 
-  const handleSelect = (id: string) => {
-    console.log({ id });
-    setView('editor');
+  const handleSelect = (id: PlanTemplateId) => {
+    openTemplate(id);
   };
 
   const hasRecentProjects = recentProjects.length > 0;
