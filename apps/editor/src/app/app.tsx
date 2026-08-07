@@ -3,6 +3,7 @@ import MainWrapper from '@/app/components/layout/wrapper/MainWrapper';
 import Header from './components/layout/header';
 import Footer from './components/layout/footer';
 import { EditorView } from '@/editor';
+import { EditorProvider } from '@/editor/provider';
 import ProjectSelector from './components/layout/views/project-selector';
 import SignIn from './components/layout/views/sign-in';
 import {
@@ -17,7 +18,6 @@ export function App() {
   const user = useSettingsStore((state) => state.user);
   const signIn = useSettingsStore((state) => state.signIn);
   const view = useSettingsStore((state) => state.view);
-  const template = useSettingsStore((state) => state.template);
 
   // A null user means they have not chosen how to enter yet — guest is a real
   // choice, so it is stored as a guest-role user rather than left as null.
@@ -35,18 +35,18 @@ export function App() {
     );
   }
 
+  // The provider wraps the footer as well as the viewport: footer buttons are
+  // driven by selection and history, which live on the session.
   return (
-    <MainWrapper>
-      {showHeader && <Header />}
-      <div className="flex-1 min-h-0">
-        {view === 'editor' ? (
-          <EditorView template={template} />
-        ) : (
-          <ProjectSelector />
-        )}
-      </div>
-      {showFooter && <Footer />}
-    </MainWrapper>
+    <EditorProvider>
+      <MainWrapper>
+        {showHeader && <Header />}
+        <div className="flex-1 min-h-0">
+          {view === 'editor' ? <EditorView /> : <ProjectSelector />}
+        </div>
+        {showFooter && <Footer />}
+      </MainWrapper>
+    </EditorProvider>
   );
 }
 export default App;

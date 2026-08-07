@@ -1,21 +1,15 @@
-import { createContext, useContext, useState } from 'react';
-import type { ReactNode } from 'react';
+import { createContext, useContext } from 'react';
 import { EditorSession } from '@acip/editor-core';
 
-const SessionContext = createContext<EditorSession | null>(null);
-
-export function SessionProvider({ children }: { children: ReactNode }) {
-  const [session] = useState(() => new EditorSession());
-  return (
-    <SessionContext.Provider value={session}>
-      {children}
-    </SessionContext.Provider>
-  );
-}
+/**
+ * Supplied by <EditorProvider>, which sits above the whole signed-in shell so
+ * chrome outside the viewport (the footer) can read the session too.
+ */
+export const SessionContext = createContext<EditorSession | null>(null);
 
 export function useSession(): EditorSession {
   const session = useContext(SessionContext);
   if (!session)
-    throw new Error('useSession must be used inside <SessionProvider>');
+    throw new Error('useSession must be used inside <EditorProvider>');
   return session;
 }

@@ -5,8 +5,6 @@ import {
   IconWall,
   IconWindow,
 } from '@tabler/icons-react';
-import { useFooterAction } from '@/app/stores/global/settings.store';
-
 export type InsertItemType = 'room' | 'wall' | 'window';
 
 type Item = {
@@ -39,11 +37,8 @@ type InsertProps = {
   onInsert?: (type: InsertItemType) => void;
 };
 
+// Visibility and permission are decided by the descriptor in actions.tsx.
 export function Insert({ onInsert }: InsertProps) {
-  const canInsert = useFooterAction('insert');
-
-  if (!canInsert) return null;
-
   return (
     <Dropdown>
       {/* Button is the trigger directly: Dropdown.Trigger is itself a button,

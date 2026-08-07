@@ -1,38 +1,100 @@
-import { IconArrowBackUp, IconCopy, IconTrash } from '@tabler/icons-react';
-import { Insert } from './insert';
+import { Fragment } from 'react';
 import { Button, ButtonGroup } from '@heroui/react';
-import { useFooterAction } from '@/app/stores/global/settings.store';
+import { useSettingsStore } from '@/app/stores/global/settings.store';
+import { useSession } from '@/editor/session-context';
+import { useRuntime } from '@/editor/runtime';
+import { useFooterContext, type FooterContext } from './context';
+import {
+  FOOTER_ITEMS,
+  resolveFooter,
+  type FooterApi,
+  type ResolvedFooterItem,
+} from './actions';
 
+/** Consecutive items sharing a group render inside one ButtonGroup. */
+function chunk(items: ResolvedFooterItem[]): ResolvedFooterItem[][] {
+  const runs: ResolvedFooterItem[][] = [];
+  for (const entry of items) {
+    const last = runs.at(-1);
+    const group = entry.item.group;
+    if (last && group && last[0].item.group === group) last.push(entry);
+    else runs.push([entry]);
+  }
+  return runs;
+}
+
+function FooterButton({
+  entry,
+  api,
+  ctx,
+}: {
+  entry: ResolvedFooterItem;
+  api: FooterApi;
+  ctx: FooterContext;
+}) {
+  const { item, enabled } = entry;
+  if (item.render) return <>{item.render(api, ctx)}</>;
+  return (
+    <Button
+      isIconOnly={item.iconOnly}
+      isDisabled={!enabled}
+      aria-label={item.label}
+      variant="tertiary"
+      onPress={() => item.run?.(api)}
+    >
+      {item.icon}
+      {!item.iconOnly && item.label}
+    </Button>
+  );
+}
+
+function Slot({
+  items,
+  api,
+  ctx,
+}: {
+  items: ResolvedFooterItem[];
+  api: FooterApi;
+  ctx: FooterContext;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex items-center">
+      {chunk(items).map((run) => {
+        const body = run.map((entry) => (
+          <FooterButton key={entry.item.id} entry={entry} api={api} ctx={ctx} />
+        ));
+        return run.length > 1 ? (
+          <ButtonGroup key={run[0].item.id}>{body}</ButtonGroup>
+        ) : (
+          <Fragment key={run[0].item.id}>{body}</Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Renders whatever FOOTER_ITEMS resolves to. Nothing here knows what any
+ * button does — add or re-gate buttons in actions.tsx.
+ */
 const Footer = () => {
-  const canUndo = useFooterAction('undo');
-  const canDuplicate = useFooterAction('duplicate');
-  const canDelete = useFooterAction('delete');
+  const session = useSession();
+  const { ui } = useRuntime();
+  const user = useSettingsStore((state) => state.user);
+  const ctx = useFooterContext();
+
+  const api: FooterApi = { session, ui };
+  const resolved = resolveFooter(FOOTER_ITEMS, ctx, user);
+  const start = resolved.filter((entry) => entry.item.slot === 'start');
+  const end = resolved.filter((entry) => entry.item.slot === 'end');
 
   return (
     <div className="absolute bottom-0 h-14 w-full flex items-center justify-between px-4">
-      {canUndo && (
-        <Button isIconOnly aria-label="Undo" variant="tertiary">
-          <IconArrowBackUp />
-        </Button>
-      )}
-      {(canDuplicate || canDelete) && (
-        <ButtonGroup>
-          {canDuplicate && (
-            <Button aria-label="Duplicate" variant="tertiary">
-              <IconCopy className="rotate-180" />
-              Duplicate
-            </Button>
-          )}
-          {canDelete && (
-            <Button isIconOnly aria-label="Delete" variant="tertiary">
-              <IconTrash className="text-danger" />
-            </Button>
-          )}
-        </ButtonGroup>
-      )}
-      {/* ml-auto keeps insert on the right when the other buttons are hidden */}
-      <div className="justify-self-end">
-        <Insert />
+      <Slot items={start} api={api} ctx={ctx} />
+      {/* ml-auto keeps the end slot right when the start slot is empty */}
+      <div className="ml-auto">
+        <Slot items={end} api={api} ctx={ctx} />
       </div>
     </div>
   );

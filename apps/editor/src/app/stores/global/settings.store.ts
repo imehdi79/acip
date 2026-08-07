@@ -9,6 +9,7 @@ import type { PlanTemplateId } from '@/editor/templates';
 /** Everything a user is allowed to do maps to a real button in the UI. */
 export type Permission =
   | 'footer.undo'
+  | 'footer.redo'
   | 'footer.duplicate'
   | 'footer.delete'
   | 'footer.insert'
@@ -31,6 +32,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'header.profile',
     'header.settings',
     'footer.undo',
+    'footer.redo',
     'footer.duplicate',
     'footer.delete',
     'footer.insert',
@@ -39,6 +41,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'header.profile',
     'header.settings',
     'footer.undo',
+    'footer.redo',
     'footer.duplicate',
     'footer.delete',
     'footer.insert',
@@ -52,31 +55,27 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
 /** Which screen the user is on. Tracked so a reload puts them back. */
 export type AppView = 'projects' | 'editor';
 
-/** Footer buttons, in the order the footer lays them out. */
-export type FooterAction = 'undo' | 'duplicate' | 'delete' | 'insert';
-
 export type Chrome = {
   header: boolean;
   footer: boolean;
-  /** Which footer buttons this view offers at all. */
-  footerActions: FooterAction[];
 };
 
 /**
  * Chrome is a property of the view, not something callers toggle by hand: the
  * project list has no footer, the editor does. Add a view here and its chrome
  * comes with it.
+ *
+ * Which buttons the footer shows is not decided here — a footer descriptor
+ * gates itself on the live context (see footer/actions.tsx).
  */
 const VIEW_CHROME: Record<AppView, Chrome> = {
   projects: {
     header: true,
     footer: false,
-    footerActions: [],
   },
   editor: {
     header: true,
     footer: true,
-    footerActions: ['undo', 'duplicate', 'delete', 'insert'],
   },
 };
 
@@ -140,7 +139,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'acip-editor-settings',
-      version: 2,
+      version: 3,
       partialize: (state): PersistedSettings => ({
         user: state.user,
         view: state.view,
@@ -155,9 +154,10 @@ export const useSettingsStore = create<SettingsState>()(
           user: user ?? null,
           view: view ?? 'projects',
           template: template ?? null,
-          // v1 stored showHeader/showFooter flags; chrome comes from the view
-          // now, so drop them rather than let stale flags win.
-          chrome: version >= 2 ? (chrome ?? {}) : {},
+          // v1 stored showHeader/showFooter flags and v2 a footerActions
+          // allow-list; both are decided elsewhere now, so drop the whole patch
+          // rather than let a stale shape win.
+          chrome: version >= 3 ? (chrome ?? {}) : {},
         };
       },
     },
@@ -190,11 +190,3 @@ export const useShowHeader = (): boolean =>
 
 export const useShowFooter = (): boolean =>
   useSettingsStore((state) => chromeFor(state, state.view).footer);
-
-/** A footer button shows when the view offers it and the user may use it. */
-export const useFooterAction = (action: FooterAction): boolean =>
-  useSettingsStore(
-    (state) =>
-      chromeFor(state, state.view).footerActions.includes(action) &&
-      can(state.user, `footer.${action}`),
-  );
