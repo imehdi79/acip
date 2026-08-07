@@ -345,6 +345,8 @@ export {
 // ── engine systems (Layer 3) ──
 export type { SelectionEvents } from './selection/index.js';
 export { SelectionSet } from './selection/index.js';
+export type { SelectionInfo } from './selection/classify.js';
+export { classifySelection } from './selection/classify.js';
 export { SnapEngine } from './snapping/index.js';
 export {
   MeasurementService,

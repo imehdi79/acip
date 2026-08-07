@@ -15,6 +15,15 @@ export default defineConfig(() => ({
     // no prebuild step (matches customConditions in tsconfig.base.json)
     conditions: ['@acip/source'],
   },
+  // Vitest resolves through the SSR/node pipeline, which does NOT inherit
+  // resolve.conditions above. Without this it falls back to the `import`
+  // condition — packages/editor-core/dist/index.js — and tests run against
+  // whatever was last built instead of the source they are meant to cover.
+  ssr: {
+    resolve: {
+      conditions: ['@acip/source'],
+    },
+  },
   // HeroUI pulls ~58 react-aria-components subpaths. Pre-bundle it eagerly so
   // the dev optimizer cannot stall (and full-reload) on first popover open.
   optimizeDeps: {

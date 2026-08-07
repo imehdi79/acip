@@ -17,6 +17,7 @@ const guest: User = { id: 'g', name: 'Guest', role: 'guest' };
 const ctx = (patch: Partial<FooterContext> = {}): FooterContext => ({
   view: 'editor',
   selection: 'none',
+  types: [],
   count: 0,
   canUndo: false,
   canRedo: false,
@@ -45,16 +46,24 @@ describe('resolveFooter', () => {
   });
 
   it('swaps insert for delete once anything is selected', () => {
-    expect(ids(ctx({ selection: 'wall', count: 1 }))).toEqual([
+    expect(ids(ctx({ selection: 'wall', types: ['wall'], count: 1 }))).toEqual([
       'undo',
       'delete',
     ]);
   });
 
   it('adds duplicate for a room selection, disabled until the command exists', () => {
-    const room = ctx({ selection: 'room', count: 1 });
+    const room = ctx({ selection: 'room', types: ['wall'], count: 4 });
     expect(ids(room)).toEqual(['undo', 'duplicate', 'delete']);
     expect(enabledOf(room, 'duplicate')).toBe(false);
+  });
+
+  // `selection` is the entity's own type, so a future type needs no change in
+  // core, the classifier or the footer — only a descriptor that gates on it.
+  it('carries an unknown future entity type through as its own kind', () => {
+    expect(
+      ids(ctx({ selection: 'stair', types: ['stair'], count: 1 })),
+    ).toEqual(['undo', 'delete']);
   });
 
   it('gives guests nothing, whatever the context', () => {
@@ -62,7 +71,8 @@ describe('resolveFooter', () => {
       canUndo: true,
       canRedo: true,
       selection: 'room',
-      count: 1,
+      types: ['wall'],
+      count: 4,
     });
     expect(ids(busy, guest)).toEqual([]);
   });

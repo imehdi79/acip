@@ -7,18 +7,20 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import type { EditorUi } from '@/editor/ui-state';
+import type { ToolManager } from '@/editor/tools/tool-manager';
 import {
   can,
   type Permission,
   type User,
 } from '@/app/stores/global/settings.store';
 import type { FooterContext } from './context';
-import { Insert } from './insert';
+import { Insert, insertRoom, type InsertItemType } from './insert';
 
 /** What a button gets to act on. */
 export interface FooterApi {
   readonly session: EditorSession;
   readonly ui: EditorUi;
+  readonly tools: ToolManager;
 }
 
 export interface FooterItem {
@@ -107,7 +109,17 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     slot: 'end',
     permission: 'footer.insert',
     visible: (ctx) => ctx.view === 'editor' && ctx.selection === 'none',
-    render: () => <Insert />,
+    render: (api) => (
+      <Insert
+        onInsert={(type: InsertItemType) => {
+          // Wall and window are interactive: arm the tool and let the user
+          // tap on the plan. A room needs no tool — it is placed, then handed
+          // to the select tool's room-resize handles.
+          if (type === 'room') insertRoom(api.session, api.ui);
+          else api.tools.useById(type);
+        }}
+      />
+    ),
   },
 ];
 

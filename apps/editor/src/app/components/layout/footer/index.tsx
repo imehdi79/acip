@@ -80,11 +80,11 @@ function Slot({
  */
 const Footer = () => {
   const session = useSession();
-  const { ui } = useRuntime();
+  const { ui, tools } = useRuntime();
   const user = useSettingsStore((state) => state.user);
   const ctx = useFooterContext();
 
-  const api: FooterApi = { session, ui };
+  const api: FooterApi = { session, ui, tools };
   const resolved = resolveFooter(FOOTER_ITEMS, ctx, user);
   const start = resolved.filter((entry) => entry.item.slot === 'start');
   const end = resolved.filter((entry) => entry.item.slot === 'end');

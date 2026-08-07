@@ -2,6 +2,9 @@ import { createContext, useContext } from 'react';
 import type { EditorSession, ToolContext } from '@acip/editor-core';
 import { EditorUi } from './ui-state';
 import { ToolManager } from './tools/tool-manager';
+import { SelectTool } from './tools/select-tool';
+import { ChainedDrawTool } from './tools/chained-draw-tool';
+import { HostedPlaceTool } from './tools/hosted-place-tool';
 
 export interface EditorRuntime {
   readonly ui: EditorUi;
@@ -9,8 +12,8 @@ export interface EditorRuntime {
 }
 
 /**
- * Bare editor runtime: UI state + an empty ToolManager. No tools are
- * registered yet — register them here as they are built.
+ * Editor runtime: UI state plus the registered tools. Select is the resting
+ * tool — every draw tool returns to it when it finishes.
  */
 export function createRuntime(session: EditorSession): EditorRuntime {
   const ui = new EditorUi();
@@ -22,6 +25,50 @@ export function createRuntime(session: EditorSession): EditorRuntime {
       session.dispatch<R>(name, params),
   };
   const tools = new ToolManager(toolCtx, ui);
+
+  const finish = () => tools.useById('select');
+  const tolerance = () => tools.worldTolerance;
+  const activeLayer = () => {
+    const layerId = ui.activeLayerId.get();
+    return layerId ? { layerId } : {};
+  };
+
+  tools.register(new SelectTool(ui, tolerance));
+  tools.register(
+    new ChainedDrawTool(
+      'wall',
+      'WALL',
+      'WALL.ADD',
+      ui,
+      finish,
+      tolerance,
+      () => {
+        const levelId = ui.activeLevelId.get();
+        // resolved live — New/Open replace the catalog under a running session
+        const wallTypes = session.doc.types.list('wall');
+        return {
+          ...activeLayer(),
+          ...(levelId ? { levelId } : {}),
+          ...(wallTypes.length > 0 ? { typeId: wallTypes[0].id } : {}),
+        };
+      },
+    ),
+  );
+  tools.register(
+    new HostedPlaceTool(
+      'window',
+      'WINDOW',
+      'WINDOW.ADD',
+      ui,
+      tolerance,
+      finish,
+    ),
+  );
+  tools.register(
+    new HostedPlaceTool('door', 'DOOR', 'DOOR.ADD', ui, tolerance, finish),
+  );
+  tools.useById('select');
+
   return { ui, tools };
 }
 
