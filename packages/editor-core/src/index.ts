@@ -150,6 +150,8 @@ export type {
   DimPointsDef,
   DimWallsDef,
   DimWallSide,
+  WallEndSide,
+  WallJoin,
 } from './entities/index.js';
 export {
   Entity,

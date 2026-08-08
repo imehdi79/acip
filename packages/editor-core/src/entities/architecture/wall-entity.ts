@@ -51,6 +51,21 @@ import { cutsOpening } from '../base/capabilities.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
 import type { Transaction } from '../../document/history/transaction.js';
 
+/** which end of a wall's baseline — `start` is `a`, `end` is `b` */
+export type WallEndSide = 'start' | 'end';
+
+/**
+ * One wall found joined to an end of another wall.
+ *
+ * `corner` — the two walls share that endpoint and miter against each other.
+ * `tee` — this end lands on the other wall's BODY and butts its near face;
+ * the tee'd wall stops short, the continuous one is untouched.
+ */
+export interface WallJoin {
+  readonly wall: WallEntity;
+  readonly kind: 'corner' | 'tee';
+}
+
 /**
  * First semantic entity: baseline + thickness + height. Hosts openings
  * (windows, doors) on its axis anchor; effective plan geometry is the solid
@@ -112,66 +127,62 @@ export class WallEntity
     return [add(pa, half), add(pb, half), sub(pb, half), sub(pa, half)];
   }
 
-  /**
-   * Auto-join: walls whose endpoints coincide (within JOIN_TOLERANCE) miter
-   * their caps against each other. Derived on every read, never stored — a
-   * join dissolves the moment a wall is dragged away. Neighbor discovery goes
-   * through the document's spatial index.
-   */
-  private junctionCap(which: 'start' | 'end'): EndCap | null {
-    const doc = this.doc;
-    if (!doc || this.getLength() < JOIN_TOLERANCE) return null;
+  /** the point and outward direction of one end, as the resolvers want it */
+  private endDescriptor(which: WallEndSide): WallEnd {
     const p = which === 'start' ? this.a : this.b;
     const away = which === 'start' ? sub(this.b, this.a) : sub(this.a, this.b);
-    const ends: WallEnd[] = [
-      {
-        point: p,
-        direction: normalize(away),
-        halfWidth: this.getThickness() / 2,
-      },
-    ];
-    for (const other of doc.queryBBox(
-      bboxExpand(bboxFromPoints([p]), JOIN_TOLERANCE),
-    )) {
-      if (other === this || !(other instanceof WallEntity)) continue;
-      const bl = other.getBaseline();
-      if (distance(bl.a, bl.b) < JOIN_TOLERANCE) continue;
-      let dir: Vector | null = null;
-      if (distance(bl.a, p) <= JOIN_TOLERANCE) dir = normalize(sub(bl.b, bl.a));
-      else if (distance(bl.b, p) <= JOIN_TOLERANCE)
-        dir = normalize(sub(bl.a, bl.b));
-      if (!dir) continue;
-      ends.push({
-        point: p,
-        direction: dir,
-        halfWidth: other.getThickness() / 2,
-      });
-    }
-    // shared-endpoint junctions win; a lone end may still tee into a wall body
-    if (ends.length >= 2) return resolveJunction(ends)[0];
-    return this.teeCap(ends[0]);
+    return {
+      point: p,
+      direction: normalize(away),
+      halfWidth: this.getThickness() / 2,
+    };
   }
 
   /**
-   * T-junction (joins V2): this end touches the BODY of another wall away
-   * from its endpoints — butt against that wall's near face. The continuous
-   * wall is untouched. Nearest host wins if several qualify.
+   * The walls this end is actually JOINED to — the single answer to "is this
+   * end connected?", and the discovery the mitered corner itself runs on.
+   *
+   * Joins are derived, never stored (see docs/editor-core/04-systems/
+   * wall-joins.md), so there is no join table to consult: coincident endpoints
+   * are found through the spatial index, and only when there are none does a
+   * lone end look for a wall body to tee into. Shared-endpoint neighbours
+   * always win — the wheel beats the tee — and tees come back nearest-first,
+   * so `[0]` is the host that would actually be butted against.
+   *
+   * An empty list means a free end. Proximity alone never counts: a wall
+   * passing 5 cm away is not joined to anything.
    */
-  private teeCap(selfEnd: WallEnd): EndCap | null {
+  getJoinsAt(which: WallEndSide): WallJoin[] {
     const doc = this.doc;
-    if (!doc) return null;
-    const p = selfEnd.point;
-    let best: { cap: EndCap; dist: number } | null = null;
+    if (!doc || this.getLength() < JOIN_TOLERANCE) return [];
+    const p = which === 'start' ? this.a : this.b;
+    const nearby: WallEntity[] = [];
     for (const other of doc.queryBBox(
       bboxExpand(bboxFromPoints([p]), JOIN_TOLERANCE),
     )) {
       if (other === this || !(other instanceof WallEntity)) continue;
       const bl = other.getBaseline();
       if (distance(bl.a, bl.b) < JOIN_TOLERANCE) continue;
+      nearby.push(other);
+    }
+
+    const corners = nearby.filter((other) => {
+      const bl = other.getBaseline();
+      return (
+        distance(bl.a, p) <= JOIN_TOLERANCE ||
+        distance(bl.b, p) <= JOIN_TOLERANCE
+      );
+    });
+    if (corners.length > 0) {
+      return corners.map((wall) => ({ wall, kind: 'corner' as const }));
+    }
+
+    const tees: { wall: WallEntity; dist: number }[] = [];
+    for (const other of nearby) {
+      const bl = other.getBaseline();
       const foot = closestPointOnSegment(p, bl.a, bl.b);
-      const halfB = other.getThickness() / 2;
       const dist = distance(p, foot);
-      if (dist > halfB + JOIN_TOLERANCE) continue;
+      if (dist > other.getThickness() / 2 + JOIN_TOLERANCE) continue;
       // near the host's endpoints this is an L/corner case, not a T
       if (
         distance(foot, bl.a) <= JOIN_TOLERANCE ||
@@ -179,14 +190,61 @@ export class WallEntity
       ) {
         continue;
       }
+      tees.push({ wall: other, dist });
+    }
+    tees.sort((x, y) => x.dist - y.dist);
+    return tees.map((tee) => ({ wall: tee.wall, kind: 'tee' as const }));
+  }
+
+  /**
+   * Auto-join: walls whose endpoints coincide (within JOIN_TOLERANCE) miter
+   * their caps against each other. Derived on every read, never stored — a
+   * join dissolves the moment a wall is dragged away.
+   */
+  private junctionCap(which: WallEndSide): EndCap | null {
+    if (!this.doc || this.getLength() < JOIN_TOLERANCE) return null;
+    const selfEnd = this.endDescriptor(which);
+    const joins = this.getJoinsAt(which);
+    if (joins.length === 0) return null;
+
+    if (joins[0].kind === 'corner') {
+      const ends: WallEnd[] = [selfEnd];
+      for (const { wall } of joins) {
+        const bl = wall.getBaseline();
+        // direction points AWAY from the junction, into the neighbour
+        const dir =
+          distance(bl.a, selfEnd.point) <= JOIN_TOLERANCE
+            ? normalize(sub(bl.b, bl.a))
+            : normalize(sub(bl.a, bl.b));
+        ends.push({
+          point: selfEnd.point,
+          direction: dir,
+          halfWidth: wall.getThickness() / 2,
+        });
+      }
+      return resolveJunction(ends)[0];
+    }
+    return this.teeCap(selfEnd, joins);
+  }
+
+  /**
+   * T-junction (joins V2): this end touches the BODY of another wall away
+   * from its endpoints — butt against that wall's near face. The continuous
+   * wall is untouched. Hosts arrive nearest-first; the first that can actually
+   * produce a butt wins (a parallel face cannot).
+   */
+  private teeCap(selfEnd: WallEnd, joins: readonly WallJoin[]): EndCap | null {
+    for (const { wall } of joins) {
+      const bl = wall.getBaseline();
       const u = normalize(sub(bl.b, bl.a));
       const n = perpendicular(u);
+      const halfB = wall.getThickness() / 2;
       // near face = the side of the host's centerline this wall extends toward
       const side = dot(selfEnd.direction, n) >= 0 ? 1 : -1;
       const cap = resolveTeeCap(selfEnd, add(bl.a, scale(n, side * halfB)), u);
-      if (cap && (best === null || dist < best.dist)) best = { cap, dist };
+      if (cap) return cap;
     }
-    return best?.cap ?? null;
+    return null;
   }
 
   private capsForEnds(): { start: EndCap | null; end: EndCap | null } {

@@ -2,8 +2,6 @@ import type { DrawingDocument, EntityId, Point } from '@acip/editor-core';
 import { WallEntity } from '@acip/editor-core';
 
 const TOL = 1e-3;
-/** two directions count as parallel when the sine of their angle is below this (~5°) */
-const PARALLEL_SIN = 0.09;
 
 /** dispatch signature both a session and a tool context satisfy */
 export type Dispatch = (name: string, params: unknown) => unknown;
@@ -100,13 +98,128 @@ export function resizeRectRoomTo(
   dispatch('GRIP.MOVEMANY', { moves });
 }
 
+/** which end of a wall a resize holds still */
+export interface WallResizePlan {
+  /** grip index (0 = baseline 'a', 1 = 'b') that stays put, or null when both move */
+  readonly anchorIndex: 0 | 1 | null;
+  readonly moves: { id: EntityId; index: number; to: Point }[];
+}
+
 /**
- * Set a wall to an explicit length, CENTERED: the walls joined to each end are
- * pushed out/in symmetrically along the wall's axis so its length becomes
- * `newLength` without shifting the shape sideways or skewing its angles. The
- * facing (parallel) wall follows because it rides on those joined walls, so a
- * hand-drawn room keeps its shape and grows/shrinks about the wall's midpoint.
- * One undo step (GRIP.MOVEMANY).
+ * Which grip index sits on the RIGHT of the wall as drawn on the plan: the end
+ * further along +x, and for a vertical wall the one further along +y (its top).
+ * Only used to break the tie when BOTH ends are joined — the resize side is
+ * otherwise decided by connectivity, not by where a wall happens to point.
+ */
+function rightGrip(a: Point, b: Point): 0 | 1 {
+  if (Math.abs(b.x - a.x) > TOL) return b.x > a.x ? 1 : 0;
+  return b.y > a.y ? 1 : 0;
+}
+
+/**
+ * Work out how to set a wall to `newLength`. Connectivity comes from the
+ * wall-join topology itself (`getJoinsAt`) — the same derived discovery that
+ * decides whether a corner miters — never from "is there a wall roughly over
+ * there".
+ *
+ * Which end holds still is decided by what is joined to it:
+ *
+ * - one end joined   → anchor it, stretch from the free end;
+ * - both ends joined → anchor the left end, stretch from the right;
+ * - neither joined   → grow symmetrically about the midpoint.
+ *
+ * The anchor side is never touched at all. At the MOVING end, each wall
+ * sharing that corner is carried along **rigidly** — translated, so it keeps
+ * its own length and bearing exactly — and whatever is welded to its far end
+ * stretches to stay welded. In a room that means the facing wall grows by the
+ * same delta while the two walls across the room keep their size, and the
+ * corners never come apart.
+ *
+ * A tee is deliberately not carried: our end merely rests on that wall's body,
+ * and a continuous wall should not jump because something slid along it.
+ */
+export function planWallResize(
+  doc: DrawingDocument,
+  wallId: EntityId,
+  newLength: number,
+): WallResizePlan | null {
+  const wall = doc.get(wallId);
+  if (!(wall instanceof WallEntity) || newLength <= 0) return null;
+  const { a, b } = wall.getBaseline();
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len < TOL) return null;
+  const ux = (b.x - a.x) / len;
+  const uy = (b.y - a.y) / len;
+
+  const joins = {
+    start: wall.getJoinsAt('start'),
+    end: wall.getJoinsAt('end'),
+  };
+
+  let anchorIndex: 0 | 1 | null;
+  if (joins.start.length > 0 && joins.end.length > 0) {
+    anchorIndex = rightGrip(a, b) === 1 ? 0 : 1;
+  } else if (joins.start.length > 0) anchorIndex = 0;
+  else if (joins.end.length > 0) anchorIndex = 1;
+  else anchorIndex = null;
+
+  if (anchorIndex === null) {
+    // free-standing: nothing joined to carry, and centring keeps the wall
+    // where it sits on the plan
+    const half = (newLength - len) / 2;
+    return {
+      anchorIndex: null,
+      moves: [
+        {
+          id: wallId,
+          index: 0,
+          to: { x: a.x - ux * half, y: a.y - uy * half },
+        },
+        {
+          id: wallId,
+          index: 1,
+          to: { x: b.x + ux * half, y: b.y + uy * half },
+        },
+      ],
+    };
+  }
+
+  const movingIndex = anchorIndex === 0 ? 1 : 0;
+  const sign = anchorIndex === 0 ? 1 : -1;
+  const grow = newLength - len;
+  const delta = { x: ux * sign * grow, y: uy * sign * grow };
+  const moved = anchorIndex === 0 ? b : a;
+
+  const moves = new Map<string, { id: EntityId; index: number; to: Point }>();
+  const put = (m: { id: EntityId; index: number; to: Point }) =>
+    moves.set(`${m.id}:${m.index}`, m);
+
+  // the anchor stays put; the other end slides along the baseline, so the
+  // wall keeps its bearing
+  put({
+    id: wallId,
+    index: movingIndex,
+    to: { x: moved.x + delta.x, y: moved.y + delta.y },
+  });
+
+  // carry the corner partners at that end, rigid so their own size is kept
+  for (const join of joins[anchorIndex === 0 ? 'end' : 'start']) {
+    if (join.kind !== 'corner') continue;
+    const plan = planStickyWallMove(doc, [join.wall.id], delta);
+    if (plan) for (const m of plan.moves) put(m);
+  }
+
+  // the anchor is the one thing that must never move: a carried wall welded
+  // back to it (a triangle, a stub) would otherwise drag it along
+  moves.delete(`${wallId}:${anchorIndex}`);
+
+  return { anchorIndex, moves: [...moves.values()] };
+}
+
+/**
+ * Set a wall to an explicit length, holding whichever end is joined to another
+ * wall. One undo step (GRIP.MOVEMANY), and never more than this wall's own
+ * two grips — walls joined to it keep their geometry exactly.
  */
 export function resizeWallLength(
   dispatch: Dispatch,
@@ -114,46 +227,8 @@ export function resizeWallLength(
   wallId: EntityId,
   newLength: number,
 ): void {
-  const wall = doc.get(wallId);
-  if (!(wall instanceof WallEntity) || newLength <= 0) return;
-  const { a, b } = wall.getBaseline();
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  if (len < TOL) return;
-  const ux = dx / len;
-  const uy = dy / len;
-  const half = (newLength - len) / 2;
-  const dA = { x: -ux * half, y: -uy * half }; // the 'a' end backs off along u
-  const dB = { x: ux * half, y: uy * half }; //  the 'b' end reaches out along u
-
-  const moves = new Map<string, { id: EntityId; index: number; to: Point }>();
-  const put = (m: { id: EntityId; index: number; to: Point }) =>
-    moves.set(`${m.id}:${m.index}`, m);
-  // the wall itself grows symmetrically about its midpoint
-  put({ id: wallId, index: 0, to: { x: a.x + dA.x, y: a.y + dA.y } });
-  put({ id: wallId, index: 1, to: { x: b.x + dB.x, y: b.y + dB.y } });
-
-  // translate each cross wall joined at an end (skip collinear continuations),
-  // dragging its far neighbours — this carries the parallel wall along too
-  const shiftCross = (corner: Point, delta: Point) => {
-    for (const o of doc.all()) {
-      if (!(o instanceof WallEntity) || o.id === wallId) continue;
-      const bl = o.getBaseline();
-      const ol = Math.hypot(bl.b.x - bl.a.x, bl.b.y - bl.a.y);
-      if (ol < TOL) continue;
-      if (!samePt(bl.a, corner) && !samePt(bl.b, corner)) continue;
-      const ox = (bl.b.x - bl.a.x) / ol;
-      const oy = (bl.b.y - bl.a.y) / ol;
-      if (Math.abs(ux * oy - uy * ox) <= PARALLEL_SIN) continue; // collinear → skip
-      const plan = planStickyWallMove(doc, [o.id], delta);
-      if (plan) for (const m of plan.moves) put(m);
-    }
-  };
-  shiftCross(a, dA);
-  shiftCross(b, dB);
-
-  dispatch('GRIP.MOVEMANY', { moves: [...moves.values()] });
+  const plan = planWallResize(doc, wallId, newLength);
+  if (plan) dispatch('GRIP.MOVEMANY', { moves: plan.moves });
 }
 
 export interface StickyWallMovePlan {
