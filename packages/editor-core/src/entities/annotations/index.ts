@@ -5,3 +5,4 @@ export type {
   DimWallSide,
 } from './dimension-entity.js';
 export { DimensionEntity, createDimensionEntity } from './dimension-entity.js';
+export { SpaceTagEntity, createSpaceTagEntity } from './space-tag-entity.js';

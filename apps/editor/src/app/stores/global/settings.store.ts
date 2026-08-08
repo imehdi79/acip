@@ -13,6 +13,8 @@ export type Permission =
   | 'footer.duplicate'
   | 'footer.delete'
   | 'footer.insert'
+  | 'footer.measure'
+  | 'footer.rename'
   | 'header.settings'
   | 'header.profile';
 
@@ -24,28 +26,25 @@ export type User = {
   role: Role;
 };
 
+/** Everything that changes the drawing — editors and admins hold all of it. */
+const EDITING_PERMISSIONS: Permission[] = [
+  'header.profile',
+  'header.settings',
+  'footer.undo',
+  'footer.redo',
+  'footer.duplicate',
+  'footer.delete',
+  'footer.insert',
+  'footer.measure',
+  'footer.rename',
+];
+
 /** Signed-out users are treated as `guest`. */
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   guest: ['header.profile'],
   viewer: ['header.profile', 'header.settings'],
-  editor: [
-    'header.profile',
-    'header.settings',
-    'footer.undo',
-    'footer.redo',
-    'footer.duplicate',
-    'footer.delete',
-    'footer.insert',
-  ],
-  admin: [
-    'header.profile',
-    'header.settings',
-    'footer.undo',
-    'footer.redo',
-    'footer.duplicate',
-    'footer.delete',
-    'footer.insert',
-  ],
+  editor: EDITING_PERMISSIONS,
+  admin: EDITING_PERMISSIONS,
 };
 
 /* -------------------------------------------------------------------------- */

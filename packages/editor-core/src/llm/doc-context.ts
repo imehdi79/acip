@@ -2,7 +2,7 @@ import type { JsonObject, JsonValue } from '../common/json.js';
 import type { LevelId } from '../common/id.js';
 import type { DrawingDocument } from '../document/document.js';
 import { computeQuantities } from '../measurements/quantities.js';
-import { detectSpaces } from '../measurements/spaces.js';
+import { detectSpaces, spaceName } from '../measurements/spaces.js';
 
 export interface DescribeDocumentOptions {
   /** entity cap so huge drawings stay inside an LLM context (default 200) */
@@ -92,6 +92,8 @@ function spacesDigest(doc: DrawingDocument): JsonValue[] {
     for (const space of detectSpaces(doc, scope)) {
       out.push({
         key: space.key,
+        // how a person refers to the room, when they have named one
+        name: spaceName(doc, space),
         level: scope,
         netArea: round(space.netArea),
         grossArea: round(space.grossArea),

@@ -3,7 +3,12 @@ import type { InputModifiers, ViewDefinition } from '@acip/editor-core';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { Viewport2D } from './viewport2d';
-import { drawOverlay, drawScene, drawWallDimensions } from './scene-renderer';
+import {
+  drawOverlay,
+  drawScene,
+  drawWallDimensions,
+  overlayAnimates,
+} from './scene-renderer';
 import { lengthUnit } from '../units';
 
 const PICK_PIXELS = 8;
@@ -63,6 +68,21 @@ export function Viewport2DView() {
     const redrawOverlay = () =>
       drawOverlay(overlay, viewport, ui.overlay.get());
 
+    /* the pending wall pulses, which is the one thing here that needs a clock
+       rather than an event. The loop runs only while it is on screen. */
+    let blinkRaf = 0;
+    const blink = () => {
+      if (!overlayAnimates(ui.overlay.get())) {
+        blinkRaf = 0;
+        return;
+      }
+      redrawOverlay();
+      blinkRaf = requestAnimationFrame(blink);
+    };
+    const syncBlink = () => {
+      if (blinkRaf === 0 && overlayAnimates(ui.overlay.get())) blink();
+    };
+
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       const { clientWidth, clientHeight } = container;
@@ -92,7 +112,10 @@ export function Viewport2DView() {
         redrawBase();
         redrawOverlay();
       }),
-      ui.overlay.subscribe(redrawOverlay),
+      ui.overlay.subscribe(() => {
+        redrawOverlay();
+        syncBlink();
+      }),
       ui.activeLevelId.subscribe(redrawBase),
       ui.showMarks.subscribe(redrawBase),
       ui.showDemolition.subscribe(redrawBase),
@@ -368,6 +391,7 @@ export function Viewport2DView() {
 
     return () => {
       cancelAnimationFrame(baseRaf);
+      cancelAnimationFrame(blinkRaf);
       observer.disconnect();
       for (const unsub of unsubs) unsub();
       overlay.removeEventListener('pointerdown', onPointerDown);

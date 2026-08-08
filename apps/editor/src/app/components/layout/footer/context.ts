@@ -25,6 +25,8 @@ export interface FooterContext {
   readonly count: number;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
+  /** the armed tool. Anything but `'select'` means a gesture is in progress. */
+  readonly tool: string;
 }
 
 function snapshot(
@@ -44,6 +46,7 @@ function snapshot(
     count: info.count,
     canUndo: session.history.canUndo,
     canRedo: session.history.canRedo,
+    tool: ui.activeToolId.get(),
   };
 }
 
@@ -56,6 +59,7 @@ const same = (a: FooterContext, b: FooterContext): boolean =>
   a.count === b.count &&
   a.canUndo === b.canUndo &&
   a.canRedo === b.canRedo &&
+  a.tool === b.tool &&
   sameTypes(a.types, b.types);
 
 /**
@@ -81,6 +85,7 @@ export function useFooterContext(): FooterContext {
       session.selection.events.on('changed', sync),
       session.doc.events.on('change', sync),
       ui.activeLevelId.subscribe(sync),
+      ui.activeToolId.subscribe(sync),
     ];
     return () => {
       for (const off of unsubs) off();

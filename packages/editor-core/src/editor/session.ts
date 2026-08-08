@@ -9,6 +9,7 @@ import { registerPrimitiveCommands } from '../commands/primitives.js';
 import { registerArchitectureCommands } from '../commands/architecture.js';
 import { registerDocumentStoreCommands } from '../commands/document-stores.js';
 import { registerDimensionCommands } from '../commands/dimensions.js';
+import { registerSpaceCommands } from '../commands/spaces.js';
 import { registerSlabCommands } from '../commands/slabs.js';
 import { registerRoofCommands } from '../commands/roofs.js';
 import { registerFinishCommands } from '../commands/finishes.js';
@@ -63,6 +64,10 @@ import {
   DimensionEntity,
   createDimensionEntity,
 } from '../entities/annotations/dimension-entity.js';
+import {
+  SpaceTagEntity,
+  createSpaceTagEntity,
+} from '../entities/annotations/space-tag-entity.js';
 import { SelectionSet } from '../selection/index.js';
 import { SnapEngine } from '../snapping/index.js';
 import { MeasurementService } from '../measurements/index.js';
@@ -147,6 +152,10 @@ export class EditorSession {
         type: DimensionEntity.TYPE,
         create: createDimensionEntity,
       });
+      this.entityTypes.register({
+        type: SpaceTagEntity.TYPE,
+        create: createSpaceTagEntity,
+      });
       registerBuiltinCommands(this.commands);
       registerPrimitiveCommands(this.commands);
       registerArchitectureCommands(this.commands);
@@ -157,6 +166,7 @@ export class EditorSession {
       registerPhaseCommands(this.commands);
       registerStairCommands(this.commands);
       registerDimensionCommands(this.commands);
+      registerSpaceCommands(this.commands);
       registerRequestCommands(this.commands);
     }
   }

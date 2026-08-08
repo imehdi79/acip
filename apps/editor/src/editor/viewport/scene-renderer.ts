@@ -13,6 +13,7 @@ import {
   buildDisplayList,
   detectSpaces,
   hasGrips,
+  spaceName,
   wallAssemblyStrips,
 } from '@acip/editor-core';
 import type { Viewport2D } from './viewport2d';
@@ -71,6 +72,25 @@ const MARK_PREFIX: Record<string, string> = {
 };
 
 export const GRIP_PIXELS = 4;
+
+/** provisional-wall band: fixed screen width, pulsed between these alphas */
+const PENDING_WIDTH_PX = 10;
+const PENDING_ALPHA_MIN = 0.3;
+const PENDING_ALPHA_SWING = 0.5;
+/** one full pulse per this many ms */
+const PENDING_BLINK_MS = 900;
+
+/** 0..1 triangle-free pulse, read from the clock so any redraw is in phase */
+function blinkPhase(): number {
+  return (
+    0.5 + 0.5 * Math.sin((performance.now() / PENDING_BLINK_MS) * Math.PI * 2)
+  );
+}
+
+/** true while the overlay wants a repainting animation (the pending wall) */
+export function overlayAnimates(overlay: OverlayState): boolean {
+  return overlay.pending !== null;
+}
 
 /** assembly build-up only shows once the wall is thick enough on screen to read */
 const MIN_ASSEMBLY_PX = 6;
@@ -462,17 +482,24 @@ export function drawScene(
     }
   }
 
-  // room area labels — fixed screen size, hidden once a room shrinks below
-  // roughly a label's worth of pixels
+  // room labels — name over area, fixed screen size, hidden once a room
+  // shrinks below roughly a label's worth of pixels
   if (spaces.length > 0) {
     ctx.fillStyle = COLORS.spaceLabel;
-    ctx.font = '12px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const space of spaces) {
       if (space.netArea * viewport.scale * viewport.scale < 40 * 40) continue;
       const at = viewport.toScreen(space.labelPoint);
-      ctx.fillText(`${space.netArea.toFixed(1)} m²`, at.x, at.y);
+      // named rooms read as a name first: the area drops to a caption under it
+      const name = spaceName(doc, space);
+      const area = `${space.netArea.toFixed(1)} m²`;
+      if (name) {
+        ctx.font = '600 13px system-ui, sans-serif';
+        ctx.fillText(name, at.x, at.y - 8);
+      }
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.fillText(area, at.x, name ? at.y + 8 : at.y);
     }
   }
 }
@@ -605,6 +632,25 @@ export function drawOverlay(
       const a = viewport.toScreen(g.a);
       ctx.strokeRect(a.x - 3, a.y - 3, 6, 6);
     }
+  }
+
+  if (overlay.pending) {
+    // provisional wall under the finger. Drawn in screen space at a fixed
+    // band width so it reads as a wall at any zoom, and pulsed so a touch
+    // that has landed is unmistakable before the drag moves anywhere.
+    const a = viewport.toScreen(overlay.pending.a);
+    const b = viewport.toScreen(overlay.pending.b);
+    ctx.save();
+    ctx.globalAlpha = PENDING_ALPHA_MIN + PENDING_ALPHA_SWING * blinkPhase();
+    ctx.strokeStyle = COLORS.ghost;
+    ctx.lineWidth = PENDING_WIDTH_PX;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    // a touch that has not moved yet is a dot, not a zero-length line
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.restore();
   }
 
   if (overlay.ghost) {

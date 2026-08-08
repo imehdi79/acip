@@ -4,7 +4,7 @@ import type {
   ToolContext,
   ToolInputEvent,
 } from '@acip/editor-core';
-import { normalize, sub } from '@acip/editor-core';
+import { distance, normalize, sub } from '@acip/editor-core';
 import type { EditorUi } from '../ui-state';
 import { lengthUnit, parseLength } from '../units';
 import { alignGuides, constrainAngle } from './drafting';
@@ -13,11 +13,20 @@ import type { AlignGuide } from './drafting';
 /**
  * Shared state machine for two-point chained drawing (LINE, WALL): gathers
  * points interactively, then dispatches the same command an agent would call
- * with params upfront. Each click continues from the last point until Escape.
+ * with params upfront.
  *
- * Drafting aids: the cursor angle-snaps (Shift = ortho) and tracks the X/Y of
- * existing corners with dashed guides; typing a number sets the exact length
- * along the current direction (Enter places it).
+ * Two ways to place a segment, because a phone and a mouse want different
+ * things:
+ *
+ * - **drag** (the touch flow): press, a provisional wall appears and blinks,
+ *   drag to aim it, release to commit. One segment per gesture.
+ * - **tap-tap** (the chained flow): a press that releases without moving
+ *   plants the first point and waits; the next press places the segment and
+ *   continues the chain from it, until Escape.
+ *
+ * Drafting aids apply to both: the cursor angle-snaps (Shift = ortho) and
+ * tracks the X/Y of existing corners with dashed guides; typing a number sets
+ * the exact length along the current direction (Enter places it).
  */
 export class ChainedDrawTool implements Tool {
   private ctx: ToolContext | null = null;
@@ -28,6 +37,8 @@ export class ChainedDrawTool implements Tool {
   private typed = '';
   /** the point the next click / Enter will place */
   private target: Point | null = null;
+  /** where the current press went down — a release far from it is a drag */
+  private pressedAt: Point | null = null;
 
   constructor(
     readonly id: string,
@@ -56,18 +67,31 @@ export class ChainedDrawTool implements Tool {
     this.cursor = null;
     this.target = null;
     this.typed = '';
+    this.pressedAt = null;
     this.ui.setRubber(null);
     this.ui.setGuides(null);
+    this.ui.setPending(null);
     this.ui.draftLength.set(null);
+  }
+
+  /**
+   * Claim every press while this tool is armed, so a one-finger drag draws
+   * instead of panning the viewport. Two fingers still pinch and pan.
+   */
+  hitDraggable(): boolean {
+    return this.ctx !== null;
   }
 
   onPointerDown(e: ToolInputEvent): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    this.pressedAt = e.point;
     if (!this.last) {
       this.last = e.point;
       this.cursor = e;
-      this.ui.prompt.set('Specify next point (Shift = 90°, type = length)');
+      // shows up the instant the finger lands, before any movement
+      this.ui.setPending({ a: e.point, b: e.point });
+      this.ui.prompt.set('Drag to aim, release to place (Shift = 90°)');
       return;
     }
     // a click always uses the cursor position (angle/align-snapped), and drops
@@ -84,8 +108,21 @@ export class ChainedDrawTool implements Tool {
     this.recompute();
   }
 
-  onPointerUp(): void {
-    // click-to-click, not drag: points are placed on pointer down
+  onPointerUp(e: ToolInputEvent): void {
+    const pressedAt = this.pressedAt;
+    this.pressedAt = null;
+    if (!this.ctx || !this.last || !pressedAt) return;
+    // a release that never travelled is a tap: leave the first point planted
+    // so the next tap completes the segment
+    if (distance(e.point, pressedAt) < this.getTolerance()) return;
+    this.typed = '';
+    this.cursor = e;
+    this.place(this.resolve(e).point);
+    // one segment per gesture — the next press starts a fresh wall
+    this.last = null;
+    this.cursor = null;
+    this.ui.setPending(null);
+    this.ui.prompt.set(`${this.label} — specify first point`);
   }
 
   onKey(key: string): void {
@@ -140,6 +177,9 @@ export class ChainedDrawTool implements Tool {
     this.target = null;
     this.ui.setRubber(null);
     this.ui.setGuides(null);
+    // the real wall exists now; the provisional one re-anchors to the new
+    // chain start (tap-tap) or is cleared by the caller (drag)
+    this.ui.setPending({ a: point, b: point });
     this.ui.draftLength.set(null);
   }
 
@@ -167,6 +207,9 @@ export class ChainedDrawTool implements Tool {
       b: target,
       angleLocked: res.locked && !this.typed,
     });
+    // the provisional wall tracks the aim, so the finger drags a wall rather
+    // than a hairline
+    this.ui.setPending({ a: this.last, b: target });
     this.ui.setGuides(res.guides.length > 0 ? res.guides : null);
   }
 

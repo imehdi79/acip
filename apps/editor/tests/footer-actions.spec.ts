@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FOOTER_ITEMS,
   resolveFooter,
+  type FooterApi,
 } from '@/app/components/layout/footer/actions';
 import type { FooterContext } from '@/app/components/layout/footer/context';
 import type { User } from '@/app/stores/global/settings.store';
@@ -21,6 +22,7 @@ const ctx = (patch: Partial<FooterContext> = {}): FooterContext => ({
   count: 0,
   canUndo: false,
   canRedo: false,
+  tool: 'select',
   ...patch,
 });
 
@@ -45,17 +47,37 @@ describe('resolveFooter', () => {
     expect(ids(ctx({ canRedo: true }))).toEqual(['undo', 'redo', 'insert']);
   });
 
-  it('swaps insert for delete once anything is selected', () => {
+  it('drops insert once anything is selected', () => {
+    expect(
+      ids(ctx({ selection: 'wall', types: ['wall'], count: 1 })),
+    ).not.toContain('insert');
+  });
+
+  it('gives a wall selection its own edit set instead of insert', () => {
     expect(ids(ctx({ selection: 'wall', types: ['wall'], count: 1 }))).toEqual([
       'undo',
+      'measure',
+      'duplicate',
       'delete',
     ]);
   });
 
-  it('adds duplicate for a room selection, disabled until the command exists', () => {
+  it('offers the room buttons for a room, and no wall-only ones', () => {
     const room = ctx({ selection: 'room', types: ['wall'], count: 4 });
-    expect(ids(room)).toEqual(['undo', 'duplicate', 'delete']);
-    expect(enabledOf(room, 'duplicate')).toBe(false);
+    expect(ids(room)).toEqual(['undo', 'rename', 'duplicate', 'delete']);
+  });
+
+  it('keeps every contextual button pressable', () => {
+    const wall = ctx({ selection: 'wall', types: ['wall'], count: 1 });
+    for (const id of ['measure', 'duplicate', 'delete'])
+      expect(enabledOf(wall, id)).toBe(true);
+  });
+
+  // a mixed bag of walls and openings is neither a wall nor a room selection
+  it('leaves a mixed selection with delete only', () => {
+    expect(
+      ids(ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 })),
+    ).toEqual(['undo', 'delete']);
   });
 
   // `selection` is the entity's own type, so a future type needs no change in
@@ -75,6 +97,28 @@ describe('resolveFooter', () => {
       count: 4,
     });
     expect(ids(busy, guest)).toEqual([]);
+  });
+
+  it('offers cancel while a tool is armed, and hides insert behind it', () => {
+    // select is the resting tool: nothing to cancel
+    expect(ids(ctx())).toEqual(['undo', 'insert']);
+    expect(ids(ctx({ tool: 'wall' }))).toEqual(['undo', 'cancel']);
+    expect(ids(ctx({ tool: 'window' }))).toEqual(['undo', 'cancel']);
+  });
+
+  it('lets even a guest put a tool down', () => {
+    // guests hold no footer.* permission, but cancel is ungated on purpose —
+    // arming a tool must never be a one-way door
+    expect(ids(ctx({ tool: 'wall' }), guest)).toEqual(['cancel']);
+  });
+
+  it('cancel returns to the select tool', () => {
+    const cancel = FOOTER_ITEMS.find((item) => item.id === 'cancel')!;
+    const armed: string[] = [];
+    cancel.run?.({
+      tools: { useById: (id: string) => armed.push(id) },
+    } as unknown as FooterApi);
+    expect(armed).toEqual(['select']);
   });
 
   it('drops the editor-only buttons outside the editor view', () => {

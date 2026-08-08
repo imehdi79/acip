@@ -142,6 +142,78 @@ export const EraseCommand: Command<EraseParams, number> = {
   },
 };
 
+export interface DuplicateParams {
+  ids: EntityId[];
+  delta?: Point;
+}
+
+export const DuplicateCommand: Command<DuplicateParams, EntityId[]> = {
+  name: 'ENTITY.DUPLICATE',
+  description:
+    'Copy entities, optionally offset by a delta vector. Hosted entities (windows, doors) are copied onto the copy of their host, so duplicating a wall duplicates what it carries. Returns the ids of the top-level copies.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: DuplicateParams = { ids: asIdArray(raw['ids'], 'ids') };
+      if (raw['delta'] !== undefined) {
+        params.delta = asPoint(raw['delta'], 'delta');
+      }
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          ids: S.array(S.id('entity id'), 'entities to copy'),
+          delta: S.point(
+            'optional translation for the copies in meters; omitted leaves them on top of the originals',
+          ),
+        },
+        ['ids'],
+      ),
+  ),
+  execute(ctx, params) {
+    const missing = params.ids.filter((id) => !ctx.doc.has(id));
+    if (missing.length > 0) {
+      throw new ValidationError(
+        `unknown entity ids: ${missing.join(', ')} — use ids from the document digest, not marks`,
+      );
+    }
+    const m = params.delta ? translation(params.delta) : null;
+    const asked = new Set(params.ids);
+    const copies: EntityId[] = [];
+    for (const id of params.ids) {
+      const source = ctx.doc.get(id);
+      if (!source) continue;
+      // a window listed alongside its wall comes along with the wall below —
+      // copying it here too would leave the copy carrying two of everything
+      const hosting = ctx.doc.relations.relationOfHosted(id);
+      if (hosting && asked.has(hosting.hostId)) continue;
+
+      const copy = source.clone();
+      ctx.tx.create(copy);
+      // after create, so the transaction records it as new rather than edited
+      if (m) copy.transform(m, ctx.tx);
+      copies.push(copy.id);
+
+      // hosted entities are placed parametrically on their host, so they need
+      // re-attaching, never transforming — the new host carries them
+      for (const relation of ctx.doc.relations.relationsOfHost(id)) {
+        const hosted = ctx.doc.get(relation.hostedId);
+        if (!hosted) continue;
+        const hostedCopy = hosted.clone();
+        ctx.tx.create(hostedCopy);
+        ctx.tx.attach(
+          copy.id,
+          hostedCopy.id,
+          relation.anchorIndex,
+          relation.params,
+        );
+      }
+    }
+    return copies;
+  },
+};
+
 export interface GripMoveParams {
   id: EntityId;
   index: number;
@@ -246,6 +318,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registry.register(AddLineCommand);
   registry.register(MoveCommand);
   registry.register(EraseCommand);
+  registry.register(DuplicateCommand);
   registry.register(GripMoveCommand);
   registry.register(GripMoveManyCommand);
 }

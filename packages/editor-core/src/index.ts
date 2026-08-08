@@ -187,6 +187,8 @@ export {
   createStairEntity,
   DimensionEntity,
   createDimensionEntity,
+  SpaceTagEntity,
+  createSpaceTagEntity,
 } from './entities/index.js';
 
 // ── document (Layer 2) ──
@@ -371,6 +373,8 @@ export {
   detectSpaces,
   detectOutlines,
   offsetBoundary,
+  findSpaceTag,
+  spaceName,
 } from './measurements/index.js';
 export type { ViewDefinition } from './views/index.js';
 export {

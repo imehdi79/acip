@@ -54,6 +54,12 @@ export interface OverlayState {
   readonly angles: readonly AngleMark[] | null;
   /** dashed alignment/tracking lines to existing corners */
   readonly guides: readonly AlignGuide[] | null;
+  /**
+   * Provisional wall the finger is dragging out. Blinks, so a touch that has
+   * registered is obvious before the drag has gone anywhere — on a phone there
+   * is no cursor to say the tool is armed.
+   */
+  readonly pending: { a: Point; b: Point } | null;
 }
 
 /** 2D camera snapshot so React overlays can place chrome at world points */
@@ -85,6 +91,7 @@ const EMPTY_OVERLAY: OverlayState = {
   ink: null,
   angles: null,
   guides: null,
+  pending: null,
 };
 
 /** Chrome-facing UI state; the viewport and tools write, React chrome subscribes. */
@@ -182,6 +189,10 @@ export class EditorUi {
 
   setGuides(guides: OverlayState['guides']): void {
     this.overlay.set({ ...this.overlay.get(), guides });
+  }
+
+  setPending(pending: OverlayState['pending']): void {
+    this.overlay.set({ ...this.overlay.get(), pending });
   }
 
   clearOverlay(): void {

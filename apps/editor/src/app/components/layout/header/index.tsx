@@ -1,5 +1,3 @@
-import { Button } from '@heroui/react';
-import { IconArrowLeft } from '@tabler/icons-react';
 import { useCan, useSettingsStore } from '@/app/stores/global/settings.store';
 import HeaderMore from './more';
 import HeaderProfile from './profile';
@@ -9,7 +7,6 @@ const Header = () => {
   const canOpenProfile = useCan('header.profile');
   const user = useSettingsStore((state) => state.user);
   const signOut = useSettingsStore((state) => state.signOut);
-  const view = useSettingsStore((state) => state.view);
   const setView = useSettingsStore((state) => state.setView);
 
   // Guests are signed in as a guest-role user, so both cases clear the user and
@@ -18,19 +15,12 @@ const Header = () => {
 
   return (
     <div className="absolute top-0 z-10 h-14 flex w-full items-center justify-between px-4">
-      {/* Back is never permission-gated: no role should be stuck in the editor. */}
-      {view === 'editor' ? (
-        <Button
-          isIconOnly
-          aria-label="Back to projects"
-          variant="tertiary"
-          onPress={() => setView('projects')}
-        >
-          <IconArrowLeft stroke={2} />
-        </Button>
-      ) : (
-        canOpenSettings && <HeaderMore />
-      )}
+      {/* The menu is the same on both views and never fully gated — it carries
+          Create New, which took over from Back as the way out of the editor. */}
+      <HeaderMore
+        canOpenSettings={canOpenSettings}
+        onCreateNew={() => setView('projects')}
+      />
 
       {/* ml-auto keeps profile on the right even when the menu is hidden */}
       {canOpenProfile && (

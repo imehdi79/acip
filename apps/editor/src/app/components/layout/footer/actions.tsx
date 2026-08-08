@@ -4,7 +4,10 @@ import {
   IconArrowBackUp,
   IconArrowForwardUp,
   IconCopy,
+  IconRulerMeasure,
+  IconSignature,
   IconTrash,
+  IconX,
 } from '@tabler/icons-react';
 import type { EditorUi } from '@/editor/ui-state';
 import type { ToolManager } from '@/editor/tools/tool-manager';
@@ -15,6 +18,9 @@ import {
 } from '@/app/stores/global/settings.store';
 import type { FooterContext } from './context';
 import { Insert, insertRoom, type InsertItemType } from './insert';
+import { WallMeasurements } from './measurements-modal';
+import { RoomName } from './room-name';
+import { duplicateSelection } from './duplicate';
 
 /** What a button gets to act on. */
 export interface FooterApi {
@@ -46,7 +52,8 @@ export interface FooterItem {
  * The footer, as data. This list is the only thing to edit to add, remove or
  * re-gate a button — the renderer never changes.
  *
- * Array order is render order.
+ * Array order is render order. The bar is contextual: `visible` reads the
+ * selection kind, so each kind of thing gets its own set of buttons.
  */
 export const FOOTER_ITEMS: readonly FooterItem[] = [
   {
@@ -75,16 +82,39 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     run: ({ session }) => void session.redo(),
   },
   {
+    id: 'measure',
+    label: 'Measurements',
+    icon: <IconRulerMeasure />,
+    slot: 'end',
+    group: 'inspect',
+    iconOnly: true,
+    permission: 'footer.measure',
+    // Length, height and thickness are per-wall, so this only makes sense
+    // once the selection is walls and nothing else.
+    visible: (ctx) => ctx.selection === 'wall',
+    render: ({ session }) => <WallMeasurements session={session} />,
+  },
+  {
+    id: 'rename',
+    label: 'Room name',
+    icon: <IconSignature />,
+    slot: 'end',
+    group: 'inspect',
+    iconOnly: true,
+    permission: 'footer.rename',
+    visible: (ctx) => ctx.selection === 'room',
+    render: ({ session, ui }) => <RoomName session={session} ui={ui} />,
+  },
+  {
     id: 'duplicate',
     label: 'Duplicate',
     icon: <IconCopy className="rotate-180" />,
     slot: 'end',
     group: 'edit',
+    iconOnly: true,
     permission: 'footer.duplicate',
-    visible: (ctx) => ctx.selection === 'room',
-    // editor-core has no ENTITY.DUPLICATE command yet — ENTITY.ERASE has no
-    // counterpart, and LEVEL.DUPLICATE is levels only. Enable once it exists.
-    enabled: () => false,
+    visible: (ctx) => ctx.selection === 'room' || ctx.selection === 'wall',
+    run: ({ session, ui }) => duplicateSelection(session, ui),
   },
   {
     id: 'delete',
@@ -103,17 +133,35 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     },
   },
   {
+    id: 'cancel',
+    label: 'Cancel',
+    icon: <IconX />,
+    slot: 'end',
+    iconOnly: true,
+    // never permission-gated, like the header's Back: no role should be able
+    // to arm a tool and then be unable to put it down
+    visible: (ctx) => ctx.view === 'editor' && ctx.tool !== 'select',
+    // useById deactivates the tool and clears the overlay, so any half-drawn
+    // wall and its provisional preview go with it
+    run: ({ tools }) => tools.useById('select'),
+  },
+  {
     id: 'insert',
     label: 'Insert',
     icon: null,
     slot: 'end',
     permission: 'footer.insert',
-    visible: (ctx) => ctx.view === 'editor' && ctx.selection === 'none',
+    // a tool is already armed — Cancel is the action that applies, not another
+    // way in
+    visible: (ctx) =>
+      ctx.view === 'editor' &&
+      ctx.selection === 'none' &&
+      ctx.tool === 'select',
     render: (api) => (
       <Insert
         onInsert={(type: InsertItemType) => {
           // Wall and window are interactive: arm the tool and let the user
-          // tap on the plan. A room needs no tool — it is placed, then handed
+          // drag on the plan. A room needs no tool — it is placed, then handed
           // to the select tool's room-resize handles.
           if (type === 'room') insertRoom(api.session, api.ui);
           else api.tools.useById(type);

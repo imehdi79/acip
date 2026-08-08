@@ -22,9 +22,16 @@ arrangement on the document was tried once and reverted as a Layer-2/Layer-3
 drift — the free-function pattern is the settled convention. Add a cache only
 when profiling demands it, and put it in the consumer, not the document.
 
-When users need to _name_ a room or override its function, that becomes a
-thin stored tag entity pointing at a detected space by location — the tag
-stores data, never geometry. Deferred until needed.
+Naming works the same way, and shipped as designed (2026-08-08): a name is a
+thin stored tag entity — `SpaceTagEntity`, type `space-tag` — anchored at a
+point inside the room it names. The tag stores data, never geometry: it draws
+no linework, is not pickable (a tap inside a room still selects the room), and
+resolves to a space by containment, so the name follows the room through wall
+edits that keep the anchor inside it. `SPACE.SETNAME` creates, renames (never
+stacking a second tag) or, on an empty name, removes it. A tag whose room is
+demolished is simply orphaned — it names a room again if the loop closes back
+around it. Overriding a room's _function_ (a schedule category) is still open,
+and belongs on the same tag.
 
 ## Golden decision 2: detection runs on a planar arrangement, not an endpoint graph
 
@@ -95,9 +102,14 @@ widths, the other measures outer overall extents.
   on every level), feeds the arrangement, builds gross/net polygons, returns
   `SpaceInfo[]` sorted stably. Layer visibility is ignored — spaces are a
   model fact, like quantities.
+- **Names** — `findSpaceTag(doc, space)` / `spaceName(doc, space)` in
+  `measurements/spaces.ts`: the read side of naming, free functions like
+  everything else here. Consumers draw the name wherever they already put the
+  room label.
 - **LLM digest** — `describeDocument()` gains a `spaces` section:
-  `{ key, level, netArea, grossArea, walls }` per space, a few tokens per
-  room. Agents address rooms instead of reasoning over wall envelopes.
+  `{ key, name, level, netArea, grossArea, walls }` per space, a few tokens per
+  room. Agents address rooms by name when there is one, instead of reasoning
+  over wall envelopes.
 - **web-editor** — plan viewports fill detected spaces and label them with
   their net area, recomputed per committed transaction. Rooms light up as a
   loop closes and merge when a partition is erased.
@@ -125,7 +137,7 @@ widths, the other measures outer overall extents.
 
 ## Deferred
 
-Stored space tags (names, functions — data only, geometry stays derived);
+Space functions/categories on the tag (names shipped 2026-08-08);
 room separator lines; wall justification (`center | face+ | face-` — becomes
 a stored wall property that face math reads; requires asymmetric half-widths
 in the junction resolver); core-vs-finish face distinction on assembly layers

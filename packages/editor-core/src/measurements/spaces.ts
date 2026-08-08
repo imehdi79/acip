@@ -10,6 +10,7 @@ import {
 } from '../geometry/primitives/point.js';
 import type { DrawingDocument } from '../document/document.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
+import { SpaceTagEntity } from '../entities/annotations/space-tag-entity.js';
 import type { ArrangementSegment, FaceEdge } from '../topology/arrangement.js';
 import {
   arrangePlan,
@@ -231,6 +232,37 @@ export function detectSpaces(
   }
   spaces.sort((a, b) => b.netArea - a.netArea || (a.key < b.key ? -1 : 1));
   return spaces;
+}
+
+/**
+ * The tag naming this space, if one has been placed inside it. Spaces are
+ * derived and carry no identity of their own, so the match is by containment:
+ * the tag whose anchor point lies within the space's net boundary. Ties
+ * (several tags dropped in one room) resolve to the first, stably.
+ */
+export function findSpaceTag(
+  doc: DrawingDocument,
+  space: SpaceInfo,
+): SpaceTagEntity | null {
+  for (const entity of doc.all()) {
+    if (!(entity instanceof SpaceTagEntity)) continue;
+    if (
+      space.levelId !== null &&
+      entity.baseLevelId !== null &&
+      entity.baseLevelId !== space.levelId
+    )
+      continue;
+    if (pointInLoop(entity.getPoint(), space.boundary)) return entity;
+  }
+  return null;
+}
+
+/** the room's name, or null when it has not been named */
+export function spaceName(
+  doc: DrawingDocument,
+  space: SpaceInfo,
+): string | null {
+  return findSpaceTag(doc, space)?.name || null;
 }
 
 /** the outer contour of a connected run of walls — what a roof covers */
