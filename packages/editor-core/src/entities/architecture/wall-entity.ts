@@ -244,6 +244,19 @@ export class WallEntity
   }
 
   /**
+   * The wall's plan outline end to end, join caps included and openings
+   * ignored — the extent a reader sees as "the wall".
+   *
+   * Neither existing accessor answers that: getBaseGeometry() is the un-capped
+   * rectangle (so it stops at the baseline endpoints, short of a mitered
+   * corner), and getEffectiveGeometry() is split into solid spans, so an
+   * opening reaching an end would shorten it.
+   */
+  getOutline(): [Point, Point, Point, Point] {
+    return this.spanQuadJoined(0, this.getLength(), this.capsForEnds());
+  }
+
+  /**
    * Bounds always include the baseline. Join caps can clip the effective
    * body AWAY from a baseline endpoint (a tee stops at the host's face), and
    * junction discovery queries the spatial index by endpoint — bounds must

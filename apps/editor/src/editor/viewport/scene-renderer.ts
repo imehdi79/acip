@@ -18,6 +18,7 @@ import {
 import type { Viewport2D } from './viewport2d';
 import type { OverlayState, UnderlayState } from '../ui-state';
 import { formatLength } from '../units';
+import { wallDimensions } from './wall-dimensions';
 
 const COLORS = {
   background: '#ffffff',
@@ -497,43 +498,35 @@ export function drawWallDimensions(
 ): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  // plan-only pass; the 3D view definition carries no level
-  if (view.kind !== 'plan') return;
-
-  const levelId = view.levelId ?? null;
-  const walls: WallEntity[] = [];
-  for (const entity of doc.all()) {
-    if (!(entity instanceof WallEntity)) continue;
-    if ((entity.baseLevelId ?? null) !== levelId) continue;
-    walls.push(entity);
-  }
-  if (walls.length === 0) return;
+  const dims = wallDimensions(doc, view);
+  if (dims.length === 0) return;
 
   const dpr = window.devicePixelRatio || 1;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // mean of the wall midpoints — labels are pushed away from it so they sit
-  // outside the plan instead of cluttering the rooms
+  // mean of the dimension midpoints — labels are pushed away from it so they
+  // sit outside the plan instead of cluttering the rooms
   let sumX = 0;
   let sumY = 0;
-  for (const wall of walls) {
-    const { a, b } = wall.getBaseline();
-    sumX += (a.x + b.x) / 2;
-    sumY += (a.y + b.y) / 2;
+  for (const dim of dims) {
+    sumX += (dim.a.x + dim.b.x) / 2;
+    sumY += (dim.a.y + dim.b.y) / 2;
   }
   const centre = viewport.toScreen({
-    x: sumX / walls.length,
-    y: sumY / walls.length,
+    x: sumX / dims.length,
+    y: sumY / dims.length,
   });
 
   ctx.font = '11px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  for (const wall of walls) {
-    const { a, b } = wall.getBaseline();
-    const sa = viewport.toScreen(a);
-    const sb = viewport.toScreen(b);
+  for (const dim of dims) {
+    // the anchors ARE the measured points: the only thing applied below is a
+    // perpendicular stand-off, so the line can never span a different length
+    // than the label states
+    const sa = viewport.toScreen(dim.a);
+    const sb = viewport.toScreen(dim.b);
     const dx = sb.x - sa.x;
     const dy = sb.y - sa.y;
     const px = Math.hypot(dx, dy);
@@ -558,7 +551,7 @@ export function drawWallDimensions(
     ctx.beginPath();
     ctx.moveTo(da.x, da.y);
     ctx.lineTo(db.x, db.y);
-    // witness lines running back toward each wall end
+    // witness lines running back to the measured points themselves
     ctx.moveTo(sa.x + nx * 4, sa.y + ny * 4);
     ctx.lineTo(da.x + nx * DIM_TICK_PX, da.y + ny * DIM_TICK_PX);
     ctx.moveTo(sb.x + nx * 4, sb.y + ny * 4);
@@ -569,7 +562,7 @@ export function drawWallDimensions(
     let angle = Math.atan2(db.y - da.y, db.x - da.x);
     if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
 
-    const label = formatLength(Math.hypot(b.x - a.x, b.y - a.y));
+    const label = formatLength(dim.length);
     ctx.save();
     ctx.translate((da.x + db.x) / 2 + nx * 9, (da.y + db.y) / 2 + ny * 9);
     ctx.rotate(angle);
