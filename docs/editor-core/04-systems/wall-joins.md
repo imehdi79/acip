@@ -43,8 +43,10 @@ the side butt against the face it presents, thickest wall of the run owning it.
 Resolving each side of a through-wall separately — parallel faces on one side, a
 miter on the other — chamfers its cap and leaves a triangular void above the
 arriving wall, which is what a split wall with a room hung under it used to look
-like. A four-way crossing has two runs, so its centre is covered twice rather
-than being ringed by four chamfers.
+like. A crossing has TWO runs and only one can carry on — both keeping square caps
+would fill the centre twice and overlap there — so **X wins the tie**: the most
+horizontal run runs through and the other stops at its faces. X priority only
+decides between competing runs; a lone vertical run still carries on.
 
 Fallbacks, in order:
 
@@ -113,7 +115,7 @@ that wall's **near face**; the continuous wall is untouched.
 - **Wheel-over-tee overlap**: when two walls share an endpoint ON a third
   wall's body, they miter with each other (wheel priority) and their miter can
   overlap the host's body in plan. Fills overlap harmlessly; no boolean
-  cleanup in V2. Through-runs overlap at their crossing for the same reason.
+  cleanup in V2.
 - **Crossing (+) junctions**: interior-crossing-interior is not detected —
   detection is endpoint-driven only.
 

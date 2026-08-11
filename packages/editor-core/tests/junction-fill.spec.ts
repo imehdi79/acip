@@ -64,19 +64,35 @@ describe('resolveJunction', () => {
     expect(round(caps[0].left)).toEqual({ x: -0.15, y: 0.15 });
   });
 
-  test('a four-way crossing is covered by both runs', () => {
+  test('at a crossing X runs through and Y stops at its faces', () => {
+    //      │
+    //   ───┼───   only one run can stay continuous, or the two overlap
+    //      │
     const caps = resolveJunction([
       end(1, 0),
       end(-1, 0),
       end(0, 1),
       end(0, -1),
     ]);
-    // every arm reaches the junction line — the centre is filled twice over
-    // rather than left with four chamfers around a hole
-    for (const cap of caps) {
-      expect(Math.hypot(cap.left.x, cap.left.y)).toBeCloseTo(0.15, 9);
-      expect(Math.hypot(cap.right.x, cap.right.y)).toBeCloseTo(0.15, 9);
+
+    // the horizontal run carries on: square caps on the junction line
+    for (const cap of [caps[0], caps[1]]) {
+      expect(round(cap.left).x).toBe(0);
+      expect(round(cap.right).x).toBe(0);
     }
+    // the vertical arms stop on the face they arrive at, each on its own side
+    expect(round(caps[2].left).y).toBe(0.15);
+    expect(round(caps[2].right).y).toBe(0.15);
+    expect(round(caps[3].left).y).toBe(-0.15);
+    expect(round(caps[3].right).y).toBe(-0.15);
+  });
+
+  test('a vertical run still carries on when nothing horizontal runs through', () => {
+    // X priority only decides between two RUNS — a lone arm never wins
+    const caps = resolveJunction([end(0, 1), end(0, -1), end(1, 0)]);
+    expect(round(caps[0].left).y).toBe(0);
+    expect(round(caps[0].right).y).toBe(0);
+    expect(round(caps[2].left).x).toBe(0.15);
   });
 
   test('near-collinear counts as a run, so float dust cannot open a spike', () => {

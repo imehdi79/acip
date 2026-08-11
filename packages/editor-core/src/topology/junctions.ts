@@ -147,17 +147,33 @@ export function resolveJunction(ends: readonly WallEnd[]): EndCap[] {
       (other, j) => j !== i && continues(end.direction, other.direction),
     ),
   );
-  const first = throughRun.indexOf(true);
-  if (first >= 0) {
-    // the thickest wall of the run owns the face the others stop at, so a
-    // thin partition never pokes through a thick wall it butts into
-    const halfWidth = Math.max(
-      ...ends.filter((_, i) => throughRun[i]).map((end) => end.halfWidth),
+  let chosen = throughRun.indexOf(true);
+  if (chosen >= 0) {
+    // A crossing has TWO runs, and only one of them can stay continuous:
+    // letting both keep square caps fills the middle twice, so the walls
+    // overlap there. X wins the tie — the most horizontal run carries on and
+    // the other stops at its faces, so a crossing reads as one wall with the
+    // other butting into it from both sides.
+    for (let i = 0; i < ends.length; i++) {
+      if (!throughRun[i]) continue;
+      if (Math.abs(ends[i].direction.x) > Math.abs(ends[chosen].direction.x)) {
+        chosen = i;
+      }
+    }
+    const along = ends[chosen].direction;
+    // everything lying along the chosen run carries on with it; anything else
+    // arriving here — the other run included — butts against its face
+    const inRun = ends.map(
+      (end) => Math.abs(cross(end.direction, along)) <= COLLINEAR_SIN,
     );
-    const along = ends[first].direction;
+    // the thickest wall of the run owns that face, so a thin partition never
+    // pokes through a thick wall it butts into
+    const halfWidth = Math.max(
+      ...ends.filter((_, i) => inRun[i]).map((end) => end.halfWidth),
+    );
     const n = perpendicular(along);
     return ends.map((end, i) => {
-      if (throughRun[i]) return squareCap(end);
+      if (inRun[i]) return squareCap(end);
       const side = dot(end.direction, n) >= 0 ? 1 : -1;
       return (
         resolveTeeCap(end, add(junction, scale(n, side * halfWidth)), along) ??
