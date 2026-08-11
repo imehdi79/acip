@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { EditorSession, WallEntity, point } from '@acip/editor-core';
-import type { EntityId } from '@acip/editor-core';
+import {
+  EditorSession,
+  WallEntity,
+  bboxIntersects,
+  point,
+} from '@acip/editor-core';
+import type { BBox, EntityId, Point } from '@acip/editor-core';
 import { createRuntime } from '@/editor/runtime';
 import type { EditorRuntime } from '@/editor/runtime';
-import { duplicateSelection } from '@/app/components/layout/footer/duplicate';
+import {
+  duplicateSelection,
+  planDuplicateOffset,
+} from '@/app/components/layout/footer/duplicate';
 
 /**
  * The footer's Duplicate button: core does the copying, this covers the part
@@ -21,6 +29,22 @@ const addWall = (ax: number, ay: number, bx: number, by: number) =>
 
 const walls = () =>
   session.doc.all().filter((e): e is WallEntity => e instanceof WallEntity);
+
+const boundsOf = (id: EntityId): BBox => session.doc.get(id)!.getBounds();
+
+const shift = (b: BBox, by: Point): BBox => ({
+  minX: b.minX + by.x,
+  minY: b.minY + by.y,
+  maxX: b.maxX + by.x,
+  maxY: b.maxY + by.y,
+});
+
+/** does this entity keep out of everything else on the plan? */
+const standsAlone = (id: EntityId): boolean =>
+  session.doc
+    .all()
+    .filter((e) => e.id !== id)
+    .every((e) => !bboxIntersects(boundsOf(id), e.getBounds()));
 
 beforeEach(() => {
   session = new EditorSession();
@@ -81,5 +105,107 @@ describe('duplicateSelection', () => {
     duplicateSelection(session, runtime.ui);
 
     expect(runtime.ui.fitTarget.get()).toMatchObject({ minX: 0, maxX: 9 });
+  });
+
+  it('lands clear when the spot on the right is taken', () => {
+    const id = addWall(0, 0, 4, 0);
+    const seed = boundsOf(id);
+    // exactly where the old fixed shift would have dropped the copy
+    addWall(5, 0, 9, 0);
+    session.selection.add(id);
+
+    duplicateSelection(session, runtime.ui);
+
+    const copy = walls().find(
+      (wall) => wall.id !== id && wall.getBaseline().a.x < 1,
+    )!;
+    expect(standsAlone(copy.id)).toBe(true);
+    // next in the order is below, one bbox height plus the gap down
+    expect(copy.getBaseline().a.y).toBeCloseTo(-(seed.maxY - seed.minY + 1));
+  });
+
+  it('frames the copy wherever it went', () => {
+    const id = addWall(0, 0, 4, 0);
+    addWall(5, 0, 9, 0);
+    session.selection.add(id);
+
+    duplicateSelection(session, runtime.ui);
+
+    const fit = runtime.ui.fitTarget.get()!;
+    const copy = walls().find(
+      (wall) => wall.id !== id && wall.getBaseline().a.x < 1,
+    )!;
+    const copyBounds = copy.getBounds();
+    expect(fit.minY).toBeLessThanOrEqual(copyBounds.minY);
+    expect(fit.maxY).toBeGreaterThanOrEqual(copyBounds.maxY);
+  });
+
+  it('keeps the plain right shift on an empty plan', () => {
+    const id = addWall(0, 0, 4, 0);
+    expect(planDuplicateOffset(session.doc, [id])).toMatchObject({
+      x: 5,
+      y: 0,
+    });
+  });
+
+  it('survives an empty plan with nothing selected', () => {
+    expect(() => duplicateSelection(session, runtime.ui)).not.toThrow();
+    expect(planDuplicateOffset(session.doc, [])).toMatchObject({ x: 0, y: 0 });
+    expect(session.doc.count).toBe(0);
+  });
+
+  it('picks the same spot every time for the same drawing', () => {
+    const plan = (): EntityId => {
+      const id = addWall(0, 0, 4, 0);
+      addWall(5, 0, 9, 0);
+      addWall(0, -1.5, 4, -1.5);
+      addWall(-5, 0, -1, 0);
+      return id;
+    };
+
+    const id = plan();
+    const first = planDuplicateOffset(session.doc, [id]);
+    expect(planDuplicateOffset(session.doc, [id])).toEqual(first);
+    expect(planDuplicateOffset(session.doc, [id])).toEqual(first);
+
+    // and the same again from a drawing built from scratch — the answer comes
+    // from the geometry, not from entity ids or insertion luck
+    session = new EditorSession();
+    runtime = createRuntime(session);
+    const again = plan();
+    expect(planDuplicateOffset(session.doc, [again])).toEqual(first);
+  });
+
+  it('falls back to the right shift when every slot is taken', () => {
+    const id = addWall(0, 0, 4, 0);
+    const seed = boundsOf(id);
+    const stepX = seed.maxX - seed.minX + 1;
+    const stepY = seed.maxY - seed.minY + 1;
+    const cx = (seed.minX + seed.maxX) / 2;
+    const cy = (seed.minY + seed.maxY) / 2;
+
+    // a stub in the middle of every slot the search will look at, far enough
+    // out that the search has to give up rather than wander forever
+    for (let ring = 1; ring <= 12; ring++) {
+      for (const dir of [
+        point(1, 0),
+        point(0, -1),
+        point(-1, 0),
+        point(0, 1),
+      ]) {
+        const x = cx + dir.x * stepX * ring;
+        const y = cy + dir.y * stepY * ring;
+        addWall(x - 0.25, y, x + 0.25, y);
+      }
+    }
+    session.selection.add(id);
+
+    const offset = planDuplicateOffset(session.doc, [id]);
+    expect(offset).toMatchObject({ x: stepX, y: 0 });
+    // the fallback knowingly lands on something — that is why the resolve runs
+    const taken = session.doc
+      .queryBBox(shift(seed, offset))
+      .filter((e) => e.id !== id);
+    expect(taken.length).toBeGreaterThan(0);
   });
 });

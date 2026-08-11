@@ -21,6 +21,7 @@ import {
 } from './drafting';
 import type { AlignGuide } from './drafting';
 import {
+  HostedOpeningEntity,
   JOIN_TOLERANCE,
   bboxExpand,
   bboxFromPoints,
@@ -51,6 +52,12 @@ type Mode =
       fixed: Point | null;
       /** move every endpoint stuck to this corner together, not just this one */
       stick: boolean;
+    }
+  | {
+      kind: 'opening-resize';
+      entityId: EntityId;
+      /** which end is under the finger: 1 = start of the span, 2 = end */
+      index: number;
     }
   | { kind: 'room-resize'; room: RectRoom; fixed: Point }
   | { kind: 'box'; start: Point; additive: boolean };
@@ -105,6 +112,7 @@ export class SelectTool implements Tool {
     this.ui.setBox(null);
     this.ui.setAngles(null);
     this.ui.setGuides(null);
+    this.ui.setPending(null);
   }
 
   onPointerDown(e: ToolInputEvent): void {
@@ -132,6 +140,18 @@ export class SelectTool implements Tool {
       // anchor at the grip's real position so coincident corners are found
       // exactly, not at the click point (which may be up to tolerance off)
       const entity = ctx.doc.get(grip.entityId);
+      // an opening's end grips run along its wall: they resize it rather than
+      // move a corner, so none of the corner machinery below applies
+      if (entity instanceof HostedOpeningEntity && grip.index > 0) {
+        this.mode = {
+          kind: 'opening-resize',
+          entityId: grip.entityId,
+          index: grip.index,
+        };
+        this.previewOpening(e.point);
+        this.ui.prompt.set('Drag to resize the opening');
+        return;
+      }
       const grips = entity && hasGrips(entity) ? entity.getGrips() : [];
       const gp = grips.find((g) => g.index === grip.index)?.point;
       // a two-grip wall/line gives an angle-snap reference: its fixed end
@@ -206,6 +226,9 @@ export class SelectTool implements Tool {
         );
         break;
       }
+      case 'opening-resize':
+        this.previewOpening(e.point);
+        break;
       case 'room-resize': {
         const r = rectFrom(this.mode.fixed, e.point);
         const outline: Geometry = {
@@ -244,6 +267,7 @@ export class SelectTool implements Tool {
     this.ui.setAngles(null);
     this.ui.setGuides(null);
     this.ui.setSnap(null);
+    this.ui.setPending(null);
 
     switch (mode.kind) {
       case 'drag': {
@@ -287,6 +311,26 @@ export class SelectTool implements Tool {
         );
         break;
       }
+      case 'opening-resize': {
+        // one grip move, so the width change and the centre shift that keeps
+        // the far end put are one command and one undo
+        const opening = ctx.doc.get(mode.entityId);
+        if (opening instanceof HostedOpeningEntity) {
+          const span = opening.planEndDrag(mode.index, e.point);
+          // a tap on the grip resizes nothing — it must not cost an undo step
+          if (span && (span.width !== opening.width || span.t !== opening.t)) {
+            ctx.dispatch('GRIP.MOVE', {
+              id: mode.entityId,
+              index: mode.index,
+              to: e.point,
+            });
+          }
+        }
+        this.ui.prompt.set(
+          'Select (Shift = toggle, drag = move/box, grips = stretch)',
+        );
+        break;
+      }
       case 'room-resize':
         resizeRectRoomTo(
           (name, params) => ctx.dispatch(name, params),
@@ -313,7 +357,20 @@ export class SelectTool implements Tool {
     this.ui.setRubber(null);
     this.ui.setAngles(null);
     this.ui.setGuides(null);
+    this.ui.setPending(null);
     this.ctx?.selection.clear();
+  }
+
+  /** blinking band showing the opening the end grip would leave behind */
+  private previewOpening(cursor: Point): void {
+    const ctx = this.ctx;
+    if (!ctx || this.mode.kind !== 'opening-resize') return;
+    const opening = ctx.doc.get(this.mode.entityId);
+    const span =
+      opening instanceof HostedOpeningEntity
+        ? opening.planEndDrag(this.mode.index, cursor)
+        : null;
+    this.ui.setPending(span ? { a: span.a, b: span.b } : null);
   }
 
   /**
@@ -434,7 +491,9 @@ export class SelectTool implements Tool {
     const out: { id: EntityId; index: number }[] = [];
     const area = bboxExpand(bboxFromPoints([anchor]), JOIN_TOLERANCE);
     for (const entity of ctx.doc.queryBBox(area)) {
-      if (!hasGrips(entity)) continue;
+      // an opening's ends are a width, not a junction: a window sitting flush
+      // against a wall corner must not be stretched when that corner moves
+      if (!hasGrips(entity) || entity instanceof HostedOpeningEntity) continue;
       for (const grip of entity.getGrips()) {
         if (distance(grip.point, anchor) <= JOIN_TOLERANCE) {
           out.push({ id: entity.id, index: grip.index });
@@ -444,22 +503,29 @@ export class SelectTool implements Tool {
     return out;
   }
 
+  /**
+   * The grip under the point — the NEAREST one, not the first found: an
+   * opening's end grips sit well inside a touch radius of its middle one, and
+   * the end actually under the finger has to win.
+   */
   private gripAt(
     point: Point,
     tolerance: number,
   ): { entityId: EntityId; index: number } | null {
     const ctx = this.ctx;
     if (!ctx) return null;
+    let best: { entityId: EntityId; index: number; d: number } | null = null;
     for (const id of ctx.selection.list()) {
       const entity = ctx.doc.get(id);
       if (!entity || !hasGrips(entity)) continue;
       for (const grip of entity.getGrips()) {
-        if (distance(grip.point, point) <= tolerance) {
-          return { entityId: id, index: grip.index };
+        const d = distance(grip.point, point);
+        if (d <= tolerance && (!best || d < best.d)) {
+          best = { entityId: id, index: grip.index, d };
         }
       }
     }
-    return null;
+    return best ? { entityId: best.entityId, index: best.index } : null;
   }
 
   /**

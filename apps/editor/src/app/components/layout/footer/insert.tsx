@@ -1,6 +1,7 @@
 import { Button, Dropdown, Label } from '@heroui/react';
 import {
   IconBoxMargin,
+  IconDoor,
   IconPlus,
   IconWall,
   IconWindow,
@@ -9,7 +10,7 @@ import type { EditorSession, EntityId, Point } from '@acip/editor-core';
 import type { EditorUi } from '@/editor/ui-state';
 import { withResolvedWalls } from '@/editor/walls';
 
-export type InsertItemType = 'room' | 'wall' | 'window';
+export type InsertItemType = 'room' | 'wall' | 'window' | 'door';
 
 /** side of the room Insert drops, in metres */
 const ROOM_SIZE = 4;
@@ -84,7 +85,8 @@ type Item = {
 
 const iconClass = 'size-4 shrink-0 text-muted';
 
-const itemsList: Item[] = [
+/** what the menu offers, in order — the ids are tool ids bar 'room' */
+export const INSERT_ITEMS: Item[] = [
   {
     id: 'room',
     label: 'Room',
@@ -99,6 +101,11 @@ const itemsList: Item[] = [
     id: 'window',
     label: 'Window',
     icon: <IconWindow className={iconClass} stroke={2} />,
+  },
+  {
+    id: 'door',
+    label: 'Door',
+    icon: <IconDoor className={iconClass} stroke={2} />,
   },
 ];
 
@@ -119,7 +126,7 @@ export function Insert({ onInsert }: InsertProps) {
         {/* No Section wrapper: it is one unlabelled group, and .menu-item
             already lays out icon + label as a flex row with a gap. */}
         <Dropdown.Menu onAction={(key) => onInsert?.(key as InsertItemType)}>
-          {itemsList.map((item) => (
+          {INSERT_ITEMS.map((item) => (
             <Dropdown.Item id={item.id} key={item.id} textValue={item.label}>
               {item.icon}
               <Label>{item.label}</Label>

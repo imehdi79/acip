@@ -41,7 +41,21 @@ export interface OpeningFrame {
   halfThickness: number;
 }
 
+/** where an end-grip drag lands, in host-parametric AND world terms */
+export interface OpeningSpan {
+  /** normalized position of the opening center along the host axis */
+  readonly t: number;
+  /** opening width in meters */
+  readonly width: number;
+  /** the span's two ends on the host axis, so a tool can preview it */
+  readonly a: Point;
+  readonly b: Point;
+}
+
 export const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
+
+const clamp = (v: number, lo: number, hi: number): number =>
+  Math.min(hi, Math.max(lo, v));
 
 /**
  * Shared machinery for entities hosted on a wall axis that cut an opening
@@ -53,6 +67,13 @@ export abstract class HostedOpeningEntity
   extends Entity
   implements IHosted, IOpeningCutter, IGrippable
 {
+  /**
+   * Narrowest opening a drag may produce. A zero-width window is not a thing
+   * a plan can hold, and a resize that collapses to nothing reads as a
+   * mis-touch rather than an intent.
+   */
+  static readonly MIN_WIDTH = 0.3;
+
   /** normalized position of the opening center along the host axis */
   t = 0.5;
   width = 1.0;
@@ -186,13 +207,67 @@ export abstract class HostedOpeningEntity
     this.setPositionFromPoint(applyToPoint(m, frame.center), tx);
   }
 
+  /**
+   * Where an end-grip drag lands: the OTHER end stays put, so the opening
+   * grows and shrinks from the side under the finger, and the result always
+   * fits inside the host. Pure, so a tool previews exactly what will commit.
+   */
+  planEndDrag(index: number, to: Point): OpeningSpan | null {
+    const anchor = this.axisAnchor();
+    if (!anchor) return null;
+    const seg = anchor.geometry as SegmentShape;
+    const ab = sub(seg.b, seg.a);
+    const len = Math.hypot(ab.x, ab.y);
+    if (len === 0) return null;
+    const u = scale(ab, 1 / len);
+    // meters along the axis: grip 1 is the low end, so grip 2's is the one to
+    // leave alone, and the other way round
+    const center = this.t * len;
+    const fixed =
+      index === 1 ? center + this.width / 2 : center - this.width / 2;
+    const dragged = clamp(dot(sub(to, seg.a), u), 0, len);
+    const width = clamp(
+      Math.abs(dragged - fixed),
+      Math.min(HostedOpeningEntity.MIN_WIDTH, len),
+      len,
+    );
+    const half = width / 2;
+    // which side of the fixed end the opening lies on. Dragging PAST it flips
+    // the opening over, the way a stretch through zero behaves everywhere;
+    // dragging exactly onto it leaves the side alone
+    const side = index === 1 ? -1 : 1;
+    const dir = (dragged - fixed) * side >= 0 ? side : -side;
+    const at = clamp(fixed + dir * half, half, len - half);
+    return {
+      t: at / len,
+      width,
+      a: add(seg.a, scale(u, at - half)),
+      b: add(seg.a, scale(u, at + half)),
+    };
+  }
+
   getGrips(): GripPoint[] {
     const frame = this.frame();
     if (!frame) return [];
-    return [{ index: 0, point: frame.center, kind: 'position' }];
+    const du = scale(frame.u, frame.halfWidth);
+    return [
+      { index: 0, point: frame.center, kind: 'position' },
+      { index: 1, point: sub(frame.center, du), kind: 'endpoint' },
+      { index: 2, point: add(frame.center, du), kind: 'endpoint' },
+    ];
   }
 
-  moveGrip(_index: number, to: Point, tx: Transaction): void {
-    this.setPositionFromPoint(to, tx);
+  moveGrip(index: number, to: Point, tx: Transaction): void {
+    if (index === 0) {
+      this.setPositionFromPoint(to, tx);
+      return;
+    }
+    const span = this.planEndDrag(index, to);
+    if (!span) return;
+    tx.update(this, (entity) => {
+      const opening = entity as HostedOpeningEntity;
+      opening.t = span.t;
+      opening.width = span.width;
+    });
   }
 }

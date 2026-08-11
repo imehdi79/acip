@@ -150,16 +150,18 @@ describe('dragging a copied room onto an existing room', () => {
 });
 
 describe('duplicating', () => {
-  it('resolves the copy against whatever it lands on', () => {
-    // a wall exactly where the copy will be dropped (bbox width 4 + 1 m gap)
+  it('steps around what is already there rather than stacking on it', () => {
+    // a wall sitting exactly where the old fixed shift dropped the copy
     addWall(point(0, 0), point(4, 0));
     addWall(point(5, 0), point(9, 0));
     session.selection.add(walls()[0].id);
 
     duplicateSelection(session, runtime.ui);
 
-    // the copy lands on 5–9, which is already taken: no doubling
-    expect(totalLength()).toBeCloseTo(8, 6);
+    // three separate 4 m walls: the copy went somewhere free, so there is
+    // nothing for the resolve to dedupe and no length quietly disappears
+    expect(walls()).toHaveLength(3);
+    expect(totalLength()).toBeCloseTo(12, 6);
   });
 });
 
