@@ -25,8 +25,6 @@ const COLORS = {
   background: '#ffffff',
   gridMinor: '#eceef1',
   gridMajor: '#dde1e6',
-  axisX: '#e0b4b4',
-  axisY: '#b4d4b4',
   selected: '#1f7ae0',
   snap: '#e0a500',
   rubber: '#8a94a0',
@@ -273,19 +271,8 @@ function drawGrid(
   };
   drawLines(step, COLORS.gridMinor);
   drawLines(step * 10, COLORS.gridMajor);
-
-  const origin = viewport.toScreen({ x: 0, y: 0 });
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = COLORS.axisX;
-  ctx.beginPath();
-  ctx.moveTo(0, origin.y);
-  ctx.lineTo(width, origin.y);
-  ctx.stroke();
-  ctx.strokeStyle = COLORS.axisY;
-  ctx.beginPath();
-  ctx.moveTo(origin.x, 0);
-  ctx.lineTo(origin.x, height);
-  ctx.stroke();
+  // no axis lines: the world origin is not a feature of a floor plan, and two
+  // coloured full-width rules read as walls on a phone screen
 }
 
 export function drawScene(
@@ -508,6 +495,8 @@ export function drawScene(
 const DIM_OFFSET_PX = 18;
 const DIM_TICK_PX = 5;
 const DIM_MIN_PX = 44;
+/** gap between lanes — a line plus its label has to fit in here */
+const DIM_LANE_PX = 22;
 
 /**
  * Automatic length labels on every wall. This is a render pass, not document
@@ -531,19 +520,6 @@ export function drawWallDimensions(
   const dpr = window.devicePixelRatio || 1;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // mean of the dimension midpoints — labels are pushed away from it so they
-  // sit outside the plan instead of cluttering the rooms
-  let sumX = 0;
-  let sumY = 0;
-  for (const dim of dims) {
-    sumX += (dim.a.x + dim.b.x) / 2;
-    sumY += (dim.a.y + dim.b.y) / 2;
-  }
-  const centre = viewport.toScreen({
-    x: sumX / dims.length,
-    y: sumY / dims.length,
-  });
-
   ctx.font = '11px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -560,17 +536,15 @@ export function drawWallDimensions(
     // too short on screen to carry a label without colliding with its neighbours
     if (px < DIM_MIN_PX) continue;
 
-    let nx = -dy / px;
-    let ny = dx / px;
-    const mx = (sa.x + sb.x) / 2;
-    const my = (sa.y + sb.y) / 2;
-    if ((mx - centre.x) * nx + (my - centre.y) * ny < 0) {
-      nx = -nx;
-      ny = -ny;
-    }
+    // side and lane are decided by the layout pass over the real segments;
+    // here they are only converted to screen space. World +y is up and screen
+    // +y is down, so the normal's y flips on the way in.
+    const nx = dim.side.x;
+    const ny = -dim.side.y;
+    const standOff = DIM_OFFSET_PX + dim.lane * DIM_LANE_PX;
 
-    const da = { x: sa.x + nx * DIM_OFFSET_PX, y: sa.y + ny * DIM_OFFSET_PX };
-    const db = { x: sb.x + nx * DIM_OFFSET_PX, y: sb.y + ny * DIM_OFFSET_PX };
+    const da = { x: sa.x + nx * standOff, y: sa.y + ny * standOff };
+    const db = { x: sb.x + nx * standOff, y: sb.y + ny * standOff };
 
     ctx.strokeStyle = COLORS.measure;
     ctx.fillStyle = COLORS.measure;

@@ -116,6 +116,9 @@ export type {
   FaceEdge,
   ArrangementFace,
   ArrangementResult,
+  OverlapSegment,
+  SegmentPiece,
+  SegmentPlan,
 } from './topology/index.js';
 export {
   mergeIntervals,
@@ -126,6 +129,8 @@ export {
   arrangePlan,
   loopSignedArea,
   pointInLoop,
+  planSegmentOverlaps,
+  isUnchanged,
   JOIN_TOLERANCE,
 } from './topology/index.js';
 

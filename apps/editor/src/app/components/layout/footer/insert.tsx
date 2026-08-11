@@ -7,6 +7,7 @@ import {
 } from '@tabler/icons-react';
 import type { EditorSession, EntityId, Point } from '@acip/editor-core';
 import type { EditorUi } from '@/editor/ui-state';
+import { withResolvedWalls } from '@/editor/walls';
 
 export type InsertItemType = 'room' | 'wall' | 'window';
 
@@ -57,8 +58,8 @@ export function insertRoom(session: EditorSession, ui: EditorUi): void {
   };
 
   const ids: EntityId[] = [];
-  session.history.beginGroup();
-  try {
+  // one group, one undo — and the room is split against whatever it lands on
+  withResolvedWalls(session, () => {
     for (let i = 0; i < corners.length; i++) {
       ids.push(
         session.dispatch<EntityId>('WALL.ADD', {
@@ -68,9 +69,7 @@ export function insertRoom(session: EditorSession, ui: EditorUi): void {
         }),
       );
     }
-  } finally {
-    session.history.endGroup();
-  }
+  });
 
   session.selection.clear();
   for (const id of ids) session.selection.add(id);

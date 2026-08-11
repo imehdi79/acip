@@ -10,15 +10,25 @@ import { WallEntity } from '@acip/editor-core';
  * One wall's automatic dimension, in world space.
  *
  * `a`, `b` and `length` are derived together from the same two points, so the
- * drawn line and the printed number can never disagree.
+ * drawn line and the printed number can never disagree. Everything after that
+ * is placement: which way the dimension stands off from its wall, and which
+ * lane it occupies once its neighbours want the same space.
  */
 export interface WallDimension {
+  /** the wall SEGMENT this measures — one dimension per wall entity, always */
   readonly wallId: EntityId;
   /** measurement anchors, on the wall's axis, at its full drawn extent */
   readonly a: Point;
   readonly b: Point;
   /** distance(a, b) — exactly what the label reads */
   readonly length: number;
+  /** unit normal the dimension stands off along; points away from the plan */
+  readonly side: Point;
+  /**
+   * Which lane it sits in, counted from the wall outward. 0 is against the
+   * wall; each further lane clears the one before it.
+   */
+  readonly lane: number;
 }
 
 /**
@@ -38,7 +48,9 @@ export interface WallDimension {
  *
  * Returns null for a degenerate wall, which has no direction to measure along.
  */
-export function wallExtent(wall: WallEntity): WallDimension | null {
+export function wallExtent(
+  wall: WallEntity,
+): Omit<WallDimension, 'side' | 'lane'> | null {
   const { a, b } = wall.getBaseline();
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -64,7 +76,140 @@ export function wallExtent(wall: WallEntity): WallDimension | null {
   };
 }
 
-/** Every wall on the view's level, with its overall extent. */
+/** directions within this many radians of each other share a lane group (~3°) */
+const PARALLEL_TOLERANCE = 0.05;
+/**
+ * Dimensions whose stand-off lines would land within this of each other, in
+ * metres, are treated as colliding and pushed to separate lanes. Lanes are
+ * assigned in world space so the layout is stable under zoom; the renderer
+ * spaces them in pixels.
+ */
+const LANE_BAND = 0.35;
+
+interface Placed {
+  dim: Omit<WallDimension, 'lane'>;
+  /** angle of the dimension's own direction, folded to [0, π) */
+  axis: number;
+  /** signed distance from the origin along `side` — which line it sits on */
+  offset: number;
+  /** extent along the shared axis, for deciding whether two of them overlap */
+  from: number;
+  to: number;
+  lane: number;
+}
+
+const dotp = (p: Point, q: Point): number => p.x * q.x + p.y * q.y;
+
+/**
+ * Assign each dimension a side and a lane so that no two of them are drawn on
+ * top of each other.
+ *
+ * Deterministic, and driven by the measured segments rather than any bounding
+ * box: dimensions are grouped by direction, and within a group two of them
+ * collide only if they sit on nearly the same line AND their spans actually
+ * overlap along it. Colliding dimensions take the first free lane, in a stable
+ * order (by offset, then along the wall), so redrawing the same plan always
+ * produces the same layout and moving one wall only reshuffles its neighbours.
+ *
+ * The wall in the screenshot's middle band — where a room's bottom wall and the
+ * next room's top wall run along the same line — is exactly the colliding case:
+ * same axis, near-identical offset, overlapping spans, so they get lanes 0 and
+ * 1 instead of one illegible overlap.
+ */
+export function layOutDimensions(
+  dims: readonly Omit<WallDimension, 'side' | 'lane'>[],
+  centre: Point,
+): WallDimension[] {
+  const placed: Placed[] = [];
+  for (const dim of dims) {
+    const dx = dim.b.x - dim.a.x;
+    const dy = dim.b.y - dim.a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-9) continue;
+    const ux = dx / len;
+    const uy = dy / len;
+
+    // Everything below is measured against the axis, not the wall's own a→b
+    // direction: two walls on one line must land in the same group whichever
+    // way each of them happens to have been drawn.
+    let axis = Math.atan2(uy, ux);
+    if (axis < 0) axis += Math.PI;
+    if (axis >= Math.PI - 1e-9) axis = 0;
+    const normal = { x: -Math.sin(axis), y: Math.cos(axis) };
+    const along = { x: Math.cos(axis), y: Math.sin(axis) };
+
+    // stand off on the side away from the middle of the plan, so dimensions
+    // ring the drawing instead of falling across the rooms
+    const mid = { x: (dim.a.x + dim.b.x) / 2, y: (dim.a.y + dim.b.y) / 2 };
+    const outward = dotp({ x: mid.x - centre.x, y: mid.y - centre.y }, normal);
+    const side = outward < 0 ? { x: -normal.x, y: -normal.y } : { ...normal };
+
+    placed.push({
+      dim: { ...dim, side },
+      axis,
+      offset: dotp(mid, normal),
+      from: Math.min(dotp(dim.a, along), dotp(dim.b, along)),
+      to: Math.max(dotp(dim.a, along), dotp(dim.b, along)),
+      lane: 0,
+    });
+  }
+
+  // Fully ordered, so the same geometry always lays out the same way however
+  // the walls happen to be ordered in the document. The id is the last resort
+  // — two dimensions can genuinely share an axis, offset and span.
+  placed.sort(
+    (p, q) =>
+      p.axis - q.axis ||
+      p.offset - q.offset ||
+      p.from - q.from ||
+      q.to - p.to ||
+      (p.dim.wallId < q.dim.wallId ? -1 : 1),
+  );
+
+  const done: Placed[] = [];
+  for (const item of placed) {
+    const clashes = done.filter((other) => {
+      const parallel =
+        Math.abs(other.axis - item.axis) <= PARALLEL_TOLERANCE ||
+        Math.abs(Math.abs(other.axis - item.axis) - Math.PI) <=
+          PARALLEL_TOLERANCE;
+      if (!parallel) return false;
+      // dimensions standing off opposite ways cannot cover each other, so the
+      // two sides of a room keep their own side instead of stacking
+      if (dotp(other.dim.side, item.dim.side) <= 0) return false;
+      // offsets are measured against the axis normal, so two walls on one line
+      // read as one line however each was drawn
+      if (Math.abs(other.offset - item.offset) > LANE_BAND) return false;
+      // no overlap along the shared axis = no collision, whatever the offset
+      return other.to > item.from + 1e-9 && item.to > other.from + 1e-9;
+    });
+    const taken = new Set(clashes.map((other) => other.lane));
+    while (taken.has(item.lane)) item.lane += 1;
+    done.push(item);
+  }
+
+  return done
+    .sort((p, q) => (p.dim.wallId < q.dim.wallId ? -1 : 1))
+    .map((item) => ({ ...item.dim, lane: item.lane }));
+}
+
+/** the mean of the dimension midpoints — the plan's middle, for side picking */
+function centreOf(dims: readonly { a: Point; b: Point }[]): Point {
+  let x = 0;
+  let y = 0;
+  for (const dim of dims) {
+    x += (dim.a.x + dim.b.x) / 2;
+    y += (dim.a.y + dim.b.y) / 2;
+  }
+  return { x: x / dims.length, y: y / dims.length };
+}
+
+/**
+ * Every wall on the view's level, with its overall extent, its side and its
+ * lane. Recomputed from the document on every call, so any geometry change —
+ * a wall moved, resized, split at a new crossing, added or erased — lays the
+ * dimensions out afresh.
+ */
 export function wallDimensions(
   doc: DrawingDocument,
   view: ViewDefinition,
@@ -72,12 +217,13 @@ export function wallDimensions(
   // plan-only; the 3D view definition carries no level
   if (view.kind !== 'plan') return [];
   const levelId = view.levelId ?? null;
-  const out: WallDimension[] = [];
+  const extents: Omit<WallDimension, 'side' | 'lane'>[] = [];
   for (const entity of doc.all()) {
     if (!(entity instanceof WallEntity)) continue;
     if ((entity.baseLevelId ?? null) !== levelId) continue;
     const dim = wallExtent(entity);
-    if (dim) out.push(dim);
+    if (dim) extents.push(dim);
   }
-  return out;
+  if (extents.length === 0) return [];
+  return layOutDimensions(extents, centreOf(extents));
 }

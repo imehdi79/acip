@@ -10,6 +10,7 @@ import { registerArchitectureCommands } from '../commands/architecture.js';
 import { registerDocumentStoreCommands } from '../commands/document-stores.js';
 import { registerDimensionCommands } from '../commands/dimensions.js';
 import { registerSpaceCommands } from '../commands/spaces.js';
+import { registerWallResolveCommands } from '../commands/walls-resolve.js';
 import { registerSlabCommands } from '../commands/slabs.js';
 import { registerRoofCommands } from '../commands/roofs.js';
 import { registerFinishCommands } from '../commands/finishes.js';
@@ -167,6 +168,7 @@ export class EditorSession {
       registerStairCommands(this.commands);
       registerDimensionCommands(this.commands);
       registerSpaceCommands(this.commands);
+      registerWallResolveCommands(this.commands);
       registerRequestCommands(this.commands);
     }
   }

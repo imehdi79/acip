@@ -35,3 +35,5 @@ export {
   loopSignedArea,
   pointInLoop,
 } from './arrangement.js';
+export type { OverlapSegment, SegmentPiece, SegmentPlan } from './overlaps.js';
+export { planSegmentOverlaps, isUnchanged } from './overlaps.js';

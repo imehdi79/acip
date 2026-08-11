@@ -5,6 +5,7 @@ import { ToolManager } from './tools/tool-manager';
 import { SelectTool } from './tools/select-tool';
 import { ChainedDrawTool } from './tools/chained-draw-tool';
 import { HostedPlaceTool } from './tools/hosted-place-tool';
+import { withResolvedWalls } from './walls';
 
 export interface EditorRuntime {
   readonly ui: EditorUi;
@@ -21,8 +22,13 @@ export function createRuntime(session: EditorSession): EditorRuntime {
     doc: session.doc,
     selection: session.selection,
     snap: session.snap,
+    // a drawn wall that crosses an existing one is split at the crossing
+    // before the tool hands control back, so the plan never holds two walls
+    // over one stretch. One undo covers both.
     dispatch: <R>(name: string, params?: unknown): R =>
-      session.dispatch<R>(name, params),
+      name === 'WALL.ADD'
+        ? withResolvedWalls(session, () => session.dispatch<R>(name, params))
+        : session.dispatch<R>(name, params),
   };
   const tools = new ToolManager(toolCtx, ui);
 
