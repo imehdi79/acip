@@ -14,14 +14,19 @@ import { WallEntity } from '@acip/editor-core';
  * is placement: which way the dimension stands off from its wall, and which
  * lane it occupies once its neighbours want the same space.
  */
-export interface WallDimension {
-  /** the wall SEGMENT this measures — one dimension per wall entity, always */
+export interface WallExtent {
+  /** the wall SEGMENT this measures */
   readonly wallId: EntityId;
   /** measurement anchors, on the wall's axis, at its full drawn extent */
   readonly a: Point;
   readonly b: Point;
   /** distance(a, b) — exactly what the label reads */
   readonly length: number;
+  /** its wall is selected: drawn highlighted, and it wins any de-duplication */
+  readonly selected?: boolean;
+}
+
+export interface WallDimension extends WallExtent {
   /** unit normal the dimension stands off along; points away from the plan */
   readonly side: Point;
   /**
@@ -29,6 +34,7 @@ export interface WallDimension {
    * wall; each further lane clears the one before it.
    */
   readonly lane: number;
+  readonly selected: boolean;
 }
 
 /**
@@ -48,9 +54,7 @@ export interface WallDimension {
  *
  * Returns null for a degenerate wall, which has no direction to measure along.
  */
-export function wallExtent(
-  wall: WallEntity,
-): Omit<WallDimension, 'side' | 'lane'> | null {
+export function wallExtent(wall: WallEntity): WallExtent | null {
   const { a, b } = wall.getBaseline();
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -85,6 +89,8 @@ const PARALLEL_TOLERANCE = 0.05;
  * spaces them in pixels.
  */
 const LANE_BAND = 0.35;
+/** spans within a millimetre of each other measure the same thing */
+const SPAN_EPSILON = 1e-3;
 
 interface Placed {
   dim: Omit<WallDimension, 'lane'>;
@@ -117,7 +123,7 @@ const dotp = (p: Point, q: Point): number => p.x * q.x + p.y * q.y;
  * 1 instead of one illegible overlap.
  */
 export function layOutDimensions(
-  dims: readonly Omit<WallDimension, 'side' | 'lane'>[],
+  dims: readonly WallExtent[],
   centre: Point,
 ): WallDimension[] {
   const placed: Placed[] = [];
@@ -145,7 +151,7 @@ export function layOutDimensions(
     const side = outward < 0 ? { x: -normal.x, y: -normal.y } : { ...normal };
 
     placed.push({
-      dim: { ...dim, side },
+      dim: { ...dim, side, selected: dim.selected ?? false },
       axis,
       offset: dotp(mid, normal),
       from: Math.min(dotp(dim.a, along), dotp(dim.b, along)),
@@ -166,8 +172,26 @@ export function layOutDimensions(
       (p.dim.wallId < q.dim.wallId ? -1 : 1),
   );
 
-  const done: Placed[] = [];
+  // Two walls measuring the SAME span on the same axis print the same number
+  // twice — a room's top and bottom edge, or the left and right walls of a
+  // band. One of them is enough, and a selected wall keeps its own so the
+  // highlight always has something to land on.
+  const unique: Placed[] = [];
   for (const item of placed) {
+    const twin = unique.findIndex(
+      (other) =>
+        Math.abs(other.axis - item.axis) <= PARALLEL_TOLERANCE &&
+        Math.abs(other.from - item.from) <= SPAN_EPSILON &&
+        Math.abs(other.to - item.to) <= SPAN_EPSILON,
+    );
+    if (twin < 0) unique.push(item);
+    else if (item.dim.selected && !unique[twin].dim.selected) {
+      unique[twin] = item;
+    }
+  }
+
+  const done: Placed[] = [];
+  for (const item of unique) {
     const clashes = done.filter((other) => {
       const parallel =
         Math.abs(other.axis - item.axis) <= PARALLEL_TOLERANCE ||
@@ -213,16 +237,17 @@ function centreOf(dims: readonly { a: Point; b: Point }[]): Point {
 export function wallDimensions(
   doc: DrawingDocument,
   view: ViewDefinition,
+  selection: ReadonlySet<string> = new Set(),
 ): WallDimension[] {
   // plan-only; the 3D view definition carries no level
   if (view.kind !== 'plan') return [];
   const levelId = view.levelId ?? null;
-  const extents: Omit<WallDimension, 'side' | 'lane'>[] = [];
+  const extents: WallExtent[] = [];
   for (const entity of doc.all()) {
     if (!(entity instanceof WallEntity)) continue;
     if ((entity.baseLevelId ?? null) !== levelId) continue;
     const dim = wallExtent(entity);
-    if (dim) extents.push(dim);
+    if (dim) extents.push({ ...dim, selected: selection.has(entity.id) });
   }
   if (extents.length === 0) return [];
   return layOutDimensions(extents, centreOf(extents));

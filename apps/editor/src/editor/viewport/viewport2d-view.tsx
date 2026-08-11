@@ -51,18 +51,19 @@ export function Viewport2DView() {
     const redrawBase = () => {
       cancelAnimationFrame(baseRaf);
       baseRaf = requestAnimationFrame(() => {
+        const selected = new Set(session.selection.list());
         drawScene(
           base,
           viewport,
           session.doc,
           planView(),
-          new Set(session.selection.list()),
+          selected,
           ui.showMarks.get(),
           ui.underlay.get(),
           ui.showDemolition.get(),
         );
         // wall lengths, always on — same canvas, drawn over the finished scene
-        drawWallDimensions(base, viewport, session.doc, planView());
+        drawWallDimensions(base, viewport, session.doc, planView(), selected);
       });
     };
     const redrawOverlay = () =>

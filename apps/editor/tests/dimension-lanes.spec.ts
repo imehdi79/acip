@@ -74,12 +74,12 @@ describe('layOutDimensions', () => {
   });
 
   it('keeps far-apart parallel walls in the same lane', () => {
-    // the two long sides of a room: parallel, overlapping spans, but metres
-    // apart and facing opposite ways — each keeps its own side
+    // parallel and overlapping, but metres apart and facing opposite ways —
+    // each keeps its own side. Different spans, so neither is a duplicate.
     const out = layOutDimensions(
       [
         bare('a', point(0, 0), point(6, 0)),
-        bare('b', point(0, 4), point(6, 4)),
+        bare('b', point(0, 4), point(5, 4)),
       ],
       point(3, 2),
     );
@@ -152,16 +152,20 @@ describe('layOutDimensions', () => {
 });
 
 describe('wallDimensions over a real document', () => {
-  it('measures one dimension per wall segment', () => {
+  it('measures each distinct span once', () => {
     const ids = room(0, 0, 6, 4);
+    // opposite edges of a rectangle measure the same thing, so two will do
+    const shown = dims().map((d) => d.wallId);
+    expect(shown).toHaveLength(2);
+    for (const id of shown) expect(ids).toContain(id);
     expect(
       dims()
-        .map((d) => d.wallId)
+        .map((d) => Math.round(d.length * 100) / 100)
         .sort(),
-    ).toEqual([...ids].sort());
+    ).toEqual([4.3, 6.3]);
   });
 
-  it('gives a clean room four dimensions in the first lane', () => {
+  it('gives a clean room its dimensions in the first lane', () => {
     room(0, 0, 6, 4);
     expect(dims().every((d) => d.lane === 0)).toBe(true);
   });
@@ -181,11 +185,11 @@ describe('wallDimensions over a real document', () => {
     expect(after.filter((d) => Math.abs(d.length - 3) < 0.01)).toHaveLength(2);
   });
 
-  it('separates two rooms sharing a wall line into lanes', () => {
-    // exactly the screenshot: one room above another, their shared band
-    // carrying two walls on the same line
+  it('lanes walls that share a line but measure different spans', () => {
+    // one room above another, the lower one wider: their walls run along the
+    // same line but measure different things, so both are worth showing
     room(0, 4, 6, 8);
-    room(0, 0, 6, 4);
+    room(0, 0, 9, 4);
 
     const onTheLine = dims().filter(
       (d) => Math.abs(d.a.y - 4) < 0.2 && Math.abs(d.b.y - 4) < 0.2,
@@ -207,21 +211,92 @@ describe('wallDimensions over a real document', () => {
     });
 
     expect(before).toBe(0);
+    // both walls now measure the same span on the same line: one is enough
     const after = dims().filter(
       (d) => Math.abs(d.a.y - 4) < 0.2 && Math.abs(d.b.y - 4) < 0.2,
     );
-    expect(after.map((d) => d.lane).sort()).toEqual([0, 1]);
+    expect(after).toHaveLength(1);
   });
 
   it('drops the dimension when its wall is erased', () => {
     const ids = room(0, 0, 6, 4);
     session.dispatch('ENTITY.ERASE', { ids: [ids[0]] });
     expect(dims().map((d) => d.wallId)).not.toContain(ids[0]);
-    expect(dims()).toHaveLength(3);
+    // the remaining top wall, plus one of the two equal sides
+    expect(dims()).toHaveLength(2);
   });
 
   it('returns nothing for the 3D view', () => {
     room(0, 0, 6, 4);
     expect(wallDimensions(session.doc, { kind: '3d' })).toEqual([]);
+  });
+
+  it('returns nothing for the 3D view', () => {
+    room(0, 0, 6, 4);
+    expect(wallDimensions(session.doc, { kind: '3d' })).toEqual([]);
+  });
+});
+
+describe('duplicate spans', () => {
+  it('keeps one dimension when two walls measure the same span', () => {
+    // opposite sides of a band: same x range, same length, different y
+    addWall(point(0, 0), point(6, 0));
+    addWall(point(0, 4), point(6, 4));
+    expect(dims()).toHaveLength(1);
+  });
+
+  it('keeps both when the spans differ, even slightly', () => {
+    addWall(point(0, 0), point(6, 0));
+    addWall(point(0, 4), point(5.9, 4));
+    expect(dims()).toHaveLength(2);
+  });
+
+  it('keeps both when equal walls sit at different places along the axis', () => {
+    // stacked bands: same length, but each measures its own stretch
+    addWall(point(0, 0), point(0, 5));
+    addWall(point(0, 5), point(0, 10));
+    expect(dims()).toHaveLength(2);
+  });
+
+  it('does not confuse a horizontal and a vertical of the same length', () => {
+    addWall(point(0, 0), point(4, 0));
+    addWall(point(0, 0), point(0, 4));
+    expect(dims()).toHaveLength(2);
+  });
+
+  it('is the selected wall that survives a de-duplication', () => {
+    const lower = addWall(point(0, 0), point(6, 0));
+    const upper = addWall(point(0, 4), point(6, 4));
+
+    // with nothing selected the first one wins, stably
+    expect(dims()[0].wallId).toBe(lower);
+
+    // selecting the other one hands it the dimension, so the highlight has
+    // something to land on
+    const picked = wallDimensions(session.doc, PLAN, new Set([upper]));
+    expect(picked).toHaveLength(1);
+    expect(picked[0].wallId).toBe(upper);
+    expect(picked[0].selected).toBe(true);
+  });
+});
+
+describe('selection', () => {
+  it('marks only the selected wall dimension', () => {
+    const ids = room(0, 0, 6, 4);
+    const marked = wallDimensions(session.doc, PLAN, new Set([ids[0]]));
+    expect(marked.filter((d) => d.selected).map((d) => d.wallId)).toEqual([
+      ids[0],
+    ]);
+  });
+
+  it('marks nothing when nothing is selected', () => {
+    room(0, 0, 6, 4);
+    expect(dims().every((d) => d.selected === false)).toBe(true);
+  });
+
+  it('marks every selected wall of a multi-wall selection', () => {
+    const ids = room(0, 0, 6, 4);
+    const marked = wallDimensions(session.doc, PLAN, new Set(ids));
+    expect(marked.every((d) => d.selected)).toBe(true);
   });
 });

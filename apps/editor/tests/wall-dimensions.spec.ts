@@ -157,11 +157,13 @@ describe('wallExtent', () => {
 });
 
 describe('wallDimensions', () => {
-  it('gives one dimension per wall on the plan', () => {
+  it('gives one dimension per distinct span on the plan', () => {
     const s = session();
     loop(s, [point(0, 0), point(4, 0), point(4, 4), point(0, 4)]);
     const dims = wallDimensions(s.doc, PLAN);
-    expect(dims.length).toBe(4);
+    // a square room measures the same 4.3 four times over; the opposite edges
+    // are duplicates of each other, so one of each pair is enough
+    expect(dims.length).toBe(2);
     for (const d of dims) expect(d.length).toBeCloseTo(4.3, 6);
   });
 

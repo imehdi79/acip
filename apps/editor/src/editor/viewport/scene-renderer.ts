@@ -510,10 +510,11 @@ export function drawWallDimensions(
   viewport: Viewport2D,
   doc: DrawingDocument,
   view: ViewDefinition,
+  selection: ReadonlySet<string> = new Set(),
 ): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const dims = wallDimensions(doc, view);
+  const dims = wallDimensions(doc, view, selection);
   if (dims.length === 0) return;
 
   const dpr = window.devicePixelRatio || 1;
@@ -545,9 +546,12 @@ export function drawWallDimensions(
     const da = { x: sa.x + nx * standOff, y: sa.y + ny * standOff };
     const db = { x: sb.x + nx * standOff, y: sb.y + ny * standOff };
 
-    ctx.strokeStyle = COLORS.measure;
-    ctx.fillStyle = COLORS.measure;
-    ctx.lineWidth = 1;
+    // a selected wall's dimension reads in the selection colour, so the number
+    // being edited is obvious at a glance
+    const colour = dim.selected ? COLORS.selected : COLORS.measure;
+    ctx.strokeStyle = colour;
+    ctx.fillStyle = colour;
+    ctx.lineWidth = dim.selected ? 1.5 : 1;
     ctx.beginPath();
     ctx.moveTo(da.x, da.y);
     ctx.lineTo(db.x, db.y);
