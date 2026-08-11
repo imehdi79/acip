@@ -316,7 +316,9 @@ export const SetWallPropsCommand: Command<SetWallPropsParams, number> = {
       S.object(
         {
           ids: S.array(S.id('wall id'), 'walls to update'),
-          thickness: S.number('wall thickness in meters (clears the assigned type)'),
+          thickness: S.number(
+            'wall thickness in meters (clears the assigned type)',
+          ),
           height: S.number('wall height in meters'),
         },
         ['ids'],
@@ -343,11 +345,165 @@ export const SetWallPropsCommand: Command<SetWallPropsParams, number> = {
   },
 };
 
+export interface SetOpeningPropsParams {
+  ids: EntityId[];
+  width?: number;
+  height?: number;
+  sill?: number;
+  thickness?: number;
+}
+
+/**
+ * Set the stored sizes of hosted openings — the numbers-first companion to
+ * OPENING.MOVE and OPENING.RESIZE, which between them reach only t and width.
+ *
+ * A door's sill is not a stored number that happens to be zero: getSillHeight
+ * returns a literal 0, so there is nowhere to put another value. A non-zero
+ * sill aimed at a door is therefore REJECTED rather than dropped — silently
+ * discarding a number the caller passed is the worse failure, and the throw
+ * rolls the whole transaction back, so no opening is left half-edited.
+ */
+export const SetOpeningPropsCommand: Command<SetOpeningPropsParams, number> = {
+  name: 'OPENING.SETPROPS',
+  description:
+    'Set the width, height, sill height and/or frame thickness in meters of ' +
+    'one or more hosted windows and doors. A door has no sill (it opens at ' +
+    'floor level), so only 0 is accepted for one. Thickness is the frame ' +
+    'depth through the wall, stored for later 3D work and drawn nowhere. ' +
+    'Returns how many openings changed.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: SetOpeningPropsParams = {
+        ids: asIdArray(raw['ids'], 'ids'),
+      };
+      if (raw['width'] !== undefined) {
+        params.width = asPositive(raw['width'], 'width');
+      }
+      if (raw['height'] !== undefined) {
+        params.height = asPositive(raw['height'], 'height');
+      }
+      // a sill sits ON the floor at 0, so this is the one size where zero is
+      // an answer rather than a mistake
+      if (raw['sill'] !== undefined) {
+        const sill = asNumber(raw['sill'], 'sill');
+        if (sill < 0) throw new ValidationError('sill must be 0 or greater');
+        params.sill = sill;
+      }
+      if (raw['thickness'] !== undefined) {
+        params.thickness = asPositive(raw['thickness'], 'thickness');
+      }
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          ids: S.array(S.id('window or door id'), 'openings to update'),
+          width: S.number('opening width in meters, along the wall'),
+          height: S.number('opening height in meters'),
+          sill: S.number(
+            'height of the opening bottom above the wall base in meters (doors are always 0)',
+          ),
+          thickness: S.number('frame depth through the wall in meters'),
+        },
+        ['ids'],
+      ),
+  ),
+  execute(ctx, params) {
+    let count = 0;
+    for (const id of params.ids) {
+      const entity = ctx.doc.get(id);
+      if (!(entity instanceof HostedOpeningEntity)) continue;
+      // WindowEntity is the only opening that stores a sill today; anything
+      // else inherits the fixed 0 and cannot hold one
+      const hasSill = entity instanceof WindowEntity;
+      if (params.sill !== undefined && params.sill !== 0 && !hasSill) {
+        throw new ValidationError(
+          `entity ${id} is a ${entity.type}: it opens at floor level and has no sill`,
+        );
+      }
+      ctx.tx.update(entity, (e) => {
+        const opening = e as HostedOpeningEntity;
+        if (params.width !== undefined) opening.width = params.width;
+        if (params.height !== undefined) opening.height = params.height;
+        if (params.thickness !== undefined) {
+          opening.thickness = params.thickness;
+        }
+        if (params.sill !== undefined && opening instanceof WindowEntity) {
+          opening.sill = params.sill;
+        }
+      });
+      count += 1;
+    }
+    return count;
+  },
+};
+
+export interface SetDoorHangParams {
+  ids: EntityId[];
+  swing?: 1 | -1;
+  hinge?: 1 | -1;
+}
+
+/**
+ * How a door hangs: which face it opens onto (`swing`) and which jamb it is
+ * hinged on (`hinge`). The two together are the four ways a joiner can hang
+ * one, and they are set through a single command because on site they are one
+ * decision — you do not choose a swing without choosing a side to hang it.
+ */
+export const SetDoorHangCommand: Command<SetDoorHangParams, number> = {
+  name: 'DOOR.SETHANG',
+  description:
+    'Set which side of the wall a door opens onto (swing: 1 or -1) and which ' +
+    'jamb it is hinged on (hinge: -1 = the end the wall runs from, 1 = the ' +
+    'end it runs to). Returns how many doors changed.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: SetDoorHangParams = { ids: asIdArray(raw['ids'], 'ids') };
+      for (const key of ['swing', 'hinge'] as const) {
+        if (raw[key] === undefined) continue;
+        if (raw[key] !== 1 && raw[key] !== -1) {
+          throw new ValidationError(`${key} must be 1 or -1`);
+        }
+        params[key] = raw[key];
+      }
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          ids: S.array(S.id('door id'), 'doors to rehang'),
+          swing: S.enum([1, -1], 'side of the wall the leaf opens onto'),
+          hinge: S.enum([1, -1], 'jamb the leaf is hinged on'),
+        },
+        ['ids'],
+      ),
+  ),
+  execute(ctx, params) {
+    let count = 0;
+    for (const id of params.ids) {
+      const entity = ctx.doc.get(id);
+      // windows have no leaf to hang; skipping keeps a mixed selection usable
+      if (!(entity instanceof DoorEntity)) continue;
+      ctx.tx.update(entity, (e) => {
+        const door = e as DoorEntity;
+        if (params.swing !== undefined) door.swing = params.swing;
+        if (params.hinge !== undefined) door.hinge = params.hinge;
+      });
+      count += 1;
+    }
+    return count;
+  },
+};
+
 export function registerArchitectureCommands(registry: CommandRegistry): void {
   registry.register(AddWallCommand);
   registry.register(AddWindowCommand);
   registry.register(AddDoorCommand);
   registry.register(MoveOpeningCommand);
   registry.register(ResizeOpeningCommand);
+  registry.register(SetOpeningPropsCommand);
   registry.register(SetWallPropsCommand);
+  registry.register(SetDoorHangCommand);
 }

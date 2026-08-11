@@ -3,7 +3,7 @@ import { EditorSession, WallEntity, point } from '@acip/editor-core';
 import type { EntityId, Point, ViewDefinition } from '@acip/editor-core';
 import {
   layOutDimensions,
-  wallDimensions,
+  planDimensions,
   wallExtent,
 } from '@/editor/viewport/wall-dimensions';
 import { withResolvedWalls } from '@/editor/walls';
@@ -25,12 +25,13 @@ const room = (x0: number, y0: number, x1: number, y1: number) => {
   return corners.map((a, i) => addWall(a, corners[(i + 1) % corners.length]));
 };
 
-const dims = () => wallDimensions(session.doc, PLAN);
-const laneOf = (id: EntityId) => dims().find((d) => d.wallId === id)?.lane;
+const dims = () => planDimensions(session.doc, PLAN);
+const laneOf = (id: EntityId) => dims().find((d) => d.entityId === id)?.lane;
 
 /** a bare dimension for the layout function, without a document */
 const bare = (id: string, a: Point, b: Point) => ({
-  wallId: id as EntityId,
+  entityId: id as EntityId,
+  kind: 'wall' as const,
   a,
   b,
   length: Math.hypot(b.x - a.x, b.y - a.y),
@@ -152,11 +153,11 @@ describe('layOutDimensions', () => {
   });
 });
 
-describe('wallDimensions over a real document', () => {
+describe('planDimensions over a real document', () => {
   it('measures each distinct span once', () => {
     const ids = room(0, 0, 6, 4);
     // opposite edges of a rectangle measure the same thing, so two will do
-    const shown = dims().map((d) => d.wallId);
+    const shown = dims().map((d) => d.entityId);
     expect(shown).toHaveLength(2);
     for (const id of shown) expect(ids).toContain(id);
     expect(
@@ -179,7 +180,7 @@ describe('wallDimensions over a real document', () => {
     // the host became two segments, so it carries two dimensions, each
     // measuring its own piece rather than the old whole
     const hostWall = session.doc.get(host) as WallEntity;
-    const hostDim = after.find((d) => d.wallId === host)!;
+    const hostDim = after.find((d) => d.entityId === host)!;
     expect(hostDim.length).toBeLessThan(6);
     // collinear pieces butt flush at the tee, so the extent is the centreline
     expect(hostDim.length).toBeCloseTo(hostWall.getLength(), 6);
@@ -220,19 +221,19 @@ describe('wallDimensions over a real document', () => {
   it('drops the dimension when its wall is erased', () => {
     const ids = room(0, 0, 6, 4);
     session.dispatch('ENTITY.ERASE', { ids: [ids[0]] });
-    expect(dims().map((d) => d.wallId)).not.toContain(ids[0]);
+    expect(dims().map((d) => d.entityId)).not.toContain(ids[0]);
     // the remaining top wall, plus one of the two equal sides
     expect(dims()).toHaveLength(2);
   });
 
   it('returns nothing for the 3D view', () => {
     room(0, 0, 6, 4);
-    expect(wallDimensions(session.doc, { kind: '3d' })).toEqual([]);
+    expect(planDimensions(session.doc, { kind: '3d' })).toEqual([]);
   });
 
   it('returns nothing for the 3D view', () => {
     room(0, 0, 6, 4);
-    expect(wallDimensions(session.doc, { kind: '3d' })).toEqual([]);
+    expect(planDimensions(session.doc, { kind: '3d' })).toEqual([]);
   });
 });
 
@@ -301,13 +302,13 @@ describe('duplicate spans', () => {
     const upper = addWall(point(0, 4), point(6, 4));
 
     // with nothing selected the first one wins, stably
-    expect(dims()[0].wallId).toBe(lower);
+    expect(dims()[0].entityId).toBe(lower);
 
     // selecting the other one hands it the dimension, so the highlight has
     // something to land on
-    const picked = wallDimensions(session.doc, PLAN, new Set([upper]));
+    const picked = planDimensions(session.doc, PLAN, new Set([upper]));
     expect(picked).toHaveLength(1);
-    expect(picked[0].wallId).toBe(upper);
+    expect(picked[0].entityId).toBe(upper);
     expect(picked[0].selected).toBe(true);
   });
 });
@@ -315,8 +316,8 @@ describe('duplicate spans', () => {
 describe('selection', () => {
   it('marks only the selected wall dimension', () => {
     const ids = room(0, 0, 6, 4);
-    const marked = wallDimensions(session.doc, PLAN, new Set([ids[0]]));
-    expect(marked.filter((d) => d.selected).map((d) => d.wallId)).toEqual([
+    const marked = planDimensions(session.doc, PLAN, new Set([ids[0]]));
+    expect(marked.filter((d) => d.selected).map((d) => d.entityId)).toEqual([
       ids[0],
     ]);
   });
@@ -328,7 +329,7 @@ describe('selection', () => {
 
   it('marks every selected wall of a multi-wall selection', () => {
     const ids = room(0, 0, 6, 4);
-    const marked = wallDimensions(session.doc, PLAN, new Set(ids));
+    const marked = planDimensions(session.doc, PLAN, new Set(ids));
     expect(marked.every((d) => d.selected)).toBe(true);
   });
 });

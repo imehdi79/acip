@@ -9,7 +9,7 @@ import type { EntityId, Point } from '@acip/editor-core';
 import { createRuntime } from '@/editor/runtime';
 import type { EditorRuntime } from '@/editor/runtime';
 import { duplicateSelection } from '@/app/components/layout/footer/duplicate';
-import { wallDimensions } from '@/editor/viewport/wall-dimensions';
+import { planDimensions } from '@/editor/viewport/wall-dimensions';
 
 /**
  * Dragging is how walls actually end up doubled: copy a room, drop it on an
@@ -136,7 +136,7 @@ describe('dragging a copied room onto an existing room', () => {
 
     drag(point(4, -4), point(4, 0));
 
-    const dims = wallDimensions(session.doc, { kind: 'plan', levelId: null });
+    const dims = planDimensions(session.doc, { kind: 'plan', levelId: null });
     // every piece is measured; walls that measure the same span share one
     // dimension, so there are never MORE dimensions than walls
     expect(dims.length).toBeLessThanOrEqual(walls().length);

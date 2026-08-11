@@ -74,10 +74,23 @@ export abstract class HostedOpeningEntity
    */
   static readonly MIN_WIDTH = 0.3;
 
+  /** frame depth through the wall, in meters */
+  static readonly DEFAULT_THICKNESS = 0.05;
+
   /** normalized position of the opening center along the host axis */
   t = 0.5;
   width = 1.0;
   height = 1.2;
+  /**
+   * Frame depth through the wall.
+   *
+   * NOTHING reads this yet. The plan symbol and the hit test take their depth
+   * from the host wall's thickness, and the 3D pane is a fixed thin sheet — a
+   * frame with its own depth is 3D work that does not exist. It is stored
+   * anyway because it is a number the user measures off a real window, and a
+   * drawing saved today cannot be given one retroactively.
+   */
+  thickness = HostedOpeningEntity.DEFAULT_THICKNESS;
   /** `new` = install; `demolish` = existing opening to be removed (renovation) */
   phase: Phase = 'new';
 
@@ -270,4 +283,15 @@ export abstract class HostedOpeningEntity
       opening.width = span.width;
     });
   }
+}
+
+/**
+ * Frame depth off saved props. Every drawing written before the field existed
+ * has none, and that is not a corrupt file — it falls back to the default
+ * rather than refusing to open.
+ */
+export function asOpeningThickness(value: unknown): number {
+  return typeof value === 'number' && value > 0
+    ? value
+    : HostedOpeningEntity.DEFAULT_THICKNESS;
 }

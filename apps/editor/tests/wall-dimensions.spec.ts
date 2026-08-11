@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EditorSession, WallEntity, point } from '@acip/editor-core';
 import type { EntityId, Point, ViewDefinition } from '@acip/editor-core';
-import { wallDimensions, wallExtent } from '@/editor/viewport/wall-dimensions';
+import { planDimensions, wallExtent } from '@/editor/viewport/wall-dimensions';
 
 /**
  * Wall dimensions measure the OVERALL EXTENT: the wall as drawn, outer corner
@@ -156,11 +156,11 @@ describe('wallExtent', () => {
   });
 });
 
-describe('wallDimensions', () => {
+describe('planDimensions', () => {
   it('gives one dimension per distinct span on the plan', () => {
     const s = session();
     loop(s, [point(0, 0), point(4, 0), point(4, 4), point(0, 4)]);
-    const dims = wallDimensions(s.doc, PLAN);
+    const dims = planDimensions(s.doc, PLAN);
     // a square room measures the same 4.3 four times over; the opposite edges
     // are duplicates of each other, so one of each pair is enough
     expect(dims.length).toBe(2);
@@ -170,6 +170,6 @@ describe('wallDimensions', () => {
   it('draws nothing in 3D', () => {
     const s = session();
     loop(s, [point(0, 0), point(4, 0), point(4, 4), point(0, 4)]);
-    expect(wallDimensions(s.doc, { kind: '3d' } as ViewDefinition)).toEqual([]);
+    expect(planDimensions(s.doc, { kind: '3d' } as ViewDefinition)).toEqual([]);
   });
 });

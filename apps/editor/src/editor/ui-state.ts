@@ -58,8 +58,12 @@ export interface OverlayState {
    * Provisional wall the finger is dragging out. Blinks, so a touch that has
    * registered is obvious before the drag has gone anywhere — on a phone there
    * is no cursor to say the tool is armed.
+   *
+   * `measured` prints the band's length next to it: a tool whose band IS the
+   * size being chosen asks for it, one whose band only shows where something
+   * will land does not.
    */
-  readonly pending: { a: Point; b: Point } | null;
+  readonly pending: { a: Point; b: Point; measured?: boolean } | null;
 }
 
 /** 2D camera snapshot so React overlays can place chrome at world points */

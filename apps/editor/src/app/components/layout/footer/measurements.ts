@@ -38,14 +38,18 @@ const baselineLength = (wall: WallEntity): number => {
   return distance(a, b);
 };
 
-/** the shared value of a wall property, or null when the walls disagree */
-export function commonValue(
-  walls: readonly WallEntity[],
-  of: (wall: WallEntity) => number,
+/**
+ * The shared value of a property across a selection, or null when they
+ * disagree. Generic because openings prefill their dialog the same way — the
+ * rule is about the selection, not about walls.
+ */
+export function commonValue<T>(
+  items: readonly T[],
+  of: (item: T) => number,
 ): number | null {
-  if (walls.length === 0) return null;
-  const first = of(walls[0]);
-  return walls.every((wall) => Math.abs(of(wall) - first) < 1e-6)
+  if (items.length === 0) return null;
+  const first = of(items[0]);
+  return items.every((item) => Math.abs(of(item) - first) < 1e-6)
     ? first
     : null;
 }

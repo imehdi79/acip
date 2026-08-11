@@ -4,6 +4,7 @@ import {
   IconArrowBackUp,
   IconArrowForwardUp,
   IconCopy,
+  IconRotateClockwise2,
   IconRulerMeasure,
   IconSignature,
   IconTrash,
@@ -19,8 +20,10 @@ import {
 import type { FooterContext } from './context';
 import { Insert, insertRoom, type InsertItemType } from './insert';
 import { WallMeasurements } from './measurements-modal';
+import { OpeningMeasurements } from './opening-measurements-modal';
 import { RoomName } from './room-name';
 import { MoveMode } from './move-mode';
+import { cycleDoorHang } from './door-hang';
 import { duplicateSelection } from './duplicate';
 
 /** What a button gets to act on. */
@@ -96,6 +99,20 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     render: ({ session }) => <WallMeasurements session={session} />,
   },
   {
+    id: 'measure-opening',
+    label: 'Measurements',
+    icon: <IconRulerMeasure />,
+    slot: 'end',
+    group: 'inspect',
+    iconOnly: true,
+    permission: 'footer.measureOpening',
+    // An opening measures nothing like its host: width, height, a sill and a
+    // frame depth, none of which a wall has. Own gate, own dialog — widening
+    // the wall one would mean a form where half the fields never apply.
+    visible: (ctx) => ctx.selection === 'window' || ctx.selection === 'door',
+    render: ({ session }) => <OpeningMeasurements session={session} />,
+  },
+  {
     id: 'rename',
     label: 'Room name',
     icon: <IconSignature />,
@@ -105,6 +122,19 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     permission: 'footer.rename',
     visible: (ctx) => ctx.selection === 'room',
     render: ({ session, ui }) => <RoomName session={session} ui={ui} />,
+  },
+  {
+    id: 'door-hang',
+    label: 'Change how the door opens',
+    icon: <IconRotateClockwise2 />,
+    slot: 'end',
+    group: 'inspect',
+    iconOnly: true,
+    permission: 'footer.doorHang',
+    visible: (ctx) => ctx.selection === 'door',
+    // one press, one visible change: the swing flips, then the hinge moves,
+    // and four presses bring the door back where it started
+    run: ({ session }) => cycleDoorHang(session),
   },
   {
     id: 'move-mode',

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  DoorEntity,
   EditorSession,
   WallEntity,
   WindowEntity,
@@ -209,6 +210,26 @@ describe('WindowEntity — hosted placement and openings', () => {
     expect(Math.max(...zs)).toBeCloseTo(2.1);
   });
 
+  test('window round-trips its frame thickness, and a file without one loads', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const winId = session.dispatch<EntityId>('WINDOW.ADD', { wallId, t: 0.5 });
+    session.dispatch('OPENING.SETPROPS', { ids: [winId], thickness: 0.08 });
+
+    const data = JSON.parse(JSON.stringify(saveDocument(session.doc)));
+    expect(
+      (loadDocument(data, session.entityTypes).get(winId) as WindowEntity)
+        .thickness,
+    ).toBeCloseTo(0.08);
+
+    // every drawing saved before the field existed looks like this
+    for (const entity of data.entities) {
+      if (entity.type === 'window') delete entity.props.thickness;
+    }
+    const older = loadDocument(data, session.entityTypes);
+    expect((older.get(winId) as WindowEntity).thickness).toBeCloseTo(0.05);
+  });
+
   test('document round-trips with wall, window, and relation intact', () => {
     const session = new EditorSession();
     const wallId = addWall(session, 0, 0, 10, 0);
@@ -225,5 +246,106 @@ describe('WindowEntity — hosted placement and openings', () => {
     expect(restored.relations.dependentsOf(wallId)).toEqual([winId]);
     const center = bboxCenter(restored.get(winId)!.getBounds());
     expect(center.x).toBeCloseTo(2.5);
+  });
+});
+
+describe('OPENING.SETPROPS', () => {
+  const scene = () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const winId = session.dispatch<EntityId>('WINDOW.ADD', { wallId, t: 0.25 });
+    const doorId = session.dispatch<EntityId>('DOOR.ADD', { wallId, t: 0.75 });
+    return { session, wallId, winId, doorId };
+  };
+
+  test('sets width, height, sill and thickness in one go', () => {
+    const { session, wallId, winId } = scene();
+    const n = session.dispatch<number>('OPENING.SETPROPS', {
+      ids: [winId],
+      width: 1.6,
+      height: 1.4,
+      sill: 1.1,
+      thickness: 0.07,
+    });
+
+    expect(n).toBe(1);
+    const win = session.doc.get(winId) as WindowEntity;
+    expect(win.width).toBeCloseTo(1.6);
+    expect(win.height).toBeCloseTo(1.4);
+    expect(win.sill).toBeCloseTo(1.1);
+    expect(win.thickness).toBeCloseTo(0.07);
+    // the wall's cut widens with it — a width edit is real geometry, not a
+    // number parked on the entity
+    expect(session.measure.areaOf(wallId)).toBeCloseTo((10 - 1.6 - 0.9) * 0.3);
+  });
+
+  test('one undo restores every property it set', () => {
+    const { session, winId } = scene();
+    session.dispatch('OPENING.SETPROPS', {
+      ids: [winId],
+      width: 1.6,
+      height: 1.4,
+      sill: 1.1,
+    });
+    session.undo();
+
+    const win = session.doc.get(winId) as WindowEntity;
+    expect(win.width).toBeCloseTo(1.0);
+    expect(win.height).toBeCloseTo(1.2);
+    expect(win.sill).toBeCloseTo(0.9);
+  });
+
+  test('leaves openings outside the id list alone', () => {
+    const { session, winId, doorId } = scene();
+    session.dispatch('OPENING.SETPROPS', { ids: [winId], height: 1.4 });
+
+    expect((session.doc.get(doorId) as DoorEntity).height).toBeCloseTo(2.1);
+  });
+
+  test('ids that are not openings are skipped, not fatal', () => {
+    const { session, wallId, winId } = scene();
+    const n = session.dispatch<number>('OPENING.SETPROPS', {
+      ids: [wallId, winId],
+      width: 1.6,
+    });
+
+    expect(n).toBe(1);
+    expect((session.doc.get(wallId) as WallEntity).getThickness()).toBeCloseTo(
+      0.3,
+    );
+  });
+
+  test('a door takes sill 0 and rejects anything else, changing nothing', () => {
+    const { session, winId, doorId } = scene();
+    expect(
+      session.dispatch<number>('OPENING.SETPROPS', { ids: [doorId], sill: 0 }),
+    ).toBe(1);
+
+    expect(() =>
+      session.dispatch('OPENING.SETPROPS', {
+        ids: [winId, doorId],
+        sill: 1.1,
+        height: 1.4,
+      }),
+    ).toThrow();
+    // the window is listed first, so a partial apply would already have moved
+    // it — rollback is what keeps the batch atomic
+    const win = session.doc.get(winId) as WindowEntity;
+    expect(win.sill).toBeCloseTo(0.9);
+    expect(win.height).toBeCloseTo(1.2);
+  });
+
+  test('rejects sizes that are not sizes, and a sill below the floor', () => {
+    const { session, winId } = scene();
+    const bad = (patch: Record<string, unknown>) =>
+      expect(() =>
+        session.dispatch('OPENING.SETPROPS', { ids: [winId], ...patch }),
+      ).toThrow();
+
+    bad({ width: 0 });
+    bad({ height: -1 });
+    bad({ thickness: 0 });
+    bad({ sill: -0.1 });
+    bad({ width: 'wide' });
   });
 });

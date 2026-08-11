@@ -171,11 +171,16 @@ export class HostedPlaceTool implements Tool {
     this.ui.prompt.set(`${this.label} — drag along a wall to place`);
   }
 
+  /**
+   * The band under the finger IS the opening being sized, so it carries the
+   * width as a number — the drafting question while dragging is "how wide",
+   * and the pending band alone cannot answer it.
+   */
   private preview(cursor: Point): void {
     const press = this.press;
     if (!press) return;
     const span = planOpeningSpan(press.baseline, press.from, cursor);
-    this.ui.setPending({ a: span.a, b: span.b });
+    this.ui.setPending({ a: span.a, b: span.b, measured: true });
   }
 
   private wallAt(point: Point, tolerance: number): WallEntity | null {

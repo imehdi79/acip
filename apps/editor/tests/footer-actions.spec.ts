@@ -74,6 +74,38 @@ describe('resolveFooter', () => {
     ]);
   });
 
+  // openings get their own measurements button: the wall one asks for a
+  // length and knows nothing about a sill
+  it('gives a window and a door the opening measurements button', () => {
+    for (const kind of ['window', 'door']) {
+      expect(ids(ctx({ selection: kind, types: [kind], count: 1 }))).toContain(
+        'measure-opening',
+      );
+    }
+  });
+
+  // only a door has a leaf to rehang, so the window must not offer it
+  it('offers the hang toggle for a door alone', () => {
+    expect(ids(ctx({ selection: 'door', types: ['door'], count: 1 }))).toEqual([
+      'undo',
+      'measure-opening',
+      'door-hang',
+      'delete',
+    ]);
+    expect(
+      ids(ctx({ selection: 'window', types: ['window'], count: 1 })),
+    ).toEqual(['undo', 'measure-opening', 'delete']);
+  });
+
+  it('never offers both measurements buttons at once', () => {
+    expect(
+      ids(ctx({ selection: 'wall', types: ['wall'], count: 1 })),
+    ).not.toContain('measure-opening');
+    expect(
+      ids(ctx({ selection: 'window', types: ['window'], count: 1 })),
+    ).not.toContain('measure');
+  });
+
   it('keeps every contextual button pressable', () => {
     const wall = ctx({ selection: 'wall', types: ['wall'], count: 1 });
     for (const id of ['measure', 'move-mode', 'duplicate', 'delete'])

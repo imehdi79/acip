@@ -19,7 +19,7 @@ import {
 import type { Viewport2D } from './viewport2d';
 import type { OverlayState, UnderlayState } from '../ui-state';
 import { formatLength } from '../units';
-import { wallDimensions } from './wall-dimensions';
+import { planDimensions } from './wall-dimensions';
 
 const COLORS = {
   background: '#ffffff',
@@ -35,6 +35,7 @@ const COLORS = {
   spaceFill: 'rgba(60, 150, 130, 0.08)',
   spaceLabel: '#3c7a68',
   measure: '#a67c00',
+  measureOpening: '#5f8f7a',
   finish: '#b5702a',
   demolition: '#d84a24',
   ghost: '#4da3ff',
@@ -77,6 +78,9 @@ const PENDING_ALPHA_MIN = 0.3;
 const PENDING_ALPHA_SWING = 0.5;
 /** one full pulse per this many ms */
 const PENDING_BLINK_MS = 900;
+/** a measured band's label: its stand-off, and the shortest band worth labelling */
+const PENDING_LABEL_PX = 14;
+const PENDING_LABEL_MIN_PX = 24;
 
 /** 0..1 triangle-free pulse, read from the clock so any redraw is in phase */
 function blinkPhase(): number {
@@ -498,14 +502,15 @@ const DIM_MIN_PX = 44;
 const DIM_LANE_PX = 22;
 
 /**
- * Automatic length labels on every wall. This is a render pass, not document
- * entities: nothing is created, so there is nothing to undo, keep in sync, or
- * strip before export — the labels simply follow whatever the walls are.
+ * Automatic length labels on every wall, and width labels on the openings cut
+ * into them. This is a render pass, not document entities: nothing is created,
+ * so there is nothing to undo, keep in sync, or strip before export — the
+ * labels simply follow whatever the plan is.
  *
  * Drawn entirely in screen space, so line weights and glyphs stay a fixed size
  * at any zoom and text is never Y-mirrored by the world transform.
  */
-export function drawWallDimensions(
+export function drawPlanDimensions(
   canvas: HTMLCanvasElement,
   viewport: Viewport2D,
   doc: DrawingDocument,
@@ -514,7 +519,7 @@ export function drawWallDimensions(
 ): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const dims = wallDimensions(doc, view, selection);
+  const dims = planDimensions(doc, view, selection);
   if (dims.length === 0) return;
 
   const dpr = window.devicePixelRatio || 1;
@@ -546,9 +551,14 @@ export function drawWallDimensions(
     const da = { x: sa.x + nx * standOff, y: sa.y + ny * standOff };
     const db = { x: sb.x + nx * standOff, y: sb.y + ny * standOff };
 
-    // a selected wall's dimension reads in the selection colour, so the number
-    // being edited is obvious at a glance
-    const colour = dim.selected ? COLORS.selected : COLORS.measure;
+    // a selected entity's dimension reads in the selection colour, so the
+    // number being edited is obvious at a glance. Otherwise the hue says what
+    // kind of thing is measured: an opening's width is not a stretch of wall.
+    const colour = dim.selected
+      ? COLORS.selected
+      : dim.kind === 'opening'
+        ? COLORS.measureOpening
+        : COLORS.measure;
     ctx.strokeStyle = colour;
     ctx.fillStyle = colour;
     ctx.lineWidth = dim.selected ? 1.5 : 1;
@@ -631,6 +641,34 @@ export function drawOverlay(
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
     ctx.restore();
+
+    // A band that SIZES something says how big it is, in the same voice the
+    // rubber band uses while a wall is drawn. Taken from the band's own two
+    // points, so the number and the span being dragged cannot disagree, and
+    // drawn outside the pulse — a blinking number is unreadable.
+    if (overlay.pending.measured) {
+      const world = Math.hypot(
+        overlay.pending.b.x - overlay.pending.a.x,
+        overlay.pending.b.y - overlay.pending.a.y,
+      );
+      const screen = Math.hypot(b.x - a.x, b.y - a.y);
+      if (world > 1e-6 && screen > PENDING_LABEL_MIN_PX) {
+        const nx = -(b.y - a.y) / screen;
+        const ny = (b.x - a.x) / screen;
+        const cx = (a.x + b.x) / 2 + nx * PENDING_LABEL_PX;
+        const cy = (a.y + b.y) / 2 + ny * PENDING_LABEL_PX;
+        const label = formatLength(world);
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // halo first: the band is dragged along a wall, across its linework
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = COLORS.background;
+        ctx.fillStyle = COLORS.measure;
+        ctx.strokeText(label, cx, cy);
+        ctx.fillText(label, cx, cy);
+      }
+    }
   }
 
   if (overlay.ghost) {

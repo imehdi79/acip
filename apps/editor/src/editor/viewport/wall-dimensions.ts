@@ -4,20 +4,28 @@ import type {
   Point,
   ViewDefinition,
 } from '@acip/editor-core';
-import { WallEntity } from '@acip/editor-core';
+import { HostedOpeningEntity, WallEntity } from '@acip/editor-core';
 
 /**
- * One wall's automatic dimension, in world space.
+ * What a dimension measures. Walls and the openings cut into them share every
+ * rule below — the kind only decides how the finished dimension is drawn, so a
+ * 0.9 m door is not mistaken for a 0.9 m stretch of wall.
+ */
+export type DimensionKind = 'wall' | 'opening';
+
+/**
+ * One automatic dimension, in world space.
  *
  * `a`, `b` and `length` are derived together from the same two points, so the
  * drawn line and the printed number can never disagree. Everything after that
- * is placement: which way the dimension stands off from its wall, and which
- * lane it occupies once its neighbours want the same space.
+ * is placement: which way the dimension stands off from what it measures, and
+ * which lane it occupies once its neighbours want the same space.
  */
-export interface WallExtent {
-  /** the wall SEGMENT this measures */
-  readonly wallId: EntityId;
-  /** measurement anchors, on the wall's axis, at its full drawn extent */
+export interface PlanExtent {
+  /** what this measures: a wall SEGMENT, or an opening hosted on one */
+  readonly entityId: EntityId;
+  readonly kind: DimensionKind;
+  /** measurement anchors, on the wall's axis: its drawn extent, or an opening's width */
   readonly a: Point;
   readonly b: Point;
   /** distance(a, b) — exactly what the label reads */
@@ -31,11 +39,11 @@ export interface WallExtent {
    * even when the walls sit exactly on top of one another.
    */
   readonly base?: { readonly a: Point; readonly b: Point };
-  /** its wall is selected: drawn highlighted, and it wins any de-duplication */
+  /** its entity is selected: drawn highlighted, and it wins any de-duplication */
   readonly selected?: boolean;
 }
 
-export interface WallDimension extends WallExtent {
+export interface PlanDimension extends PlanExtent {
   /** unit normal the dimension stands off along; points away from the plan */
   readonly side: Point;
   /**
@@ -63,7 +71,7 @@ export interface WallDimension extends WallExtent {
  *
  * Returns null for a degenerate wall, which has no direction to measure along.
  */
-export function wallExtent(wall: WallEntity): WallExtent | null {
+export function wallExtent(wall: WallEntity): PlanExtent | null {
   const { a, b } = wall.getBaseline();
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -82,11 +90,41 @@ export function wallExtent(wall: WallEntity): WallExtent | null {
   if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
 
   return {
-    wallId: wall.id,
+    entityId: wall.id,
+    kind: 'wall',
     a: { x: a.x + ux * min, y: a.y + uy * min },
     b: { x: a.x + ux * max, y: a.y + uy * max },
     length: max - min,
     base: { a, b },
+  };
+}
+
+/**
+ * An opening's WIDTH, measured along its host wall.
+ *
+ * Read off the opening's own end grips, so the printed number spans exactly
+ * the two handles a finger resizes it by — the plan and the grips can never
+ * tell different stories. Those points already lie on the host's baseline,
+ * which is where placement is decided from, so there is no separate `base` to
+ * carry.
+ *
+ * Returns null for an opening with no host to hang on, or one collapsed to
+ * nothing — neither has a span to measure.
+ */
+export function openingExtent(opening: HostedOpeningEntity): PlanExtent | null {
+  const [, low, high] = opening.getGrips();
+  if (!low || !high) return null;
+  const length = Math.hypot(
+    high.point.x - low.point.x,
+    high.point.y - low.point.y,
+  );
+  if (length < 1e-9) return null;
+  return {
+    entityId: opening.id,
+    kind: 'opening',
+    a: low.point,
+    b: high.point,
+    length,
   };
 }
 
@@ -103,7 +141,7 @@ const LANE_BAND = 0.35;
 const SPAN_EPSILON = 1e-3;
 
 interface Placed {
-  dim: Omit<WallDimension, 'lane'>;
+  dim: Omit<PlanDimension, 'lane'>;
   /** angle of the dimension's own direction, folded to [0, π) */
   axis: number;
   /** signed distance from the origin along `side` — which line it sits on */
@@ -130,12 +168,14 @@ const dotp = (p: Point, q: Point): number => p.x * q.x + p.y * q.y;
  * The wall in the screenshot's middle band — where a room's bottom wall and the
  * next room's top wall run along the same line — is exactly the colliding case:
  * same axis, near-identical offset, overlapping spans, so they get lanes 0 and
- * 1 instead of one illegible overlap.
+ * 1 instead of one illegible overlap. An opening is that same case against its
+ * own host: it sits on the wall's line and inside its span, so it lands in the
+ * lane beyond whatever the wall took.
  */
 export function layOutDimensions(
-  dims: readonly WallExtent[],
+  dims: readonly PlanExtent[],
   centre: Point,
-): WallDimension[] {
+): PlanDimension[] {
   const placed: Placed[] = [];
   for (const dim of dims) {
     // placement follows the wall, not its caps
@@ -182,7 +222,7 @@ export function layOutDimensions(
       p.offset - q.offset ||
       p.from - q.from ||
       q.to - p.to ||
-      (p.dim.wallId < q.dim.wallId ? -1 : 1),
+      (p.dim.entityId < q.dim.entityId ? -1 : 1),
   );
 
   // Two walls measuring the SAME span on the same axis print the same number
@@ -226,7 +266,7 @@ export function layOutDimensions(
   }
 
   return done
-    .sort((p, q) => (p.dim.wallId < q.dim.wallId ? -1 : 1))
+    .sort((p, q) => (p.dim.entityId < q.dim.entityId ? -1 : 1))
     .map((item) => ({ ...item.dim, lane: item.lane }));
 }
 
@@ -242,26 +282,41 @@ function centreOf(dims: readonly { a: Point; b: Point }[]): Point {
 }
 
 /**
- * Every wall on the view's level, with its overall extent, its side and its
- * lane. Recomputed from the document on every call, so any geometry change —
- * a wall moved, resized, split at a new crossing, added or erased — lays the
- * dimensions out afresh.
+ * Every wall on the view's level with its overall extent, every opening in
+ * those walls with its width, each carrying the side and lane it is drawn in.
+ * Recomputed from the document on every call, so any geometry change — a wall
+ * moved, resized, split at a new crossing, a window widened, added or erased —
+ * lays the dimensions out afresh.
+ *
+ * Openings are reached through their hosts rather than scanned for, because
+ * the host is what puts them on a level at all: nothing about a window says
+ * which storey it belongs to.
  */
-export function wallDimensions(
+export function planDimensions(
   doc: DrawingDocument,
   view: ViewDefinition,
   selection: ReadonlySet<string> = new Set(),
-): WallDimension[] {
+): PlanDimension[] {
   // plan-only; the 3D view definition carries no level
   if (view.kind !== 'plan') return [];
   const levelId = view.levelId ?? null;
-  const extents: WallExtent[] = [];
+  const walls: PlanExtent[] = [];
+  const openings: PlanExtent[] = [];
   for (const entity of doc.all()) {
     if (!(entity instanceof WallEntity)) continue;
     if ((entity.baseLevelId ?? null) !== levelId) continue;
     const dim = wallExtent(entity);
-    if (dim) extents.push({ ...dim, selected: selection.has(entity.id) });
+    if (dim) walls.push({ ...dim, selected: selection.has(entity.id) });
+    for (const hostedId of doc.relations.dependentsOf(entity.id)) {
+      const hosted = doc.get(hostedId);
+      if (!(hosted instanceof HostedOpeningEntity)) continue;
+      const span = openingExtent(hosted);
+      if (span) openings.push({ ...span, selected: selection.has(hostedId) });
+    }
   }
-  if (extents.length === 0) return [];
-  return layOutDimensions(extents, centreOf(extents));
+  if (walls.length === 0) return [];
+  // the middle is the PLAN's, taken from the walls alone: cutting a window
+  // must not tug the centre far enough to flip which side a wall's dimension
+  // stands off on
+  return layOutDimensions([...walls, ...openings], centreOf(walls));
 }

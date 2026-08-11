@@ -123,6 +123,40 @@ describe('placing an opening by dragging', () => {
     expect(pending()).toBeNull();
   });
 
+  it('reads the width out beside the band being dragged', () => {
+    down(point(2, 0));
+    move(point(4, 0));
+
+    // the band IS the size being chosen, so it carries the number
+    const band = pending()!;
+    expect(band.measured).toBe(true);
+    // and the number is read off the band's own ends, so what the label says
+    // and what the release commits are the same 2 m
+    expect(Math.hypot(band.b.x - band.a.x, band.b.y - band.a.y)).toBeCloseTo(
+      2,
+      6,
+    );
+
+    up(point(4, 0));
+    expect(pending()).toBeNull();
+  });
+
+  it('takes the readout away with a cancelled gesture', () => {
+    down(point(2, 0));
+    move(point(4, 0));
+    runtime.tools.key('Escape');
+
+    expect(pending()).toBeNull();
+  });
+
+  it('takes the readout away when the tool is put away mid-drag', () => {
+    down(point(2, 0));
+    move(point(4, 0));
+    runtime.tools.useById('select');
+
+    expect(pending()).toBeNull();
+  });
+
   it('sizes off the wall it started on, even if the finger wanders off', () => {
     drag(point(2, 0), point(4, 3));
 

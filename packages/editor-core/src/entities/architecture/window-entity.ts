@@ -7,7 +7,11 @@ import type { Geometry } from '../../geometry/shapes.js';
 import type { Mesh3D, MeshDetail } from '../../geometry/mesh/index.js';
 import { EMPTY_MESH, extrudeQuad } from '../../geometry/mesh/index.js';
 import type { IMeshable } from '../base/capabilities.js';
-import { HostedOpeningEntity, clamp01 } from './hosted-opening.js';
+import {
+  HostedOpeningEntity,
+  asOpeningThickness,
+  clamp01,
+} from './hosted-opening.js';
 import { asPhase } from './phase.js';
 
 /**
@@ -71,6 +75,7 @@ export class WindowEntity extends HostedOpeningEntity implements IMeshable {
     copy.width = this.width;
     copy.sill = this.sill;
     copy.height = this.height;
+    copy.thickness = this.thickness;
     copy.phase = this.phase;
     return copy;
   }
@@ -96,6 +101,7 @@ export class WindowEntity extends HostedOpeningEntity implements IMeshable {
       width: this.width,
       sill: this.sill,
       height: this.height,
+      thickness: this.thickness,
       phase: this.phase,
     };
   }
@@ -114,6 +120,7 @@ export class WindowEntity extends HostedOpeningEntity implements IMeshable {
     this.width = width;
     this.sill = sill;
     this.height = height;
+    this.thickness = asOpeningThickness(props['thickness']);
     this.phase = asPhase(props['phase']);
   }
 }

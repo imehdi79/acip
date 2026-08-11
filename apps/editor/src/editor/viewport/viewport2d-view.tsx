@@ -5,8 +5,8 @@ import { useRuntime } from '../runtime';
 import { Viewport2D } from './viewport2d';
 import {
   drawOverlay,
+  drawPlanDimensions,
   drawScene,
-  drawWallDimensions,
   overlayAnimates,
 } from './scene-renderer';
 import { lengthUnit } from '../units';
@@ -62,8 +62,9 @@ export function Viewport2DView() {
           ui.underlay.get(),
           ui.showDemolition.get(),
         );
-        // wall lengths, always on — same canvas, drawn over the finished scene
-        drawWallDimensions(base, viewport, session.doc, planView(), selected);
+        // wall lengths and opening widths, always on — same canvas, drawn over
+        // the finished scene
+        drawPlanDimensions(base, viewport, session.doc, planView(), selected);
       });
     };
     const redrawOverlay = () =>
@@ -121,7 +122,7 @@ export function Viewport2DView() {
       ui.showMarks.subscribe(redrawBase),
       ui.showDemolition.subscribe(redrawBase),
       ui.underlay.subscribe(redrawBase),
-      // wall dimensions are rendered in the active unit, so redraw when it changes
+      // dimensions are rendered in the active unit, so redraw when it changes
       lengthUnit.subscribe(redrawBase),
       ui.fitTick.subscribe(() => {
         const w = container.clientWidth;
