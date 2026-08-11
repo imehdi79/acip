@@ -8,7 +8,6 @@ import {
   IconRulerMeasure,
   IconSignature,
   IconTrash,
-  IconX,
 } from '@tabler/icons-react';
 import type { EditorUi } from '@/editor/ui-state';
 import type { ToolManager } from '@/editor/tools/tool-manager';
@@ -18,7 +17,7 @@ import {
   type User,
 } from '@/app/stores/global/settings.store';
 import type { FooterContext } from './context';
-import { Insert, insertRoom, type InsertItemType } from './insert';
+import { Tools } from './tools';
 import { WallMeasurements } from './measurements-modal';
 import { OpeningMeasurements } from './opening-measurements-modal';
 import { RoomName } from './room-name';
@@ -31,6 +30,8 @@ export interface FooterApi {
   readonly session: EditorSession;
   readonly ui: EditorUi;
   readonly tools: ToolManager;
+  /** for a button that gates part of ITSELF rather than all of it */
+  readonly user: User | null;
 }
 
 export interface FooterItem {
@@ -38,7 +39,7 @@ export interface FooterItem {
   /** aria-label, and the visible text unless `iconOnly` */
   readonly label: string;
   readonly icon: ReactNode;
-  readonly slot: 'start' | 'end';
+  readonly slot: 'start' | 'center' | 'end';
   /** consecutive visible items sharing a group render as one ButtonGroup */
   readonly group?: string;
   readonly iconOnly?: boolean;
@@ -177,39 +178,26 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     },
   },
   {
-    id: 'cancel',
-    label: 'Cancel',
-    icon: <IconX />,
-    slot: 'end',
-    iconOnly: true,
-    // never permission-gated, like the header's Back: no role should be able
-    // to arm a tool and then be unable to put it down
-    visible: (ctx) => ctx.view === 'editor' && ctx.tool !== 'select',
-    // useById deactivates the tool and clears the overlay, so any half-drawn
-    // wall and its provisional preview go with it
-    run: ({ tools }) => tools.useById('select'),
-  },
-  {
-    id: 'insert',
-    label: 'Insert',
+    id: 'tools',
+    label: 'Tools',
     icon: null,
-    slot: 'end',
-    permission: 'footer.insert',
-    // a tool is already armed — Cancel is the action that applies, not another
-    // way in
+    slot: 'center',
+    /*
+     * Deliberately ungated, unlike every other editing button: the cluster
+     * carries the armed tool AND the way to put it down, and arming a tool
+     * must never be a one-way door. What it OFFERS is gated inside, on the
+     * same footer.insert permission the old Insert menu used.
+     */
     visible: (ctx) =>
       ctx.view === 'editor' &&
-      ctx.selection === 'none' &&
-      ctx.tool === 'select',
-    render: (api) => (
-      <Insert
-        onInsert={(type: InsertItemType) => {
-          // Wall and window are interactive: arm the tool and let the user
-          // drag on the plan. A room needs no tool — it is placed, then handed
-          // to the select tool's room-resize handles.
-          if (type === 'room') insertRoom(api.session, api.ui);
-          else api.tools.useById(type);
-        }}
+      (ctx.selection === 'none' || ctx.tool !== 'select'),
+    render: ({ session, ui, tools, user }, ctx) => (
+      <Tools
+        session={session}
+        ui={ui}
+        tools={tools}
+        activeTool={ctx.tool}
+        canInsert={can(user, 'footer.insert')}
       />
     ),
   },

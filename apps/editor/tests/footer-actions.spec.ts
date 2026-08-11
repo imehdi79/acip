@@ -5,7 +5,7 @@ import {
   type FooterApi,
 } from '@/app/components/layout/footer/actions';
 import type { FooterContext } from '@/app/components/layout/footer/context';
-import type { User } from '@/app/stores/global/settings.store';
+import { can, type User } from '@/app/stores/global/settings.store';
 
 /**
  * The footer's whole decision is one pure function, so "which buttons show
@@ -33,8 +33,8 @@ const enabledOf = (c: FooterContext, id: string) =>
   resolveFooter(FOOTER_ITEMS, c, editor).find((r) => r.item.id === id)?.enabled;
 
 describe('resolveFooter', () => {
-  it('shows undo and insert on a fresh plan, with undo greyed out', () => {
-    expect(ids(ctx())).toEqual(['undo', 'insert']);
+  it('shows undo and the tools on a fresh plan, with undo greyed out', () => {
+    expect(ids(ctx())).toEqual(['undo', 'tools']);
     expect(enabledOf(ctx(), 'undo')).toBe(false);
   });
 
@@ -44,13 +44,13 @@ describe('resolveFooter', () => {
 
   it('appears redo only when there is something to redo', () => {
     expect(ids(ctx())).not.toContain('redo');
-    expect(ids(ctx({ canRedo: true }))).toEqual(['undo', 'redo', 'insert']);
+    expect(ids(ctx({ canRedo: true }))).toEqual(['undo', 'redo', 'tools']);
   });
 
-  it('drops insert once anything is selected', () => {
+  it('drops the tools once anything is selected', () => {
     expect(
       ids(ctx({ selection: 'wall', types: ['wall'], count: 1 })),
-    ).not.toContain('insert');
+    ).not.toContain('tools');
   });
 
   it('gives a wall selection its own edit set instead of insert', () => {
@@ -138,26 +138,31 @@ describe('resolveFooter', () => {
     expect(ids(busy, guest)).toEqual([]);
   });
 
-  it('offers cancel while a tool is armed, and hides insert behind it', () => {
-    // select is the resting tool: nothing to cancel
-    expect(ids(ctx())).toEqual(['undo', 'insert']);
-    expect(ids(ctx({ tool: 'wall' }))).toEqual(['undo', 'cancel']);
-    expect(ids(ctx({ tool: 'window' }))).toEqual(['undo', 'cancel']);
+  // the cluster stays put while a tool is armed — it carries the armed tool
+  // AND the way to put it down, so there is no separate Cancel to appear
+  it('keeps the tools while a tool is armed', () => {
+    expect(ids(ctx())).toEqual(['undo', 'tools']);
+    expect(ids(ctx({ tool: 'wall' }))).toEqual(['undo', 'tools']);
+    expect(ids(ctx({ tool: 'window' }))).toEqual(['undo', 'tools']);
+  });
+
+  it('keeps the tools visible even with a selection, while one is armed', () => {
+    // otherwise arming a tool and then tapping something would strand it
+    expect(
+      ids(ctx({ tool: 'wall', selection: 'wall', types: ['wall'], count: 1 })),
+    ).toContain('tools');
   });
 
   it('lets even a guest put a tool down', () => {
-    // guests hold no footer.* permission, but cancel is ungated on purpose —
-    // arming a tool must never be a one-way door
-    expect(ids(ctx({ tool: 'wall' }), guest)).toEqual(['cancel']);
+    // guests hold no footer.* permission, but the cluster is ungated on
+    // purpose — arming a tool must never be a one-way door
+    expect(ids(ctx({ tool: 'wall' }), guest)).toEqual(['tools']);
   });
 
-  it('cancel returns to the select tool', () => {
-    const cancel = FOOTER_ITEMS.find((item) => item.id === 'cancel')!;
-    const armed: string[] = [];
-    cancel.run?.({
-      tools: { useById: (id: string) => armed.push(id) },
-    } as unknown as FooterApi);
-    expect(armed).toEqual(['select']);
+  it('gives a guest nothing to arm in the first place', () => {
+    // ungated does not mean unguarded: the cluster shows, its tools do not
+    expect(ids(ctx(), guest)).toEqual(['tools']);
+    expect(can(guest, 'footer.insert')).toBe(false);
   });
 
   it('drops the editor-only buttons outside the editor view', () => {

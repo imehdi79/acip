@@ -1,8 +1,6 @@
-import { Button, Dropdown, Label } from '@heroui/react';
 import {
   IconBoxMargin,
   IconDoor,
-  IconPlus,
   IconWall,
   IconWindow,
 } from '@tabler/icons-react';
@@ -108,32 +106,3 @@ export const INSERT_ITEMS: Item[] = [
     icon: <IconDoor className={iconClass} stroke={2} />,
   },
 ];
-
-type InsertProps = {
-  onInsert?: (type: InsertItemType) => void;
-};
-
-// Visibility and permission are decided by the descriptor in actions.tsx.
-export function Insert({ onInsert }: InsertProps) {
-  return (
-    <Dropdown>
-      {/* Button is the trigger directly: Dropdown.Trigger is itself a button,
-          and nesting one inside another is invalid and double-handles presses. */}
-      <Button isIconOnly aria-label="Insert" variant="tertiary">
-        <IconPlus stroke={2} />
-      </Button>
-      <Dropdown.Popover>
-        {/* No Section wrapper: it is one unlabelled group, and .menu-item
-            already lays out icon + label as a flex row with a gap. */}
-        <Dropdown.Menu onAction={(key) => onInsert?.(key as InsertItemType)}>
-          {INSERT_ITEMS.map((item) => (
-            <Dropdown.Item id={item.id} key={item.id} textValue={item.label}>
-              {item.icon}
-              <Label>{item.label}</Label>
-            </Dropdown.Item>
-          ))}
-        </Dropdown.Menu>
-      </Dropdown.Popover>
-    </Dropdown>
-  );
-}
