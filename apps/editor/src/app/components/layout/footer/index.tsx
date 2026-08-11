@@ -41,6 +41,9 @@ function FooterButton({
       isDisabled={!enabled}
       aria-label={item.label}
       variant="tertiary"
+      // the muted default is hard to pick out against a plan on a phone in
+      // daylight; the bar's icons carry the whole meaning, so they read solid
+      className="text-foreground"
       onPress={() => item.run?.(api)}
     >
       {item.icon}

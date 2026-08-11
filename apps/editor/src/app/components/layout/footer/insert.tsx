@@ -81,7 +81,12 @@ type Item = {
   icon: React.ReactNode;
 };
 
-const iconClass = 'size-4 shrink-0 text-muted';
+/*
+ * No colour of its own: these icons are the tool buttons in the bar as well as
+ * the rows in the overflow menu, and each place sets its own. Sized between
+ * the two — a menu row's 16px looks lost among the bar's 24px neighbours.
+ */
+const iconClass = 'size-5 shrink-0';
 
 /** what the menu offers, in order — the ids are tool ids bar 'room' */
 export const INSERT_ITEMS: Item[] = [

@@ -184,4 +184,33 @@ describe('resolveFooter', () => {
     ).not.toContain('move-mode');
     expect(ids(ctx())).not.toContain('move-mode');
   });
+
+  /*
+   * Every button a selected shape offers has to read as ONE control, the way
+   * the wall's set does — the renderer joins a run of buttons into a group
+   * only while they share a group name, so a stray one fragments the row.
+   */
+  it('gives every shape a single joined run of buttons', () => {
+    const shapes = [
+      ctx({ selection: 'wall', types: ['wall'], count: 1 }),
+      ctx({ selection: 'room', types: ['wall'], count: 4 }),
+      ctx({ selection: 'window', types: ['window'], count: 1 }),
+      ctx({ selection: 'door', types: ['door'], count: 1 }),
+      ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 }),
+    ];
+    for (const shape of shapes) {
+      const groups = resolveFooter(FOOTER_ITEMS, shape, editor)
+        .filter((entry) => entry.item.slot === 'end')
+        .map((entry) => entry.item.group);
+      expect(groups.length).toBeGreaterThan(0);
+      expect(new Set(groups).size).toBe(1);
+      expect(groups[0]).toBe('selection');
+    }
+  });
+
+  it('keeps the tools out of the selection run, in the centre', () => {
+    const tools = FOOTER_ITEMS.find((item) => item.id === 'tools')!;
+    expect(tools.slot).toBe('center');
+    expect(tools.group).toBeUndefined();
+  });
 });
