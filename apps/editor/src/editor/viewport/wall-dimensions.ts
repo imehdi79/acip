@@ -22,6 +22,15 @@ export interface WallExtent {
   readonly b: Point;
   /** distance(a, b) — exactly what the label reads */
   readonly length: number;
+  /**
+   * The wall's own baseline. Placement is decided from THIS, never from the
+   * drawn extent: caps are not part of where a wall is. Two walls at the same
+   * position must be recognised as measuring the same thing however each one
+   * happens to be capped — a mitered corner reaches past the endpoint while a
+   * tee stops short of it, so their extents differ by up to a wall thickness
+   * even when the walls sit exactly on top of one another.
+   */
+  readonly base?: { readonly a: Point; readonly b: Point };
   /** its wall is selected: drawn highlighted, and it wins any de-duplication */
   readonly selected?: boolean;
 }
@@ -77,6 +86,7 @@ export function wallExtent(wall: WallEntity): WallExtent | null {
     a: { x: a.x + ux * min, y: a.y + uy * min },
     b: { x: a.x + ux * max, y: a.y + uy * max },
     length: max - min,
+    base: { a, b },
   };
 }
 
@@ -128,8 +138,11 @@ export function layOutDimensions(
 ): WallDimension[] {
   const placed: Placed[] = [];
   for (const dim of dims) {
-    const dx = dim.b.x - dim.a.x;
-    const dy = dim.b.y - dim.a.y;
+    // placement follows the wall, not its caps
+    const from = dim.base?.a ?? dim.a;
+    const to = dim.base?.b ?? dim.b;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
     const len = Math.hypot(dx, dy);
     if (len < 1e-9) continue;
     const ux = dx / len;
@@ -146,7 +159,7 @@ export function layOutDimensions(
 
     // stand off on the side away from the middle of the plan, so dimensions
     // ring the drawing instead of falling across the rooms
-    const mid = { x: (dim.a.x + dim.b.x) / 2, y: (dim.a.y + dim.b.y) / 2 };
+    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
     const outward = dotp({ x: mid.x - centre.x, y: mid.y - centre.y }, normal);
     const side = outward < 0 ? { x: -normal.x, y: -normal.y } : { ...normal };
 
@@ -154,8 +167,8 @@ export function layOutDimensions(
       dim: { ...dim, side, selected: dim.selected ?? false },
       axis,
       offset: dotp(mid, normal),
-      from: Math.min(dotp(dim.a, along), dotp(dim.b, along)),
-      to: Math.max(dotp(dim.a, along), dotp(dim.b, along)),
+      from: Math.min(dotp(from, along), dotp(to, along)),
+      to: Math.max(dotp(from, along), dotp(to, along)),
       lane: 0,
     });
   }

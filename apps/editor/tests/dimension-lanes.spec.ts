@@ -4,6 +4,7 @@ import type { EntityId, Point, ViewDefinition } from '@acip/editor-core';
 import {
   layOutDimensions,
   wallDimensions,
+  wallExtent,
 } from '@/editor/viewport/wall-dimensions';
 import { withResolvedWalls } from '@/editor/walls';
 
@@ -186,14 +187,12 @@ describe('wallDimensions over a real document', () => {
   });
 
   it('lanes walls that share a line but measure different spans', () => {
-    // one room above another, the lower one wider: their walls run along the
-    // same line but measure different things, so both are worth showing
-    room(0, 4, 6, 8);
-    room(0, 0, 9, 4);
+    // two walls along one line covering different stretches: neither is a
+    // duplicate, so both are worth showing and they need separate lanes
+    addWall(point(0, 4), point(6, 4));
+    addWall(point(0, 4), point(9, 4));
 
-    const onTheLine = dims().filter(
-      (d) => Math.abs(d.a.y - 4) < 0.2 && Math.abs(d.b.y - 4) < 0.2,
-    );
+    const onTheLine = dims();
     expect(onTheLine).toHaveLength(2);
     expect(onTheLine.map((d) => d.lane).sort()).toEqual([0, 1]);
   });
@@ -243,6 +242,39 @@ describe('duplicate spans', () => {
     addWall(point(0, 0), point(6, 0));
     addWall(point(0, 4), point(6, 4));
     expect(dims()).toHaveLength(1);
+  });
+
+  it('sees past the caps: same wall positions, one dimension', () => {
+    // A room hung under a band. Its top wall is a piece of that band, capped
+    // square where the band runs through and stopping short at the tee; its
+    // bottom wall miters at both corners. Same 0..4.5 span, DRAWN extents 4.65
+    // and 4.80 — the very pair that showed up on one room in the plan.
+    // Reading placement off the baseline is what collapses them.
+    addWall(point(0, 0), point(8, 0));
+    addWall(point(0, -4), point(4.5, -4));
+    addWall(point(4.5, -4), point(4.5, 0));
+    addWall(point(0, 0), point(0, -4));
+    session.dispatch('WALL.RESOLVE', {});
+
+    const walls = session.doc
+      .all()
+      .filter((e): e is WallEntity => e instanceof WallEntity);
+    const span = (w: WallEntity) => {
+      const { a, b } = w.getBaseline();
+      return `${Math.min(a.x, b.x)}..${Math.max(a.x, b.x)}@${a.y}`;
+    };
+    // the two walls really are capped differently — that is the trap
+    const extents = walls
+      .filter((w) => span(w) === '0..4.5@0' || span(w) === '0..4.5@-4')
+      .map((w) => Math.round(wallExtent(w)!.length * 100) / 100)
+      .sort();
+    expect(extents).toEqual([4.65, 4.8]);
+
+    // and yet only one dimension covers that stretch of x
+    const onX = dims().filter(
+      (d) => Math.abs(d.a.x - 0) < 0.35 && Math.abs(d.length - 4.5) < 0.4,
+    );
+    expect(onX).toHaveLength(1);
   });
 
   it('keeps both when the spans differ, even slightly', () => {
