@@ -36,6 +36,16 @@ The resolver never sees entities.
 3. Each wall's cap = the two corners flanking it (`EndCap { left, right }`,
    aligned with input order).
 
+**Through-runs bypass the wheel entirely** (added 2026-08-11). If another end
+carries on along a wall's line (within ~0.06°), that wall runs STRAIGHT THROUGH
+the junction: it keeps a square cap on both faces and the walls arriving from
+the side butt against the face it presents, thickest wall of the run owning it.
+Resolving each side of a through-wall separately — parallel faces on one side, a
+miter on the other — chamfers its cap and leaves a triangular void above the
+arriving wall, which is what a split wall with a room hung under it used to look
+like. A four-way crossing has two runs, so its centre is covered twice rather
+than being ringed by four chamfers.
+
 Fallbacks, in order:
 
 - **Parallel faces** (collinear walls): no intersection → both walls keep flush
@@ -103,7 +113,7 @@ that wall's **near face**; the continuous wall is untouched.
 - **Wheel-over-tee overlap**: when two walls share an endpoint ON a third
   wall's body, they miter with each other (wheel priority) and their miter can
   overlap the host's body in plan. Fills overlap harmlessly; no boolean
-  cleanup in V2.
+  cleanup in V2. Through-runs overlap at their crossing for the same reason.
 - **Crossing (+) junctions**: interior-crossing-interior is not detected —
   detection is endpoint-driven only.
 

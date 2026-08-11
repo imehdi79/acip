@@ -3,6 +3,7 @@ import {
   add,
   angleOf,
   cross,
+  dot,
   distance,
   normalize,
   perpendicular,
@@ -113,16 +114,57 @@ export function resolveTeeCap(
   };
 }
 
+/** sine of the angle below which two ends count as one straight run (~0.06°) */
+const COLLINEAR_SIN = 1e-3;
+
+/** does `b` carry on where `a` came from — one wall passing straight through? */
+function continues(a: Vector, b: Vector): boolean {
+  return Math.abs(cross(a, b)) <= COLLINEAR_SIN && dot(a, b) < 0;
+}
+
 /**
  * Junction wheel: sort ends by arrival angle, intersect each pair of
  * angle-adjacent faces once, hand each wall the two corners flanking it.
  * Adjacent walls therefore share corner points exactly. Caps are returned
  * aligned with the INPUT order.
+ *
+ * One case never reaches the wheel: a wall that RUNS STRAIGHT THROUGH the
+ * junction, because another end carries on along its line. The wheel resolves
+ * each side of such a wall on its own — parallel faces on the through side,
+ * a miter on the other — which chamfers its cap and leaves a triangular hole
+ * above the wall arriving from the side. Instead the run keeps a square cap on
+ * both faces, filling the crossing, and the arriving walls butt against the
+ * face it presents. That is the ordinary drafting cleanup: the continuous wall
+ * stays continuous, the others stop at its face.
  */
 export function resolveJunction(ends: readonly WallEnd[]): EndCap[] {
   if (ends.length === 0) return [];
   if (ends.length === 1) return [squareCap(ends[0])];
   const junction = ends[0].point;
+
+  const throughRun = ends.map((end, i) =>
+    ends.some(
+      (other, j) => j !== i && continues(end.direction, other.direction),
+    ),
+  );
+  const first = throughRun.indexOf(true);
+  if (first >= 0) {
+    // the thickest wall of the run owns the face the others stop at, so a
+    // thin partition never pokes through a thick wall it butts into
+    const halfWidth = Math.max(
+      ...ends.filter((_, i) => throughRun[i]).map((end) => end.halfWidth),
+    );
+    const along = ends[first].direction;
+    const n = perpendicular(along);
+    return ends.map((end, i) => {
+      if (throughRun[i]) return squareCap(end);
+      const side = dot(end.direction, n) >= 0 ? 1 : -1;
+      return (
+        resolveTeeCap(end, add(junction, scale(n, side * halfWidth)), along) ??
+        squareCap(end)
+      );
+    });
+  }
   const sorted = ends
     .map((end, index) => ({ end, index, angle: angleOf(end.direction) }))
     .sort((x, y) => x.angle - y.angle);

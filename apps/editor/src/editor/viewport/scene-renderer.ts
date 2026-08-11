@@ -493,7 +493,6 @@ export function drawScene(
 
 /** dimension line stand-off from the wall, and the minimum length worth labelling */
 const DIM_OFFSET_PX = 18;
-const DIM_TICK_PX = 5;
 const DIM_MIN_PX = 44;
 /** gap between lanes — a line plus its label has to fit in here */
 const DIM_LANE_PX = 22;
@@ -552,11 +551,14 @@ export function drawWallDimensions(
     ctx.beginPath();
     ctx.moveTo(da.x, da.y);
     ctx.lineTo(db.x, db.y);
-    // witness lines running back to the measured points themselves
+    // Witness lines run from the measured points out to the dimension line and
+    // stop THERE — the three lines close a bracket. Letting them overshoot put
+    // the connecting line short of their tips, which reads as a dimension
+    // hovering below its own extension lines.
     ctx.moveTo(sa.x + nx * 4, sa.y + ny * 4);
-    ctx.lineTo(da.x + nx * DIM_TICK_PX, da.y + ny * DIM_TICK_PX);
+    ctx.lineTo(da.x, da.y);
     ctx.moveTo(sb.x + nx * 4, sb.y + ny * 4);
-    ctx.lineTo(db.x + nx * DIM_TICK_PX, db.y + ny * DIM_TICK_PX);
+    ctx.lineTo(db.x, db.y);
     ctx.stroke();
 
     // keep the label upright: past vertical, flip it rather than read it upside down
