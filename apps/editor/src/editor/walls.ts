@@ -19,6 +19,24 @@ export interface WallResolveResult {
  * The resolve is a no-op when nothing overlaps, so this is safe to wrap around
  * every wall-creating action.
  */
+/**
+ * Commands that can leave two walls covering one stretch of plan, and so need
+ * a resolve behind them.
+ *
+ * Adding a wall is the obvious one, but MOVING is how it actually happens in
+ * practice: copy a room, drag it onto an existing wall, and the two land on
+ * top of each other. Grip moves count too — dragging a wall's end into the
+ * middle of another is exactly the "connect a room to a wall" case, and the
+ * wall it lands on has to split there.
+ */
+export const OVERLAPPING_COMMANDS: ReadonlySet<string> = new Set([
+  'WALL.ADD',
+  'ENTITY.MOVE',
+  'ENTITY.DUPLICATE',
+  'GRIP.MOVE',
+  'GRIP.MOVEMANY',
+]);
+
 export function withResolvedWalls<T>(session: EditorSession, body: () => T): T {
   session.history.beginGroup();
   try {

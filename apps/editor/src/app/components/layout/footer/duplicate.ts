@@ -1,5 +1,6 @@
 import type { EditorSession, EntityId } from '@acip/editor-core';
 import type { EditorUi } from '@/editor/ui-state';
+import { withResolvedWalls } from '@/editor/walls';
 
 /** gap between an original and its copy, in metres */
 const COPY_GAP = 1;
@@ -33,10 +34,14 @@ export function duplicateSelection(session: EditorSession, ui: EditorUi): void {
   if (!Number.isFinite(minX)) return;
 
   const dx = maxX - minX + COPY_GAP;
-  const copies = session.dispatch<EntityId[]>('ENTITY.DUPLICATE', {
-    ids,
-    delta: { x: dx, y: 0 },
-  });
+  // the copy lands clear of the original, but it can still land on something
+  // else — resolve so the copy never doubles up on an existing wall
+  const copies = withResolvedWalls(session, () =>
+    session.dispatch<EntityId[]>('ENTITY.DUPLICATE', {
+      ids,
+      delta: { x: dx, y: 0 },
+    }),
+  );
 
   session.selection.clear();
   for (const id of copies) session.selection.add(id);

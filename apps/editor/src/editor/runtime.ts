@@ -5,7 +5,7 @@ import { ToolManager } from './tools/tool-manager';
 import { SelectTool } from './tools/select-tool';
 import { ChainedDrawTool } from './tools/chained-draw-tool';
 import { HostedPlaceTool } from './tools/hosted-place-tool';
-import { withResolvedWalls } from './walls';
+import { OVERLAPPING_COMMANDS, withResolvedWalls } from './walls';
 
 export interface EditorRuntime {
   readonly ui: EditorUi;
@@ -22,11 +22,12 @@ export function createRuntime(session: EditorSession): EditorRuntime {
     doc: session.doc,
     selection: session.selection,
     snap: session.snap,
-    // a drawn wall that crosses an existing one is split at the crossing
-    // before the tool hands control back, so the plan never holds two walls
-    // over one stretch. One undo covers both.
+    // Anything a tool does that can land two walls on one stretch — drawing
+    // across a wall, dragging a copied room onto one, stretching an end into
+    // one — is split at the crossing before the tool hands control back, so
+    // the plan never holds the doubled state. One undo covers both.
     dispatch: <R>(name: string, params?: unknown): R =>
-      name === 'WALL.ADD'
+      OVERLAPPING_COMMANDS.has(name)
         ? withResolvedWalls(session, () => session.dispatch<R>(name, params))
         : session.dispatch<R>(name, params),
   };
