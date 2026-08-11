@@ -57,6 +57,7 @@ describe('resolveFooter', () => {
     expect(ids(ctx({ selection: 'wall', types: ['wall'], count: 1 }))).toEqual([
       'undo',
       'measure',
+      'move-mode',
       'duplicate',
       'delete',
     ]);
@@ -64,12 +65,18 @@ describe('resolveFooter', () => {
 
   it('offers the room buttons for a room, and no wall-only ones', () => {
     const room = ctx({ selection: 'room', types: ['wall'], count: 4 });
-    expect(ids(room)).toEqual(['undo', 'rename', 'duplicate', 'delete']);
+    expect(ids(room)).toEqual([
+      'undo',
+      'rename',
+      'move-mode',
+      'duplicate',
+      'delete',
+    ]);
   });
 
   it('keeps every contextual button pressable', () => {
     const wall = ctx({ selection: 'wall', types: ['wall'], count: 1 });
-    for (const id of ['measure', 'duplicate', 'delete'])
+    for (const id of ['measure', 'move-mode', 'duplicate', 'delete'])
       expect(enabledOf(wall, id)).toBe(true);
   });
 
@@ -125,5 +132,19 @@ describe('resolveFooter', () => {
     expect(
       ids(ctx({ view: 'projects', canUndo: true, canRedo: true })),
     ).toEqual([]);
+  });
+
+  // the move-mode toggle is only meaningful for things that carry joins
+  it('offers move-mode for walls and rooms only', () => {
+    expect(
+      ids(ctx({ selection: 'wall', types: ['wall'], count: 1 })),
+    ).toContain('move-mode');
+    expect(
+      ids(ctx({ selection: 'room', types: ['wall'], count: 4 })),
+    ).toContain('move-mode');
+    expect(
+      ids(ctx({ selection: 'window', types: ['window'], count: 1 })),
+    ).not.toContain('move-mode');
+    expect(ids(ctx())).not.toContain('move-mode');
   });
 });

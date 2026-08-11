@@ -15,6 +15,7 @@ export type Permission =
   | 'footer.insert'
   | 'footer.measure'
   | 'footer.rename'
+  | 'footer.moveMode'
   | 'header.settings'
   | 'header.profile';
 
@@ -37,6 +38,7 @@ const EDITING_PERMISSIONS: Permission[] = [
   'footer.insert',
   'footer.measure',
   'footer.rename',
+  'footer.moveMode',
 ];
 
 /** Signed-out users are treated as `guest`. */

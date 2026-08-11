@@ -112,6 +112,13 @@ export class EditorUi {
   readonly agentChatOpen = new ValueStore<boolean>(false);
   readonly agentChat = new ValueStore<readonly ChatMessage[]>([]);
   readonly agentMode = new ValueStore<AgentMode>('drafter');
+  /**
+   * Move the selection on its OWN, leaving the walls joined to it where they
+   * are. Off by default: dragging a wall normally carries its joins so a room
+   * stays a room. On, a wall can be pulled out of a junction — the control you
+   * want when a plan needs rearranging rather than reshaping.
+   */
+  readonly detachedMove = new ValueStore<boolean>(false);
   /** entity mark labels ("W3") in the plan — auto-enabled when chat opens */
   readonly showMarks = new ValueStore<boolean>(false);
   /** reveal demolition-phase work (tear-out finishes, openings to remove) on the plan */

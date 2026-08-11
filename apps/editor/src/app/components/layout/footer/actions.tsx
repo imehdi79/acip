@@ -20,6 +20,7 @@ import type { FooterContext } from './context';
 import { Insert, insertRoom, type InsertItemType } from './insert';
 import { WallMeasurements } from './measurements-modal';
 import { RoomName } from './room-name';
+import { MoveMode } from './move-mode';
 import { duplicateSelection } from './duplicate';
 
 /** What a button gets to act on. */
@@ -104,6 +105,19 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     permission: 'footer.rename',
     visible: (ctx) => ctx.selection === 'room',
     render: ({ session, ui }) => <RoomName session={session} ui={ui} />,
+  },
+  {
+    id: 'move-mode',
+    label: 'Move separately',
+    icon: null,
+    slot: 'end',
+    group: 'inspect',
+    iconOnly: true,
+    permission: 'footer.moveMode',
+    // only walls carry joins, so only a wall or room selection has anything
+    // to detach from
+    visible: (ctx) => ctx.selection === 'room' || ctx.selection === 'wall',
+    render: ({ ui }) => <MoveMode ui={ui} />,
   },
   {
     id: 'duplicate',

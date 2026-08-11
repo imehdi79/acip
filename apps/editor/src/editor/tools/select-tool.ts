@@ -253,7 +253,11 @@ export class SelectTool implements Tool {
         if (delta.x !== 0 || delta.y !== 0) {
           // moving whole walls carries their joins: attached walls stretch to
           // follow (one undo). Any non-wall in the selection → plain translate.
-          const plan = planStickyWallMove(ctx.doc, mode.ids, delta);
+          // Move-separately skips the carry entirely and just translates, so a
+          // wall can be lifted out of a junction without dragging it about.
+          const plan = this.ui.detachedMove.get()
+            ? null
+            : planStickyWallMove(ctx.doc, mode.ids, delta);
           if (plan) ctx.dispatch('GRIP.MOVEMANY', { moves: plan.moves });
           else ctx.dispatch('ENTITY.MOVE', { ids: mode.ids, delta });
         }
@@ -486,11 +490,14 @@ export class SelectTool implements Tool {
       .map((id) => ctx.doc.get(id))
       .filter((ent): ent is Entity => ent !== null)
       .map((ent) => transformGeometry(ent.getEffectiveGeometry(), m));
-    // attached walls stretching to follow the move
-    const plan = planStickyWallMove(ctx.doc, this.mode.ids, delta);
-    if (plan) {
-      for (const g of plan.ghosts)
-        ghost.push({ kind: 'segment', a: g.a, b: g.b });
+    // attached walls stretching to follow the move — nothing follows when the
+    // selection is being moved on its own
+    if (!this.ui.detachedMove.get()) {
+      const plan = planStickyWallMove(ctx.doc, this.mode.ids, delta);
+      if (plan) {
+        for (const g of plan.ghosts)
+          ghost.push({ kind: 'segment', a: g.a, b: g.b });
+      }
     }
     this.ui.setGhost(ghost);
     // feedback for where it will land: a marker on the corner it has caught,
