@@ -1,5 +1,5 @@
 import { WallEntity, hasGrips } from '@acip/editor-core';
-import type { DrawingDocument, Point } from '@acip/editor-core';
+import type { DrawingDocument, EntityId, Point } from '@acip/editor-core';
 
 /**
  * Drafting aids shared by the drawing and select tools: pull a direction onto a
@@ -101,7 +101,7 @@ function marksFromBearings(at: Point, bearings: number[]): AngleMark[] {
   for (let i = 0; i < sorted.length; i++) {
     const from = sorted[i];
     const to = i + 1 < sorted.length ? sorted[i + 1] : sorted[0] + Math.PI * 2;
-    const deg = ((to - from) / RAD);
+    const deg = (to - from) / RAD;
     // skip straight-through and the outer reflex wedge of a simple corner
     if (deg < 1 || deg > 179) continue;
     marks.push({ at, from, to, deg });
@@ -151,6 +151,121 @@ export interface AlignResult {
   guides: AlignGuide[];
 }
 
+/** what a drag should actually apply, once the plan has had its say */
+export interface DragSnap {
+  /** the translation to use — the raw one, pulled onto a node or an alignment */
+  delta: Point;
+  /** dashed tracking lines to draw */
+  guides: AlignGuide[];
+  /** the existing node a corner landed exactly on, for the snap marker */
+  stuck: { point: Point; entityId: EntityId } | null;
+}
+
+/**
+ * Snapping for a whole dragged selection, rather than a single cursor.
+ *
+ * Dragging a room is how rooms get joined, so the thing that must snap is the
+ * room's own corners against the corners already drawn — not the fingertip.
+ * Two stages, strongest first:
+ *
+ * 1. **Node stick** — if any dragged corner comes within `tol` of an existing
+ *    one, the whole selection shifts so those two coincide EXACTLY. That is
+ *    what makes a dropped room actually weld to the wall it was aimed at
+ *    instead of landing a few millimetres off and reading as a separate wall.
+ * 2. **Alignment tracking** — failing that, each axis is pulled independently
+ *    onto a corner that lines up, with a dashed guide back to it, so a room
+ *    can be lined up flush with a wall it is not touching.
+ *
+ * Pure: the tool decides when to call it and the renderer draws the feedback.
+ */
+export function planDragSnap(
+  doc: DrawingDocument,
+  moving: ReadonlySet<string>,
+  delta: Point,
+  tol: number,
+): DragSnap {
+  const movingNodes: Point[] = [];
+  const fixedNodes: { point: Point; entityId: EntityId }[] = [];
+  for (const e of doc.all()) {
+    if (!hasGrips(e)) continue;
+    if (moving.has(e.id as string)) {
+      for (const g of e.getGrips()) movingNodes.push(g.point);
+    } else {
+      for (const g of e.getGrips())
+        fixedNodes.push({ point: g.point, entityId: e.id });
+    }
+  }
+  if (movingNodes.length === 0 || fixedNodes.length === 0) {
+    return { delta, guides: [], stuck: null };
+  }
+
+  const shifted = (p: Point): Point => ({
+    x: p.x + delta.x,
+    y: p.y + delta.y,
+  });
+
+  let best: {
+    adjust: Point;
+    at: (typeof fixedNodes)[number];
+    d: number;
+  } | null = null;
+  for (const m of movingNodes) {
+    const p = shifted(m);
+    for (const f of fixedNodes) {
+      const d = Math.hypot(f.point.x - p.x, f.point.y - p.y);
+      if (d <= tol && (!best || d < best.d)) {
+        best = {
+          adjust: { x: f.point.x - p.x, y: f.point.y - p.y },
+          at: f,
+          d,
+        };
+      }
+    }
+  }
+  if (best) {
+    return {
+      delta: { x: delta.x + best.adjust.x, y: delta.y + best.adjust.y },
+      guides: [],
+      stuck: { point: best.at.point, entityId: best.at.entityId },
+    };
+  }
+
+  let bestX: { shift: number; from: Point; node: Point } | null = null;
+  let bestY: { shift: number; from: Point; node: Point } | null = null;
+  for (const m of movingNodes) {
+    const p = shifted(m);
+    for (const f of fixedNodes) {
+      const dx = f.point.x - p.x;
+      if (
+        Math.abs(dx) <= tol &&
+        (!bestX || Math.abs(dx) < Math.abs(bestX.shift))
+      )
+        bestX = { shift: dx, from: f.point, node: p };
+      const dy = f.point.y - p.y;
+      if (
+        Math.abs(dy) <= tol &&
+        (!bestY || Math.abs(dy) < Math.abs(bestY.shift))
+      )
+        bestY = { shift: dy, from: f.point, node: p };
+    }
+  }
+  const shiftX = bestX?.shift ?? 0;
+  const shiftY = bestY?.shift ?? 0;
+  const guides: AlignGuide[] = [];
+  const landed = (node: Point): Point => ({
+    x: node.x + shiftX,
+    y: node.y + shiftY,
+  });
+  if (bestX) guides.push({ a: bestX.from, b: landed(bestX.node) });
+  if (bestY) guides.push({ a: bestY.from, b: landed(bestY.node) });
+
+  return {
+    delta: { x: delta.x + shiftX, y: delta.y + shiftY },
+    guides,
+    stuck: null,
+  };
+}
+
 /**
  * Object-snap tracking: if the cursor lines up (within `tol` meters) with an
  * existing corner's X or Y, pull that coordinate onto it and return a dashed
@@ -177,7 +292,10 @@ export function alignGuides(
       if (dy <= tol && (!bestY || dy < bestY.d)) bestY = { at: p, d: dy };
     }
   }
-  const out: Point = { x: bestX ? bestX.at.x : point.x, y: bestY ? bestY.at.y : point.y };
+  const out: Point = {
+    x: bestX ? bestX.at.x : point.x,
+    y: bestY ? bestY.at.y : point.y,
+  };
   const guides: AlignGuide[] = [];
   if (bestX) guides.push({ a: bestX.at, b: { x: out.x, y: out.y } });
   if (bestY) guides.push({ a: bestY.at, b: { x: out.x, y: out.y } });

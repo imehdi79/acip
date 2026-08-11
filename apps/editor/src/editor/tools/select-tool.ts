@@ -13,7 +13,12 @@ import {
   resizeRectRoomTo,
 } from '../rooms';
 import type { RectRoom } from '../rooms';
-import { alignGuides, constrainAngle, cornerAngles } from './drafting';
+import {
+  alignGuides,
+  constrainAngle,
+  cornerAngles,
+  planDragSnap,
+} from './drafting';
 import type { AlignGuide } from './drafting';
 import {
   JOIN_TOLERANCE,
@@ -238,10 +243,13 @@ export class SelectTool implements Tool {
     this.ui.setRubber(null);
     this.ui.setAngles(null);
     this.ui.setGuides(null);
+    this.ui.setSnap(null);
 
     switch (mode.kind) {
       case 'drag': {
-        const delta = sub(e.point, mode.start);
+        // the same snap the ghost previewed, so a room welds to the corner it
+        // was shown catching instead of landing a few millimetres off
+        const delta = this.dragSnap(mode, e.point).delta;
         if (delta.x !== 0 || delta.y !== 0) {
           // moving whole walls carries their joins: attached walls stretch to
           // follow (one undo). Any non-wall in the selection → plain translate.
@@ -450,10 +458,29 @@ export class SelectTool implements Tool {
     return null;
   }
 
+  /**
+   * The translation a drag should apply: the raw cursor delta, pulled onto a
+   * neighbouring corner or an alignment with one. Computed the same way for
+   * the live ghost and for the commit, so what is previewed is what lands.
+   */
+  private dragSnap(mode: Extract<Mode, { kind: 'drag' }>, cursor: Point) {
+    const ctx = this.ctx;
+    const raw = sub(cursor, mode.start);
+    if (!ctx) return { delta: raw, guides: [] as AlignGuide[], stuck: null };
+    return planDragSnap(
+      ctx.doc,
+      new Set(mode.ids as unknown as string[]),
+      raw,
+      // a touch-sized catch: the same tolerance a tap uses to hit a grip
+      this.getTolerance() * 1.5,
+    );
+  }
+
   private updateGhost(cursor: Point): void {
     const ctx = this.ctx;
     if (!ctx || this.mode.kind !== 'drag') return;
-    const delta = sub(cursor, this.mode.start);
+    const snap = this.dragSnap(this.mode, cursor);
+    const delta = snap.delta;
     const m = translation(delta);
     const ghost: Geometry[] = this.mode.ids
       .map((id) => ctx.doc.get(id))
@@ -466,6 +493,18 @@ export class SelectTool implements Tool {
         ghost.push({ kind: 'segment', a: g.a, b: g.b });
     }
     this.ui.setGhost(ghost);
+    // feedback for where it will land: a marker on the corner it has caught,
+    // or dashed tracking lines to whatever it is lining up with
+    this.ui.setGuides(snap.guides.length > 0 ? snap.guides : null);
+    this.ui.setSnap(
+      snap.stuck
+        ? {
+            kind: 'endpoint',
+            point: snap.stuck.point,
+            entityId: snap.stuck.entityId,
+          }
+        : null,
+    );
   }
 
   private applyBoxSelection(
