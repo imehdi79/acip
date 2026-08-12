@@ -78,17 +78,38 @@ function ShapeWizard({ close }: { close: () => void }) {
   const step = steps[index];
   const last = index >= steps.length - 1;
 
-  // On the step, and ONLY on the step: opening, Next and Back move the camera,
-  // a re-render does not. Anything else and a plan the user had panned or
-  // pinched to read would be yanked back under them.
+  // The walk BORROWS the selection to highlight with, and gives it back.
+  //
+  // Declared before the step effect so it captures what the user had before
+  // that one overwrites it — effects run in order. Handing back the original
+  // beats clearing: the walk should cost nothing, and it must not leave the
+  // footer holding whatever shape it happened to stop on, which on a locked
+  // plan would be a shape the user is not allowed to edit at all.
+  useEffect(() => {
+    const before = session.selection.list();
+    return () => {
+      session.selection.clear();
+      for (const id of before) session.selection.add(id);
+    };
+  }, [session]);
+
+  // On the step, and ONLY on the step: opening, Next and Back move the camera
+  // and light up the shape, a re-render does neither. Anything else and a plan
+  // the user had panned or pinched to read would be yanked back under them.
+  //
+  // Selecting is what makes the camera legible: framing a stretch of plan says
+  // "somewhere around here", while the selection colour says "this one" — and
+  // on a wall standing in a row of identical walls that is the whole answer.
   useEffect(() => {
     if (!step) return;
+    session.selection.clear();
+    for (const id of step.entityIds) session.selection.add(id);
     const { minX, minY, maxX, maxY } = step.bounds;
     // a shape with no geometry gives the camera nowhere to go; leaving the plan
     // where it is beats sending the viewport to NaN
     if (![minX, minY, maxX, maxY].every(Number.isFinite)) return;
     ui.requestFit(framing(step.bounds));
-  }, [ui, step]);
+  }, [session, ui, step]);
 
   return (
     <>
@@ -162,9 +183,10 @@ export function Estimator() {
       </Button>
       {/* A reading aid, not a blocking dialog: the default backdrop is opaque
           (--backdrop, black at 50-56%), which greys out the very shape the
-          wizard is naming. Transparent leaves the plan legible; the sheet still
-          reads as a layer above it from its own surface and shadow. */}
-      <Modal.Backdrop variant="transparent">
+          wizard is naming. The variant picks the transparent class and the
+          utility pins it, so no later default or theme can wash the plan out
+          again — the whole feature is being able to SEE the shape. */}
+      <Modal.Backdrop variant="transparent" className="bg-transparent!">
         {/* bottom, so the plan above it stays clear — see framing() */}
         <Modal.Container placement="bottom">
           <Modal.Dialog>

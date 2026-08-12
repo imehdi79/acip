@@ -2,6 +2,7 @@ import type {
   BBox,
   DrawingDocument,
   Entity,
+  EntityId,
   LevelId,
   SpaceInfo,
 } from '@acip/editor-core';
@@ -31,6 +32,12 @@ export interface EstimatorStep {
    * belongs with it — testable from a document, with no React in the way.
    */
   readonly bounds: BBox;
+  /**
+   * What to select so the shape lights up under the camera. One entity for
+   * most steps; a ROOM is derived and cannot itself be selected, so it is its
+   * boundary walls — the same thing a tap inside a room selects.
+   */
+  readonly entityIds: readonly EntityId[];
 }
 
 /**
@@ -68,6 +75,7 @@ function entityStep(entity: Entity): EstimatorStep {
     // effective geometry, so a wall is the box the PLAN draws (openings cut,
     // ends mitered into their junctions) rather than its bare baseline
     bounds: entity.getBounds(),
+    entityIds: [entity.id],
   };
 }
 
@@ -144,6 +152,9 @@ export function estimatorSteps(
         // an unnamed room has nothing to call it but its size
         name: name ? `Room — ${name}` : `Room ${space.netArea.toFixed(1)} m²`,
         bounds: spaceBounds(space),
+        // a room is derived and has no id to select, so it lights up the way a
+        // tap inside one does: through the walls that bound it
+        entityIds: space.boundaryWallIds,
       };
     },
   );

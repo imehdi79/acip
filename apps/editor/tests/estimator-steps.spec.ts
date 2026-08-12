@@ -213,6 +213,39 @@ describe('estimatorSteps', () => {
     });
   });
 
+  /*
+   * Framing a stretch of plan says "somewhere around here"; the selection
+   * colour says "this one". On a wall in a row of identical walls, the second
+   * is the whole answer — so every step has to know what to light up.
+   */
+  describe('says what to light up', () => {
+    it('points an entity step at itself', () => {
+      const walls = drawRoom();
+      const first = estimatorSteps(session.doc, null)[0];
+      expect(first.entityIds).toEqual([walls[0]]);
+    });
+
+    it('points a room at the walls that bound it', () => {
+      const walls = drawRoom();
+      const room = estimatorSteps(session.doc, null).find(
+        (step) => step.kind === 'room',
+      );
+      // a room is derived: there is no room to select, only its sides
+      expect([...(room?.entityIds ?? [])].sort()).toEqual([...walls].sort());
+    });
+
+    it('never points at something that is not in the document', () => {
+      const walls = drawRoom();
+      session.dispatch('DOOR.ADD', { wallId: walls[0], t: 0.5, width: 0.9 });
+      for (const step of estimatorSteps(session.doc, null)) {
+        expect(step.entityIds.length).toBeGreaterThan(0);
+        for (const id of step.entityIds) {
+          expect(session.doc.get(id)).toBeTruthy();
+        }
+      }
+    });
+  });
+
   it('walks one level at a time, and the unassigned shapes on all of them', () => {
     const l1 = session.dispatch<LevelId>('LEVEL.ADD', {
       name: 'L1',

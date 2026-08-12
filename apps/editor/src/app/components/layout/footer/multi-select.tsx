@@ -1,5 +1,5 @@
 import { Button } from '@heroui/react';
-import { IconSquares, IconSquaresFilled } from '@tabler/icons-react';
+import { IconListCheck, IconListCheckFilled } from '@tabler/icons-react';
 import type { EditorUi } from '@/editor/ui-state';
 import { useStoreValue } from '@/editor/store';
 
@@ -18,6 +18,10 @@ import { useStoreValue } from '@/editor/store';
  *
  * Filled and primary when on, like the other footer modes — the bar's whole job
  * on a small screen is saying which mode a tap is about to land in.
+ *
+ * A ticked list rather than stacked squares: two overlapping squares is what
+ * Duplicate already looks like, and two buttons in one bar that read as "two of
+ * something" is one glance too many on a phone.
  */
 export function MultiSelect({ ui }: { ui: EditorUi }) {
   const on = useStoreValue(ui.multiSelect);
@@ -33,7 +37,7 @@ export function MultiSelect({ ui }: { ui: EditorUi }) {
       className={on ? undefined : 'text-foreground'}
       onPress={() => ui.multiSelect.set(!on)}
     >
-      {on ? <IconSquaresFilled /> : <IconSquares />}
+      {on ? <IconListCheckFilled /> : <IconListCheck />}
     </Button>
   );
 }

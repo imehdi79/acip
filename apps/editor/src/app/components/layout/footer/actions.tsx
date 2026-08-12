@@ -6,10 +6,10 @@ import {
   IconArrowForwardUp,
   IconCalculator,
   IconCopy,
+  IconListCheck,
   IconRotateClockwise2,
   IconRulerMeasure,
   IconSignature,
-  IconSquares,
   IconTrash,
 } from '@tabler/icons-react';
 import type { EditorUi } from '@/editor/ui-state';
@@ -136,7 +136,7 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
   {
     id: 'multi-select',
     label: 'Multi-select',
-    icon: <IconSquares />,
+    icon: <IconListCheck />,
     slot: 'start',
     group: 'session',
     iconOnly: true,
