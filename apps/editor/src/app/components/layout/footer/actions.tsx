@@ -9,6 +9,7 @@ import {
   IconRotateClockwise2,
   IconRulerMeasure,
   IconSignature,
+  IconSquares,
   IconTrash,
 } from '@tabler/icons-react';
 import type { EditorUi } from '@/editor/ui-state';
@@ -24,6 +25,7 @@ import { WallMeasurements } from './measurements-modal';
 import { OpeningMeasurements } from './opening-measurements-modal';
 import { RoomName } from './room-name';
 import { MoveMode } from './move-mode';
+import { MultiSelect } from './multi-select';
 import { DangerZone } from './danger-zone';
 import { Estimator } from './estimator';
 import { cycleDoorHang } from './door-hang';
@@ -132,6 +134,30 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     render: () => <Estimator />,
   },
   {
+    id: 'multi-select',
+    label: 'Multi-select',
+    icon: <IconSquares />,
+    slot: 'start',
+    group: 'session',
+    iconOnly: true,
+    permission: 'footer.multiSelect',
+    /*
+     * The second button whose subject is the NEXT tap rather than the current
+     * selection, so it is gated like the danger zone and not like the run at
+     * the end: a toggle that waited for something to be selected could never
+     * start a multi-selection, and one that vanished once the selection was
+     * complete would strand the user in a mode with no way out.
+     *
+     * Last in the session run, nearest the middle — it belongs beside the
+     * things it is a mode for, and the session run is the half of the bar that
+     * does not reflow. In the selection run it would slide sideways under the
+     * thumb every time a tap changed which buttons that run holds, and the tap
+     * that follows a gathered tap is the one you least want landing on Delete.
+     */
+    visible: (ctx) => ctx.view === 'editor',
+    render: ({ ui }) => <MultiSelect ui={ui} />,
+  },
+  {
     id: 'measure',
     label: 'Measurements',
     icon: <IconRulerMeasure />,
@@ -139,9 +165,13 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     group: 'selection',
     iconOnly: true,
     permission: 'footer.measure',
-    // Length, height and thickness are per-wall, so this only makes sense
-    // once the selection is walls and nothing else.
-    visible: (ctx) => ctx.selection === 'wall',
+    // Length, height and thickness are per-wall, so this only makes sense once
+    // the selection is walls and nothing else. A room is exactly that — the
+    // classifier only calls a selection a room when every entity in it is a
+    // wall — and "give this room's walls one thickness" is the commonest
+    // multi-wall edit there is, so it would be perverse to hide the dialog for
+    // the one selection shaped like the job.
+    visible: (ctx) => ctx.selection === 'wall' || ctx.selection === 'room',
     render: ({ session }) => <WallMeasurements session={session} />,
   },
   {

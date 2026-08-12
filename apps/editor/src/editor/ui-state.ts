@@ -138,6 +138,16 @@ export class EditorUi {
    * want when a plan needs rearranging rather than reshaping.
    */
   readonly detachedMove = new ValueStore<boolean>(false);
+  /**
+   * Gather a selection tap by tap: while it is on, a tap ADDS what it hits to
+   * the selection and a second tap on the same thing takes it back out, instead
+   * of replacing everything.
+   *
+   * A phone has no Shift to hold, so without this there is no way at all to put
+   * six walls in front of one dialog. Off by default, and it survives being
+   * switched off — what was gathered is the whole point of gathering it.
+   */
+  readonly multiSelect = new ValueStore<boolean>(false);
   /** entity mark labels ("W3") in the plan — auto-enabled when chat opens */
   readonly showMarks = new ValueStore<boolean>(false);
   /** reveal demolition-phase work (tear-out finishes, openings to remove) on the plan */

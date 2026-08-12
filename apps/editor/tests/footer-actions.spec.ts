@@ -34,7 +34,13 @@ const enabledOf = (c: FooterContext, id: string) =>
 
 describe('resolveFooter', () => {
   it('shows undo and the tools on a fresh plan, with undo greyed out', () => {
-    expect(ids(ctx())).toEqual(['undo', 'danger-zone', 'estimator', 'tools']);
+    expect(ids(ctx())).toEqual([
+      'undo',
+      'danger-zone',
+      'estimator',
+      'multi-select',
+      'tools',
+    ]);
     expect(enabledOf(ctx(), 'undo')).toBe(false);
   });
 
@@ -49,6 +55,7 @@ describe('resolveFooter', () => {
       'redo',
       'danger-zone',
       'estimator',
+      'multi-select',
       'tools',
     ]);
   });
@@ -64,6 +71,7 @@ describe('resolveFooter', () => {
       'undo',
       'danger-zone',
       'estimator',
+      'multi-select',
       'measure',
       'move-mode',
       'duplicate',
@@ -77,6 +85,9 @@ describe('resolveFooter', () => {
       'undo',
       'danger-zone',
       'estimator',
+      'multi-select',
+      // a room IS a wall-only selection, so the wall dialog applies to all of it
+      'measure',
       'rename',
       'move-mode',
       'duplicate',
@@ -100,6 +111,7 @@ describe('resolveFooter', () => {
       'undo',
       'danger-zone',
       'estimator',
+      'multi-select',
       'measure-opening',
       'door-hang',
       'delete',
@@ -110,6 +122,7 @@ describe('resolveFooter', () => {
       'undo',
       'danger-zone',
       'estimator',
+      'multi-select',
       'measure-opening',
       'delete',
     ]);
@@ -134,7 +147,7 @@ describe('resolveFooter', () => {
   it('leaves a mixed selection with delete only', () => {
     expect(
       ids(ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 })),
-    ).toEqual(['undo', 'danger-zone', 'estimator', 'delete']);
+    ).toEqual(['undo', 'danger-zone', 'estimator', 'multi-select', 'delete']);
   });
 
   // `selection` is the entity's own type, so a future type needs no change in
@@ -142,7 +155,7 @@ describe('resolveFooter', () => {
   it('carries an unknown future entity type through as its own kind', () => {
     expect(
       ids(ctx({ selection: 'stair', types: ['stair'], count: 1 })),
-    ).toEqual(['undo', 'danger-zone', 'estimator', 'delete']);
+    ).toEqual(['undo', 'danger-zone', 'estimator', 'multi-select', 'delete']);
   });
 
   it('gives guests nothing, whatever the context', () => {
@@ -159,19 +172,10 @@ describe('resolveFooter', () => {
   // the cluster stays put while a tool is armed — it carries the armed tool
   // AND the way to put it down, so there is no separate Cancel to appear
   it('keeps the tools while a tool is armed', () => {
-    expect(ids(ctx())).toEqual(['undo', 'danger-zone', 'estimator', 'tools']);
-    expect(ids(ctx({ tool: 'wall' }))).toEqual([
-      'undo',
-      'danger-zone',
-      'estimator',
-      'tools',
-    ]);
-    expect(ids(ctx({ tool: 'window' }))).toEqual([
-      'undo',
-      'danger-zone',
-      'estimator',
-      'tools',
-    ]);
+    const bar = ['undo', 'danger-zone', 'estimator', 'multi-select', 'tools'];
+    expect(ids(ctx())).toEqual(bar);
+    expect(ids(ctx({ tool: 'wall' }))).toEqual(bar);
+    expect(ids(ctx({ tool: 'window' }))).toEqual(bar);
   });
 
   it('keeps the tools visible even with a selection, while one is armed', () => {
@@ -289,6 +293,52 @@ describe('resolveFooter', () => {
       expect(new Set(groups).size).toBe(1);
       expect(groups[0]).toBe('selection');
     }
+  });
+
+  /*
+   * Multi-select is the second button whose subject is the next tap rather than
+   * the current selection, so it is gated like the danger zone: always there.
+   * Gated on a selection it could never start one, and dropped once the
+   * selection was complete it would leave the user in a mode with no way out.
+   */
+  it('offers multi-select whatever is selected and whatever is armed', () => {
+    const anywhere = [
+      ctx(),
+      ctx({ selection: 'wall', types: ['wall'], count: 1 }),
+      ctx({ selection: 'wall', types: ['wall'], count: 5 }),
+      ctx({ selection: 'room', types: ['wall'], count: 4 }),
+      ctx({ selection: 'window', types: ['window'], count: 1 }),
+      ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 }),
+      ctx({ tool: 'wall' }),
+    ];
+    for (const c of anywhere) expect(ids(c)).toContain('multi-select');
+  });
+
+  it('keeps multi-select out of the projects view, and away from guests', () => {
+    expect(ids(ctx({ view: 'projects' }))).not.toContain('multi-select');
+    expect(ids(ctx(), guest)).not.toContain('multi-select');
+  });
+
+  // in the half of the bar that does not reflow: the selection run rearranges
+  // itself on every tap, and a mode toggle must not move under the thumb
+  it('puts multi-select in the session run, not the selection one', () => {
+    const toggle = FOOTER_ITEMS.find((item) => item.id === 'multi-select');
+    expect(toggle?.slot).toBe('start');
+    expect(toggle?.group).toBe('session');
+    expect(toggle?.iconOnly).toBe(true);
+  });
+
+  /*
+   * What multi-select is FOR: several walls in front of one dialog. A gathered
+   * set of walls that happens to close a loop classifies as a room, and hiding
+   * the measurements button for exactly that selection would defeat the
+   * commonest multi-wall edit there is.
+   */
+  it('offers the wall measurements dialog for a room too', () => {
+    const room = ctx({ selection: 'room', types: ['wall'], count: 4 });
+    expect(ids(room)).toContain('measure');
+    expect(ids(room)).not.toContain('measure-opening');
+    expect(enabledOf(room, 'measure')).toBe(true);
   });
 
   it('keeps the tools out of the selection run, in the centre', () => {

@@ -17,6 +17,7 @@ export type Permission =
   | 'footer.measureOpening'
   | 'footer.rename'
   | 'footer.moveMode'
+  | 'footer.multiSelect'
   | 'footer.doorHang'
   | 'footer.dangerZone'
   | 'footer.estimator'
@@ -44,6 +45,9 @@ const EDITING_PERMISSIONS: Permission[] = [
   'footer.measureOpening',
   'footer.rename',
   'footer.moveMode',
+  // gathering a selection changes nothing on its own, but everything it is
+  // gathered FOR does — it travels with the editing set rather than ahead of it
+  'footer.multiSelect',
   'footer.doorHang',
   'footer.dangerZone',
   // reading a cost off the plan changes nothing, so this could widen to

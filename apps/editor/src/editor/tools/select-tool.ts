@@ -82,10 +82,10 @@ function rectFrom(fixed: Point, cursor: Point) {
 }
 
 /**
- * Default tool: click select (shift toggles), drag selected entities with a
- * ghost preview, drag grips to stretch, drag on empty space for window
- * (left→right, fully inside) or crossing (right→left, touching) selection.
- * Every mutation is one command → one undo step.
+ * Default tool: click select (shift, or the multi-select mode, toggles), drag
+ * selected entities with a ghost preview, drag grips to stretch, drag on empty
+ * space for window (left→right, fully inside) or crossing (right→left,
+ * touching) selection. Every mutation is one command → one undo step.
  */
 export class SelectTool implements Tool {
   readonly id = 'select';
@@ -100,9 +100,27 @@ export class SelectTool implements Tool {
   activate(ctx: ToolContext): void {
     this.ctx = ctx;
     this.mode = { kind: 'idle' };
-    this.ui.prompt.set(
-      'Select (Shift = toggle, drag = move/box, grips = stretch)',
-    );
+    this.ui.prompt.set(this.restingPrompt());
+  }
+
+  /**
+   * What the tool says for itself when it is not in the middle of anything.
+   * Multi-select changes what a tap does, so it changes the sentence too.
+   */
+  private restingPrompt(): string {
+    return this.ui.multiSelect.get()
+      ? 'Multi-select: tap to add, tap again to remove'
+      : 'Select (Shift = toggle, drag = move/box, grips = stretch)';
+  }
+
+  /**
+   * Does this tap ADD to the selection rather than replace it? Shift is the
+   * desktop answer and the multi-select footer toggle is the touch one — a
+   * phone has no modifier to hold — and they mean exactly the same thing, so
+   * they resolve to the same additive path rather than to two of them.
+   */
+  private additive(e: ToolInputEvent): boolean {
+    return e.modifiers.shift || this.ui.multiSelect.get();
   }
 
   deactivate(): void {
@@ -119,10 +137,20 @@ export class SelectTool implements Tool {
     const ctx = this.ctx;
     if (!ctx) return;
     const tolerance = this.getTolerance();
+    /*
+     * While gathering, a tap picks — it never reshapes. Everything already
+     * gathered is showing its grips, and on a plan those grips sit exactly on
+     * the corners where the next wall to gather meets the last one. With a
+     * fingertip-sized pick radius the grip would win nearly every time, so
+     * reaching for one more wall would stretch the one you already had.
+     */
+    const gathering = this.ui.multiSelect.get();
 
     // 0) a selected rectangular room: dragging a corner resizes the whole
     // room (takes priority over the coincident individual wall grips)
-    const room = detectRectRoom(ctx.doc, ctx.selection.list());
+    const room = gathering
+      ? null
+      : detectRectRoom(ctx.doc, ctx.selection.list());
     if (room) {
       const cs = rectRoomCorners(room);
       for (let i = 0; i < cs.length; i++) {
@@ -135,7 +163,7 @@ export class SelectTool implements Tool {
     }
 
     // 1) grips of selected entities take priority
-    const grip = this.gripAt(e.point, tolerance * 1.5);
+    const grip = gathering ? null : this.gripAt(e.point, tolerance * 1.5);
     if (grip) {
       // anchor at the grip's real position so coincident corners are found
       // exactly, not at the click point (which may be up to tolerance off)
@@ -174,12 +202,18 @@ export class SelectTool implements Tool {
     // 2) entity under cursor → select + arm drag
     const hit = this.topHit(e.point, tolerance);
     if (hit) {
-      if (e.modifiers.shift) {
+      if (this.additive(e)) {
         ctx.selection.toggle(hit.id);
       } else if (!ctx.selection.has(hit.id)) {
         ctx.selection.clear();
         ctx.selection.add(hit.id);
       }
+      // Gathering is picking, not moving. A thumb wanders a few pixels between
+      // taps, and turning that into a drag would carry everything gathered so
+      // far off across the plan. The mode is one tap away from being off, and
+      // switching it off keeps the selection — so the move is still one tap
+      // away too.
+      if (gathering) return;
       const ids = ctx.selection.list();
       if (ids.length > 0)
         this.mode = { kind: 'maybe-drag', start: e.point, ids: [...ids] };
@@ -187,7 +221,7 @@ export class SelectTool implements Tool {
     }
 
     // 3) empty space → box selection
-    this.mode = { kind: 'box', start: e.point, additive: e.modifiers.shift };
+    this.mode = { kind: 'box', start: e.point, additive: this.additive(e) };
   }
 
   onPointerMove(e: ToolInputEvent): void {
@@ -306,9 +340,7 @@ export class SelectTool implements Tool {
             to,
           });
         }
-        this.ui.prompt.set(
-          'Select (Shift = toggle, drag = move/box, grips = stretch)',
-        );
+        this.ui.prompt.set(this.restingPrompt());
         break;
       }
       case 'opening-resize': {
@@ -326,9 +358,7 @@ export class SelectTool implements Tool {
             });
           }
         }
-        this.ui.prompt.set(
-          'Select (Shift = toggle, drag = move/box, grips = stretch)',
-        );
+        this.ui.prompt.set(this.restingPrompt());
         break;
       }
       case 'room-resize':
@@ -337,9 +367,7 @@ export class SelectTool implements Tool {
           mode.room,
           rectFrom(mode.fixed, e.point),
         );
-        this.ui.prompt.set(
-          'Select (Shift = toggle, drag = move/box, grips = stretch)',
-        );
+        this.ui.prompt.set(this.restingPrompt());
         break;
       case 'box':
         this.applyBoxSelection(mode, e.point);
@@ -414,6 +442,12 @@ export class SelectTool implements Tool {
   hitDraggable(point: Point, tolerance: number): boolean {
     const ctx = this.ctx;
     if (!ctx) return false;
+    // Nothing is draggable while gathering, which leaves every gesture that is
+    // not a tap free to pan. Gathering six walls on a 360 px screen means
+    // reaching walls that are off it, and the alternative is a mode where the
+    // plan cannot be moved wherever a finger happens to land on something
+    // already selected.
+    if (this.ui.multiSelect.get()) return false;
     const room = detectRectRoom(ctx.doc, ctx.selection.list());
     if (room) {
       for (const c of rectRoomCorners(room)) {
@@ -444,16 +478,32 @@ export class SelectTool implements Tool {
    * Visible rooms only: tapping inside one selects its walls, and a room whose
    * sides are switched off would hand back a selection of things that are not
    * on the screen.
+   *
+   * And only walls this drag is allowed to edit. A room is derived geometry —
+   * it is not an entity and carries no lock of its own — so tapping inside one
+   * used to hand back its boundary whatever state those walls were in, which is
+   * how a tap in the middle of a locked plan could put the whole original in
+   * front of the Delete button. Selecting is the first step of editing, and the
+   * same predicate that guards a tap ON a wall has to guard a tap between them.
+   *
+   * A part-locked room hands back only the walls you may actually edit. That is
+   * honest: the rect-room detector will then not recognise the remainder as a
+   * room, which is correct — a room you may not edit is not one you can resize.
    */
   private roomWallsAt(point: Point): EntityId[] | null {
     const ctx = this.ctx;
     if (!ctx) return null;
     for (const space of detectSpaces(ctx.doc, null, { visibleOnly: true })) {
       if (
-        space.boundaryWallIds.length > 0 &&
-        pointInLoop(point, space.boundary)
+        space.boundaryWallIds.length === 0 ||
+        !pointInLoop(point, space.boundary)
       )
-        return [...space.boundaryWallIds];
+        continue;
+      const editable = space.boundaryWallIds.filter((id) => {
+        const wall = ctx.doc.get(id);
+        return !!wall && isEntityInteractive(ctx.doc, wall);
+      });
+      return editable.length > 0 ? editable : null;
     }
     return null;
   }
