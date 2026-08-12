@@ -4,10 +4,11 @@ import {
   SpaceTagEntity,
   ValidationError,
   detectSpaces,
+  isEntityVisible,
   point,
   spaceName,
 } from '../src/index.js';
-import type { EntityId, Point } from '../src/index.js';
+import type { EntityId, LayerId, Point } from '../src/index.js';
 
 /** closed loop of walls through the given corners */
 function room(session: EditorSession, corners: Point[]): EntityId[] {
@@ -147,6 +148,56 @@ describe('SPACE.SETNAME', () => {
     reopened.open(saved);
 
     expect(nameOfOnlySpace(reopened)).toBe('Kitchen');
+  });
+
+  test('the name lands on the given layer, and hides with it', () => {
+    // a name is drawing, not a property of the model: written onto a layer
+    // that is later switched off it goes with it, which is what makes a room
+    // renameable as part of a marked-up change instead of over the survey
+    const session = new EditorSession();
+    room(session, square());
+    const markup = session.dispatch<LayerId>('LAYER.ADD', { name: 'markup' });
+    const tagId = session.dispatch<EntityId | null>('SPACE.SETNAME', {
+      at: point(2, 2),
+      name: 'Kitchen',
+      layerId: markup,
+    });
+    const tag = session.doc.get(tagId as EntityId) as SpaceTagEntity;
+    expect(tag.layerId).toBe(markup);
+
+    session.dispatch('LAYER.UPDATE', { id: markup, visible: false });
+    // the model still knows the name; what a VIEW does with a hidden tag is
+    // the view's business (see isEntityVisible)
+    expect(nameOfOnlySpace(session)).toBe('Kitchen');
+    expect(isEntityVisible(session.doc, tag)).toBe(false);
+  });
+
+  test('a name on a locked layer is not renamed or removed', () => {
+    // the lock is the whole of "this drawing is not yours to edit", and the
+    // name is part of the drawing — this was the one path left that could
+    // rewrite a plan every other path refuses to touch
+    const session = new EditorSession();
+    room(session, square());
+    const survey = session.dispatch<LayerId>('LAYER.ADD', { name: 'survey' });
+    session.dispatch('SPACE.SETNAME', {
+      at: point(2, 2),
+      name: 'Kitchen',
+      layerId: survey,
+    });
+    session.dispatch('LAYER.UPDATE', { id: survey, locked: true });
+
+    expect(() =>
+      session.dispatch('SPACE.SETNAME', { at: point(2, 2), name: 'Bathroom' }),
+    ).toThrow(ValidationError);
+    // and clearing it is a change too
+    expect(() =>
+      session.dispatch('SPACE.SETNAME', { at: point(2, 2), name: '' }),
+    ).toThrow(ValidationError);
+    expect(nameOfOnlySpace(session)).toBe('Kitchen');
+
+    session.dispatch('LAYER.UPDATE', { id: survey, locked: false });
+    session.dispatch('SPACE.SETNAME', { at: point(2, 2), name: 'Bathroom' });
+    expect(nameOfOnlySpace(session)).toBe('Bathroom');
   });
 
   test('the tag is not pickable — a tap in the room still finds the room', () => {

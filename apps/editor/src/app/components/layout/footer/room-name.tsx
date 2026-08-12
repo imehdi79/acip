@@ -9,7 +9,12 @@ import {
 } from '@heroui/react';
 import { IconSignature } from '@tabler/icons-react';
 import type { EditorSession, SpaceInfo } from '@acip/editor-core';
-import { classifySelection, spaceName } from '@acip/editor-core';
+import {
+  classifySelection,
+  findSpaceTag,
+  isEntityInteractive,
+  spaceName,
+} from '@acip/editor-core';
 import type { EditorUi } from '@/editor/ui-state';
 
 /** the room the current selection IS, or null when it is not a room */
@@ -39,14 +44,24 @@ export function RoomName({
   );
   const [failed, setFailed] = useState(false);
 
+  // A name already written on a locked layer is part of a drawing this user is
+  // not editing — core refuses to touch it, so the field says so up front
+  // rather than accepting a name and failing on Save.
+  const existing = space ? findSpaceTag(session.doc, space) : null;
+  const locked = !!existing && !isEntityInteractive(session.doc, existing);
+
   const apply = (close: () => void) => {
     if (!space) return;
     const levelId = ui.activeLevelId.get();
+    const layerId = ui.activeLayerId.get();
     try {
       session.dispatch('SPACE.SETNAME', {
         at: space.labelPoint,
         name,
         ...(levelId ? { levelId } : {}),
+        // a name is drawing, and new drawing belongs on the layer being drawn
+        // on — write one inside the danger zone and it hides with the zone
+        ...(layerId ? { layerId } : {}),
       });
     } catch {
       // the walls moved under us and the loop no longer reads as a room
@@ -87,16 +102,21 @@ export function RoomName({
                     </FieldError>
                   </TextField>
                   <p className="mt-2 text-xs text-muted">
-                    {space
-                      ? `${space.netArea.toFixed(1)} m² · clear the name to remove it`
-                      : 'Select a room first.'}
+                    {!space
+                      ? 'Select a room first.'
+                      : locked
+                        ? `${space.netArea.toFixed(1)} m² · this room is named on a locked layer`
+                        : `${space.netArea.toFixed(1)} m² · clear the name to remove it`}
                   </p>
                 </Modal.Body>
                 <Modal.Footer className="flex justify-end gap-2">
                   <Button variant="ghost" onPress={close}>
                     Cancel
                   </Button>
-                  <Button isDisabled={!space} onPress={() => apply(close)}>
+                  <Button
+                    isDisabled={!space || locked}
+                    onPress={() => apply(close)}
+                  >
                     Save
                   </Button>
                 </Modal.Footer>

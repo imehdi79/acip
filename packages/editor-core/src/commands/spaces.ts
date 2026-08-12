@@ -1,9 +1,10 @@
-import type { EntityId, LevelId } from '../common/id.js';
+import type { EntityId, LayerId, LevelId } from '../common/id.js';
 import { ValidationError } from '../common/errors.js';
 import type { Point } from '../geometry/primitives/point.js';
 import { pointInLoop } from '../topology/arrangement.js';
 import { SpaceTagEntity } from '../entities/annotations/space-tag-entity.js';
 import { detectSpaces, findSpaceTag } from '../measurements/spaces.js';
+import { isEntityInteractive } from '../views/index.js';
 import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
 import type { CommandRegistry } from './command-registry.js';
@@ -14,6 +15,7 @@ export interface SetSpaceNameParams {
   at: Point;
   name: string;
   levelId?: LevelId;
+  layerId?: LayerId;
 }
 
 /**
@@ -22,6 +24,16 @@ export interface SetSpaceNameParams {
  * how the space docs always said naming would land. Naming an already-named
  * room renames its tag rather than stacking a second one, and an empty name
  * removes it, so the command is idempotent in both directions.
+ *
+ * The tag lands on `layerId` like any other new entity. A name is a piece of
+ * drawing, not a property of the model: written onto a layer that is later
+ * hidden it goes with it, which is what lets a room be renamed as part of a
+ * marked-up change rather than silently over the plan being marked up.
+ *
+ * An existing tag on a LOCKED layer is not renamed or removed. The lock is the
+ * whole of "this drawing is not yours to edit", and a room's name is part of
+ * the drawing — reaching through it here would be the one way left to rewrite
+ * a plan that every other path refuses to touch.
  */
 export const SetSpaceNameCommand: Command<SetSpaceNameParams, EntityId | null> =
   {
@@ -41,6 +53,9 @@ export const SetSpaceNameCommand: Command<SetSpaceNameParams, EntityId | null> =
         if (raw['levelId'] !== undefined) {
           params.levelId = asId(raw['levelId'], 'levelId') as string as LevelId;
         }
+        if (raw['layerId'] !== undefined) {
+          params.layerId = asId(raw['layerId'], 'layerId') as string as LayerId;
+        }
         return params;
       },
       () =>
@@ -49,6 +64,7 @@ export const SetSpaceNameCommand: Command<SetSpaceNameParams, EntityId | null> =
             at: S.point('any point inside the room to name'),
             name: S.string('room name; empty clears it'),
             levelId: S.id('optional level to detect rooms on; default all'),
+            layerId: S.id('optional layer for the name tag; default active'),
           },
           ['at', 'name'],
         ),
@@ -65,6 +81,11 @@ export const SetSpaceNameCommand: Command<SetSpaceNameParams, EntityId | null> =
       }
 
       const existing = findSpaceTag(ctx.doc, space);
+      if (existing && !isEntityInteractive(ctx.doc, existing)) {
+        throw new ValidationError(
+          `the name of the room at (${params.at.x}, ${params.at.y}) is on a locked layer`,
+        );
+      }
       const name = params.name.trim();
       if (name === '') {
         if (existing) ctx.tx.remove(existing);
@@ -83,6 +104,7 @@ export const SetSpaceNameCommand: Command<SetSpaceNameParams, EntityId | null> =
       // does and survives edits that keep that point inside the room
       tag.setPoint(space.labelPoint);
       tag.baseLevelId = levelId;
+      if (params.layerId !== undefined) tag.layerId = params.layerId;
       ctx.tx.create(tag);
       return tag.id;
     },
