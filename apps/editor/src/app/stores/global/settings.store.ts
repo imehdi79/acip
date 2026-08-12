@@ -18,6 +18,7 @@ export type Permission =
   | 'footer.rename'
   | 'footer.moveMode'
   | 'footer.doorHang'
+  | 'footer.dangerZone'
   | 'header.settings'
   | 'header.profile';
 
@@ -43,6 +44,7 @@ const EDITING_PERMISSIONS: Permission[] = [
   'footer.rename',
   'footer.moveMode',
   'footer.doorHang',
+  'footer.dangerZone',
 ];
 
 /** Signed-out users are treated as `guest`. */

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { EditorSession } from '@acip/editor-core';
 import {
+  IconAlertTriangle,
   IconArrowBackUp,
   IconArrowForwardUp,
   IconCopy,
@@ -22,6 +23,7 @@ import { WallMeasurements } from './measurements-modal';
 import { OpeningMeasurements } from './opening-measurements-modal';
 import { RoomName } from './room-name';
 import { MoveMode } from './move-mode';
+import { DangerZone } from './danger-zone';
 import { cycleDoorHang } from './door-hang';
 import { duplicateSelection } from './duplicate';
 
@@ -85,6 +87,25 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     // nothing to redo until you undo, so it appears rather than sits greyed
     visible: (ctx) => ctx.view === 'editor' && ctx.canRedo,
     run: ({ session }) => void session.redo(),
+  },
+  {
+    id: 'danger-zone',
+    label: 'Danger zone',
+    icon: <IconAlertTriangle />,
+    slot: 'start',
+    iconOnly: true,
+    permission: 'footer.dangerZone',
+    /*
+     * The one editing button with no selection in its gate: it decides what
+     * happens to the NEXT thing drawn, so it has to be reachable before there
+     * is anything to select — and, once on, reachable from wherever the user
+     * ends up, or the mode becomes a trap.
+     *
+     * Ungrouped, and away from the contextual run at the end, so it never
+     * reads as another thing to do to the selection.
+     */
+    visible: (ctx) => ctx.view === 'editor',
+    render: ({ session, ui }) => <DangerZone session={session} ui={ui} />,
   },
   {
     id: 'measure',

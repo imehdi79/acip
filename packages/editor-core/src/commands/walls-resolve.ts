@@ -7,6 +7,7 @@ import { HostedOpeningEntity } from '../entities/architecture/hosted-opening.js'
 import type { OverlapSegment, SegmentPiece } from '../topology/overlaps.js';
 import { isUnchanged, planSegmentOverlaps } from '../topology/overlaps.js';
 import { JOIN_TOLERANCE } from '../topology/junctions.js';
+import { isEntityInteractive, isEntityVisible } from '../views/index.js';
 import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
 import type { CommandRegistry } from './command-registry.js';
@@ -60,6 +61,12 @@ function paramOn(piece: SegmentPiece, p: Point): number {
  *
  * Hosted openings move to whichever resulting piece their centre now sits on,
  * with `t` remapped, so a window never ends up on the wrong side of a new cut.
+ *
+ * A wall on a LOCKED layer — which is how the original plan is protected while
+ * new work is drawn over it — is an obstacle only. New walls still split and deduplicate against it, and it wins any run
+ * they share however late it was added, but it is never itself cut, shortened,
+ * erased or stripped of its openings — this command runs behind every wall
+ * edit, so anything less would rewrite the survey the moment a line crossed it.
  */
 export const ResolveWallsCommand: Command<
   ResolveWallsParams,
@@ -67,7 +74,7 @@ export const ResolveWallsCommand: Command<
 > = {
   name: 'WALL.RESOLVE',
   description:
-    'Split walls at their crossings, tees and overlaps so no stretch of the plan is covered by two walls. Ids are preserved where possible and hosted openings follow their piece. Returns the walls split, created and removed.',
+    'Split walls at their crossings, tees and overlaps so no stretch of the plan is covered by two walls. Ids are preserved where possible and hosted openings follow their piece. Walls on locked layers are fixed obstacles: others split against them but they are never split, shortened or erased. Walls on hidden layers take no part at all. Returns the walls split, created and removed.',
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
@@ -87,6 +94,9 @@ export const ResolveWallsCommand: Command<
     const walls: WallEntity[] = [];
     for (const entity of ctx.doc.all()) {
       if (!(entity instanceof WallEntity)) continue;
+      // a hidden layer hides its walls everywhere — being cut by a wall the
+      // user cannot see would be the worst of the lot
+      if (!isEntityVisible(ctx.doc, entity)) continue;
       if (
         levelId !== null &&
         entity.baseLevelId !== null &&
@@ -98,7 +108,11 @@ export const ResolveWallsCommand: Command<
 
     const segments: OverlapSegment[] = walls.map((wall) => {
       const { a, b } = wall.getBaseline();
-      return { id: wall.id as string, a, b };
+      // resolving IS an edit, so it obeys the same predicate every other edit
+      // path does rather than a rule of its own. Hidden walls are already out,
+      // so what reaches here is locked-but-visible: on the drawing, off limits.
+      const immovable = !isEntityInteractive(ctx.doc, wall);
+      return { id: wall.id as string, a, b, immovable };
     });
     const plans = planSegmentOverlaps(segments, JOIN_TOLERANCE);
     const byId = new Map(walls.map((wall) => [wall.id as string, wall]));

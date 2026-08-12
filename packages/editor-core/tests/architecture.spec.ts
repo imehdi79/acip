@@ -1,16 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  DEFAULT_LAYER_ID,
   DoorEntity,
   EditorSession,
   WallEntity,
   WindowEntity,
   bboxCenter,
+  buildDisplayList,
   loadDocument,
   point,
   saveDocument,
   subtractIntervals,
 } from '../src/index.js';
-import type { DocumentChangeEvent, EntityId } from '../src/index.js';
+import type { DocumentChangeEvent, EntityId, LayerId } from '../src/index.js';
 
 function addWall(
   session: EditorSession,
@@ -228,6 +230,46 @@ describe('WindowEntity — hosted placement and openings', () => {
     }
     const older = loadDocument(data, session.entityTypes);
     expect((older.get(winId) as WindowEntity).thickness).toBeCloseTo(0.05);
+  });
+
+  // an opening on its host's layer would be unhideable on its own; it takes
+  // the layer it is given, exactly as a wall does
+  test('WINDOW.ADD and DOOR.ADD put the opening on the layer asked for', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const layerId = session.dispatch<LayerId>('LAYER.ADD', {
+      name: 'new work',
+    });
+
+    const winId = session.dispatch<EntityId>('WINDOW.ADD', {
+      wallId,
+      t: 0.25,
+      layerId,
+    });
+    const doorId = session.dispatch<EntityId>('DOOR.ADD', {
+      wallId,
+      t: 0.75,
+      layerId,
+    });
+
+    expect(session.doc.get(winId)!.layerId).toBe(layerId);
+    expect(session.doc.get(doorId)!.layerId).toBe(layerId);
+    // the host keeps its own layer — an opening does not drag its wall along
+    expect(session.doc.get(wallId)!.layerId).toBe(DEFAULT_LAYER_ID);
+
+    session.dispatch('LAYER.UPDATE', { id: layerId, visible: false });
+    const shown = buildDisplayList(session.doc, {
+      kind: 'plan',
+      levelId: null,
+    }).map((item) => item.entityId);
+    expect(shown).toEqual([wallId]);
+  });
+
+  test('an opening defaults to the default layer', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const winId = session.dispatch<EntityId>('WINDOW.ADD', { wallId, t: 0.5 });
+    expect(session.doc.get(winId)!.layerId).toBe(DEFAULT_LAYER_ID);
   });
 
   test('document round-trips with wall, window, and relation intact', () => {

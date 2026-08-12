@@ -34,7 +34,7 @@ const enabledOf = (c: FooterContext, id: string) =>
 
 describe('resolveFooter', () => {
   it('shows undo and the tools on a fresh plan, with undo greyed out', () => {
-    expect(ids(ctx())).toEqual(['undo', 'tools']);
+    expect(ids(ctx())).toEqual(['undo', 'danger-zone', 'tools']);
     expect(enabledOf(ctx(), 'undo')).toBe(false);
   });
 
@@ -44,7 +44,12 @@ describe('resolveFooter', () => {
 
   it('appears redo only when there is something to redo', () => {
     expect(ids(ctx())).not.toContain('redo');
-    expect(ids(ctx({ canRedo: true }))).toEqual(['undo', 'redo', 'tools']);
+    expect(ids(ctx({ canRedo: true }))).toEqual([
+      'undo',
+      'redo',
+      'danger-zone',
+      'tools',
+    ]);
   });
 
   it('drops the tools once anything is selected', () => {
@@ -56,6 +61,7 @@ describe('resolveFooter', () => {
   it('gives a wall selection its own edit set instead of insert', () => {
     expect(ids(ctx({ selection: 'wall', types: ['wall'], count: 1 }))).toEqual([
       'undo',
+      'danger-zone',
       'measure',
       'move-mode',
       'duplicate',
@@ -67,6 +73,7 @@ describe('resolveFooter', () => {
     const room = ctx({ selection: 'room', types: ['wall'], count: 4 });
     expect(ids(room)).toEqual([
       'undo',
+      'danger-zone',
       'rename',
       'move-mode',
       'duplicate',
@@ -88,13 +95,14 @@ describe('resolveFooter', () => {
   it('offers the hang toggle for a door alone', () => {
     expect(ids(ctx({ selection: 'door', types: ['door'], count: 1 }))).toEqual([
       'undo',
+      'danger-zone',
       'measure-opening',
       'door-hang',
       'delete',
     ]);
     expect(
       ids(ctx({ selection: 'window', types: ['window'], count: 1 })),
-    ).toEqual(['undo', 'measure-opening', 'delete']);
+    ).toEqual(['undo', 'danger-zone', 'measure-opening', 'delete']);
   });
 
   it('never offers both measurements buttons at once', () => {
@@ -116,7 +124,7 @@ describe('resolveFooter', () => {
   it('leaves a mixed selection with delete only', () => {
     expect(
       ids(ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 })),
-    ).toEqual(['undo', 'delete']);
+    ).toEqual(['undo', 'danger-zone', 'delete']);
   });
 
   // `selection` is the entity's own type, so a future type needs no change in
@@ -124,7 +132,7 @@ describe('resolveFooter', () => {
   it('carries an unknown future entity type through as its own kind', () => {
     expect(
       ids(ctx({ selection: 'stair', types: ['stair'], count: 1 })),
-    ).toEqual(['undo', 'delete']);
+    ).toEqual(['undo', 'danger-zone', 'delete']);
   });
 
   it('gives guests nothing, whatever the context', () => {
@@ -141,9 +149,17 @@ describe('resolveFooter', () => {
   // the cluster stays put while a tool is armed — it carries the armed tool
   // AND the way to put it down, so there is no separate Cancel to appear
   it('keeps the tools while a tool is armed', () => {
-    expect(ids(ctx())).toEqual(['undo', 'tools']);
-    expect(ids(ctx({ tool: 'wall' }))).toEqual(['undo', 'tools']);
-    expect(ids(ctx({ tool: 'window' }))).toEqual(['undo', 'tools']);
+    expect(ids(ctx())).toEqual(['undo', 'danger-zone', 'tools']);
+    expect(ids(ctx({ tool: 'wall' }))).toEqual([
+      'undo',
+      'danger-zone',
+      'tools',
+    ]);
+    expect(ids(ctx({ tool: 'window' }))).toEqual([
+      'undo',
+      'danger-zone',
+      'tools',
+    ]);
   });
 
   it('keeps the tools visible even with a selection, while one is armed', () => {
@@ -183,6 +199,33 @@ describe('resolveFooter', () => {
       ids(ctx({ selection: 'window', types: ['window'], count: 1 })),
     ).not.toContain('move-mode');
     expect(ids(ctx())).not.toContain('move-mode');
+  });
+
+  // the danger zone decides what happens to the NEXT thing drawn, so unlike
+  // every other editing button it cannot wait for a selection to exist
+  it('offers the danger zone whatever is selected and whatever is armed', () => {
+    const anywhere = [
+      ctx(),
+      ctx({ selection: 'wall', types: ['wall'], count: 1 }),
+      ctx({ selection: 'room', types: ['wall'], count: 4 }),
+      ctx({ selection: 'window', types: ['window'], count: 1 }),
+      ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 }),
+      ctx({ tool: 'wall' }),
+    ];
+    for (const c of anywhere) expect(ids(c)).toContain('danger-zone');
+  });
+
+  it('keeps the danger zone out of the projects view, and away from guests', () => {
+    expect(ids(ctx({ view: 'projects' }))).not.toContain('danger-zone');
+    expect(ids(ctx(), guest)).not.toContain('danger-zone');
+  });
+
+  // it belongs with undo/redo, not with the things done to a selection — and
+  // ungrouped, so it never joins that run
+  it('sits at the start on its own', () => {
+    const zone = FOOTER_ITEMS.find((item) => item.id === 'danger-zone')!;
+    expect(zone.slot).toBe('start');
+    expect(zone.group).toBeUndefined();
   });
 
   /*

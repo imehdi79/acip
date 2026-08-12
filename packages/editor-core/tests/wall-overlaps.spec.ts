@@ -5,10 +5,11 @@ import {
   WallEntity,
   WindowEntity,
   detectSpaces,
+  isUnchanged,
   planSegmentOverlaps,
   point,
 } from '../src/index.js';
-import type { EntityId, OverlapSegment, Point } from '../src/index.js';
+import type { EntityId, LayerId, OverlapSegment, Point } from '../src/index.js';
 
 const seg = (
   id: string,
@@ -125,6 +126,67 @@ describe('planSegmentOverlaps', () => {
       seg('c', 4, -1, 4, 1),
     ]);
     expect(plans[0].keep).toHaveLength(3);
+  });
+});
+
+describe('planSegmentOverlaps — immovable segments', () => {
+  const fixed = (
+    id: string,
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+  ): OverlapSegment => ({ ...seg(id, ax, ay, bx, by), immovable: true });
+
+  test('an immovable segment is not cut, but still cuts the other one', () => {
+    expect(kept([fixed('a', 0, 0, 4, 0), seg('b', 2, -2, 2, 2)])).toEqual([
+      'a:0.00,0.00→4.00,0.00',
+      'b:2.00,-2.00→2.00,0.00',
+      'b:2.00,0.00→2.00,2.00',
+    ]);
+  });
+
+  test('an immovable host is not cut by a tee landing on its body', () => {
+    const plans = plan([fixed('a', 0, 0, 4, 0), seg('b', 2, 0, 2, 3)]);
+    expect(plans[0].keep).toEqual([{ a: point(0, 0), b: point(4, 0) }]);
+    expect(plans[0].dropped).toEqual([]);
+    expect(plans[1].keep).toHaveLength(1);
+  });
+
+  test('the immovable segment wins a shared run even when it comes second', () => {
+    const plans = plan([seg('newer', 0, 0, 4, 0), fixed('older', 0, 0, 4, 0)]);
+    expect(plans[0].keep).toEqual([]);
+    expect(plans[0].dropped).toHaveLength(1);
+    expect(plans[1].keep).toHaveLength(1);
+  });
+
+  test('a partial overlap is given up by the movable segment', () => {
+    // the 4..6 run belongs to the immovable segment, whichever came first
+    expect(kept([seg('A', 0, 0, 6, 0), fixed('B', 4, 0, 10, 0)])).toEqual([
+      'A:0.00,0.00→4.00,0.00',
+      'B:4.00,0.00→10.00,0.00',
+    ]);
+  });
+
+  test('a movable segment swallowed by an immovable one keeps nothing', () => {
+    const plans = plan([fixed('A', 0, 0, 10, 0), seg('B', 3, 0, 7, 0)]);
+    expect(plans[0].keep).toHaveLength(1);
+    expect(plans[1].keep).toEqual([]);
+  });
+
+  test('two immovable segments over each other are both left whole', () => {
+    const plans = plan([fixed('A', 0, 0, 6, 0), fixed('B', 4, 0, 10, 0)]);
+    expect(plans.every(isUnchanged)).toBe(true);
+  });
+
+  test('immovable: false is the plain case, byte for byte', () => {
+    const flagged = plan([
+      { ...seg('a', 0, 0, 4, 0), immovable: false },
+      { ...seg('b', 2, -2, 2, 2), immovable: false },
+    ]);
+    expect(flagged).toEqual(
+      plan([seg('a', 0, 0, 4, 0), seg('b', 2, -2, 2, 2)]),
+    );
   });
 });
 
@@ -329,6 +391,94 @@ describe('WALL.RESOLVE', () => {
     expect(spans(session)).toEqual(before);
   });
 
+  test('protects a locked wall while still splitting the new one', () => {
+    const session = new EditorSession();
+    const layer = session.dispatch<LayerId>('LAYER.ADD', { name: 'original' });
+    const original = addWall(session, point(0, 0), point(4, 0), {
+      layerId: layer,
+    });
+    session.dispatch('LAYER.UPDATE', { id: layer, locked: true });
+    const drawn = addWall(session, point(2, -2), point(2, 2));
+
+    const result = session.dispatch<Result>('WALL.RESOLVE', {});
+
+    expect(result.split).toEqual([drawn]);
+    expect(result.created).toHaveLength(1);
+    expect(result.removed).toEqual([]);
+    expect((session.doc.get(original) as WallEntity).getBaseline()).toEqual({
+      a: point(0, 0),
+      b: point(4, 0),
+    });
+    expect(spans(session)).toEqual(['0,0→4,0', '2,-2→2,0', '2,0→2,2']);
+  });
+
+  test('the same crossing splits both walls once the layer is unlocked', () => {
+    const session = new EditorSession();
+    const layer = session.dispatch<LayerId>('LAYER.ADD', { name: 'original' });
+    addWall(session, point(0, 0), point(4, 0), { layerId: layer });
+    addWall(session, point(2, -2), point(2, 2));
+
+    session.dispatch('WALL.RESOLVE', {});
+
+    expect(spans(session)).toEqual([
+      '0,0→2,0',
+      '2,-2→2,0',
+      '2,0→2,2',
+      '2,0→4,0',
+    ]);
+  });
+
+  test('a wall drawn over a locked one is the duplicate that goes', () => {
+    const session = new EditorSession();
+    const drawn = addWall(session, point(0, 0), point(4, 0));
+    // added SECOND, so document order would hand the run to the other one
+    const layer = session.dispatch<LayerId>('LAYER.ADD', { name: 'original' });
+    const original = addWall(session, point(0, 0), point(4, 0), {
+      layerId: layer,
+    });
+    session.dispatch('LAYER.UPDATE', { id: layer, locked: true });
+
+    const result = session.dispatch<Result>('WALL.RESOLVE', {});
+
+    expect(result.removed).toEqual([drawn]);
+    expect(walls(session)).toHaveLength(1);
+    expect(session.doc.get(original)).not.toBeNull();
+  });
+
+  test('a locked wall keeps its window where it was', () => {
+    const session = new EditorSession();
+    const layer = session.dispatch<LayerId>('LAYER.ADD', { name: 'original' });
+    const original = addWall(session, point(0, 0), point(4, 0), {
+      layerId: layer,
+    });
+    const window = session.dispatch<EntityId>('WINDOW.ADD', {
+      wallId: original,
+      t: 0.75, // x=3, the far side of the cut a resolve would otherwise make
+      width: 0.8,
+    });
+    session.dispatch('LAYER.UPDATE', { id: layer, locked: true });
+    addWall(session, point(2, 0), point(2, 3));
+
+    session.dispatch('WALL.RESOLVE', {});
+
+    expect(session.doc.relations.dependentsOf(original)).toEqual([window]);
+    expect((session.doc.get(window) as WindowEntity).t).toBeCloseTo(0.75, 6);
+  });
+
+  test('two locked walls overlapping each other are left alone', () => {
+    const session = new EditorSession();
+    const layer = session.dispatch<LayerId>('LAYER.ADD', { name: 'original' });
+    addWall(session, point(0, 0), point(6, 0), { layerId: layer });
+    addWall(session, point(4, 0), point(10, 0), { layerId: layer });
+    session.dispatch('LAYER.UPDATE', { id: layer, locked: true });
+    const before = spans(session);
+
+    const result = session.dispatch<Result>('WALL.RESOLVE', {});
+
+    expect(result).toEqual({ split: [], created: [], removed: [] });
+    expect(spans(session)).toEqual(before);
+  });
+
   test('scopes to a level when asked', () => {
     const session = new EditorSession();
     const level = session.dispatch<string>('LEVEL.ADD', {
@@ -342,5 +492,46 @@ describe('WALL.RESOLVE', () => {
     // still sees them (they appear on every level, as plan views query)
     const result = session.dispatch<Result>('WALL.RESOLVE', { levelId: level });
     expect(result.split).toHaveLength(1);
+  });
+
+  test('a wall on a hidden layer takes no part at all', () => {
+    const session = new EditorSession();
+    const layer = session.dispatch<LayerId>('LAYER.ADD', {
+      name: 'hidden work',
+    });
+    const buried = addWall(session, point(2, -2), point(2, 2), {
+      layerId: layer,
+    });
+    session.dispatch('LAYER.UPDATE', { id: layer, visible: false });
+    const crossing = addWall(session, point(0, 0), point(4, 0));
+
+    const result = session.dispatch<Result>('WALL.RESOLVE', {});
+
+    // being cut by something you cannot see is the worst outcome of the three
+    expect(result).toEqual({ split: [], created: [], removed: [] });
+    expect((session.doc.get(crossing) as WallEntity).getBaseline()).toEqual({
+      a: point(0, 0),
+      b: point(4, 0),
+    });
+    expect((session.doc.get(buried) as WallEntity).getBaseline()).toEqual({
+      a: point(2, -2),
+      b: point(2, 2),
+    });
+  });
+
+  test('the same wall revealed again does split the crosser', () => {
+    const session = new EditorSession();
+    const layer = session.dispatch<LayerId>('LAYER.ADD', { name: 'work' });
+    addWall(session, point(2, -2), point(2, 2), { layerId: layer });
+    session.dispatch('LAYER.UPDATE', { id: layer, visible: false });
+    addWall(session, point(0, 0), point(4, 0));
+    session.dispatch('WALL.RESOLVE', {});
+
+    // show it, and it starts counting — hidden was the only reason it did not
+    session.dispatch('LAYER.UPDATE', { id: layer, visible: true });
+    const result = session.dispatch<Result>('WALL.RESOLVE', {});
+
+    expect(result.split.length).toBeGreaterThan(0);
+    expect(walls(session)).toHaveLength(4);
   });
 });

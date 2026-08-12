@@ -87,6 +87,19 @@ export interface UnderlayState {
   readonly opacity: number;
 }
 
+/**
+ * Danger-zone mode, while it is on. Everything drawn goes to `layerId` and
+ * draws in its red; the rest of the plan is locked, so it can be seen and
+ * snapped to but not edited.
+ *
+ * `returnLayerId` is the layer that was active before, so leaving the zone puts
+ * new work back where it was going rather than on whatever was last used.
+ */
+export interface DangerZoneState {
+  readonly layerId: LayerId;
+  readonly returnLayerId: LayerId | null;
+}
+
 const EMPTY_OVERLAY: OverlayState = {
   snap: null,
   rubber: null,
@@ -109,6 +122,8 @@ export class EditorUi {
   readonly activeLevelId = new ValueStore<LevelId | null>(null);
   /** null = default layer; new entities land on the active layer */
   readonly activeLayerId = new ValueStore<LayerId | null>(null);
+  /** null = off. See danger-zone.ts — nothing else may write this. */
+  readonly dangerZone = new ValueStore<DangerZoneState | null>(null);
   readonly overlay = new ValueStore<OverlayState>(EMPTY_OVERLAY);
   /** true while the drafter agent is running (input disabled, viewport live) */
   readonly agentBusy = new ValueStore<boolean>(false);

@@ -146,10 +146,15 @@ export class HostedPlaceTool implements Tool {
     this.ui.setPending(null);
     if (!ctx || !press) return;
     const span = planOpeningSpan(press.baseline, press.from, e.point);
+    // the active layer decides where new work lands, and an opening is new
+    // work like any other — without this one it would be stranded on the
+    // default layer while the walls around it went somewhere else
+    const layerId = this.ui.activeLayerId.get();
     ctx.dispatch(this.commandName, {
       wallId: press.wallId,
       t: span.t,
       ...(span.width === null ? {} : { width: span.width }),
+      ...(layerId ? { layerId } : {}),
     });
     this.arm();
   }

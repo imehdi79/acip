@@ -85,6 +85,7 @@ export interface AddWindowParams {
   width?: number;
   sill?: number;
   height?: number;
+  layerId?: LayerId;
 }
 
 export const AddWindowCommand: Command<AddWindowParams, EntityId> = {
@@ -94,13 +95,16 @@ export const AddWindowCommand: Command<AddWindowParams, EntityId> = {
   params: paramsSchema(
     (input) => {
       const raw = (input ?? {}) as Record<string, unknown>;
-      return {
+      const params: AddWindowParams = {
         wallId: asId(raw['wallId'], 'wallId'),
         t: asNumber(raw['t'], 't'),
         width: asPositive(raw['width'], 'width', 1.0),
         sill: asNumber(raw['sill'], 'sill', 0.9),
         height: asPositive(raw['height'], 'height', 1.2),
       };
+      if (raw['layerId'] !== undefined)
+        params.layerId = asId(raw['layerId'], 'layerId') as string as LayerId;
+      return params;
     },
     () =>
       S.object(
@@ -112,6 +116,7 @@ export const AddWindowCommand: Command<AddWindowParams, EntityId> = {
             'sill height above the wall base in meters (default 0.9)',
           ),
           height: S.number('opening height in meters (default 1.2)'),
+          layerId: S.id('optional layer id; defaults to the active layer'),
         },
         ['wallId', 't'],
       ),
@@ -128,6 +133,9 @@ export const AddWindowCommand: Command<AddWindowParams, EntityId> = {
     if (params.width !== undefined) window.width = params.width;
     if (params.sill !== undefined) window.sill = params.sill;
     if (params.height !== undefined) window.height = params.height;
+    // an opening carries its own layer rather than inheriting the host's:
+    // hiding a batch of work has to take the windows in it with the walls
+    if (params.layerId !== undefined) window.layerId = params.layerId;
     ctx.tx.create(window);
     ctx.tx.attach(host.id, window.id, 0, {});
     return window.id;
@@ -140,6 +148,7 @@ export interface AddDoorParams {
   width?: number;
   height?: number;
   swing?: 1 | -1;
+  layerId?: LayerId;
 }
 
 export const AddDoorCommand: Command<AddDoorParams, EntityId> = {
@@ -161,6 +170,8 @@ export const AddDoorCommand: Command<AddDoorParams, EntityId> = {
         }
         params.swing = raw['swing'];
       }
+      if (raw['layerId'] !== undefined)
+        params.layerId = asId(raw['layerId'], 'layerId') as string as LayerId;
       return params;
     },
     () =>
@@ -174,6 +185,7 @@ export const AddDoorCommand: Command<AddDoorParams, EntityId> = {
             [1, -1],
             'swing direction relative to the wall normal (default 1)',
           ),
+          layerId: S.id('optional layer id; defaults to the active layer'),
         },
         ['wallId', 't'],
       ),
@@ -190,6 +202,7 @@ export const AddDoorCommand: Command<AddDoorParams, EntityId> = {
     if (params.width !== undefined) door.width = params.width;
     if (params.height !== undefined) door.height = params.height;
     if (params.swing !== undefined) door.swing = params.swing;
+    if (params.layerId !== undefined) door.layerId = params.layerId;
     ctx.tx.create(door);
     ctx.tx.attach(host.id, door.id, 0, {});
     return door.id;
