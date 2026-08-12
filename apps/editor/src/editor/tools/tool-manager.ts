@@ -63,9 +63,14 @@ export class ToolManager {
   }
 
   /**
-   * Would the active tool grab a drag at this point? Used by touch input to
-   * choose between dragging (move/resize) and panning the canvas — only the
-   * select tool opts in; drawing tools stay tap-to-place so one finger pans.
+   * Would the active tool grab a drag at this point? Touch input asks before
+   * deciding whether a one-finger drag belongs to the tool or pans the canvas.
+   *
+   * A tool that does not answer gets a pan, which is the right default and a
+   * silent bug for any tool whose gesture IS a drag — the pen shipped without
+   * an answer and drew nothing on a phone. Select answers per point (only over
+   * something draggable, so empty ground pans); the drawing tools answer yes
+   * whenever they are armed, and navigation moves to two fingers.
    */
   hitDraggable(point: Point, tolerance: number): boolean {
     const tool = this.active as (Tool & Partial<Draggable>) | null;

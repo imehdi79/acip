@@ -150,6 +150,95 @@ describe('the pen', () => {
     expect(ink?.[0].length).toBeGreaterThan(1);
   });
 
+  /*
+   * Touch decides between "the tool wants this drag" and "one finger pans the
+   * canvas" by asking the tool, and a tool that does not answer gets a pan. The
+   * pen did not answer, so on a phone a stroke panned the plan and drew
+   * nothing — the one gesture the tool has was the one it never received.
+   */
+  it('claims the drag, so a finger draws instead of panning', () => {
+    expect(runtime.tools.hitDraggable(point(9, 9), 0.2)).toBe(true);
+    // anywhere on the plan: under a pen there is nothing to be over
+    expect(runtime.tools.hitDraggable(point(-40, 12), 0.2)).toBe(true);
+  });
+
+  it('is the select tool that leaves a finger free to pan', () => {
+    // select claims a drag only when something draggable is under the finger,
+    // which is what makes empty ground pan instead
+    runtime.tools.useById('select');
+    expect(runtime.tools.hitDraggable(point(9, 9), 0.2)).toBe(false);
+  });
+
+  describe('guidance', () => {
+    /** part-way through a stroke, still pressed */
+    const halfDrawn = () => {
+      runtime.tools.pointerDown({
+        point: point(0, 0),
+        modifiers: NO_MODS,
+        snapped: false,
+      });
+      for (let i = 1; i <= 20; i++) {
+        runtime.tools.pointerMove({
+          point: { x: i * 0.25, y: i % 2 ? 0.02 : -0.02 },
+          modifiers: NO_MODS,
+          snapped: false,
+        });
+      }
+    };
+
+    it('previews the walls the ink will become, before the finger lifts', () => {
+      halfDrawn();
+      const ghost = runtime.ui.overlay.get().ghost;
+
+      // freehand is the one tool where what you draw is not what you get, so
+      // the straightened result is shown while there is still time to change it
+      expect(ghost).not.toBeNull();
+      expect(ghost?.length).toBeGreaterThan(0);
+      expect(ghost?.[0].kind).toBe('segment');
+    });
+
+    it('reads out the length of the run under the finger', () => {
+      halfDrawn();
+      const rubber = runtime.ui.overlay.get().rubber;
+
+      expect(rubber).not.toBeNull();
+      const drawn = Math.hypot(
+        (rubber?.b.x ?? 0) - (rubber?.a.x ?? 0),
+        (rubber?.b.y ?? 0) - (rubber?.a.y ?? 0),
+      );
+      // the readout measures the RECOGNIZED wall, not the wandering ink
+      expect(drawn).toBeCloseTo(5, 1);
+    });
+
+    it('takes the guidance away with the stroke', () => {
+      halfDrawn();
+      runtime.tools.pointerUp({
+        point: point(5, 0),
+        modifiers: NO_MODS,
+        snapped: false,
+      });
+
+      const overlay = runtime.ui.overlay.get();
+      expect(overlay.ghost).toBeNull();
+      expect(overlay.rubber).toBeNull();
+      expect(overlay.ink).toBeNull();
+      // and the wall it was previewing is now on the plan
+      expect(walls()).toHaveLength(1);
+    });
+
+    it('drops the ghost when Escape throws the stroke away', () => {
+      halfDrawn();
+      runtime.tools.key('Escape');
+
+      const overlay = runtime.ui.overlay.get();
+      expect(overlay.ghost).toBeNull();
+      expect(overlay.ink).toBeNull();
+      expect(walls()).toHaveLength(0);
+      // the pen is still in hand — Escape drops the stroke, not the tool
+      expect(runtime.ui.activeToolId.get()).toBe(PEN_TOOL);
+    });
+  });
+
   it('draws onto the danger zone layer like every other tool', () => {
     // the pen is a way of asking for a wall, so a wall it draws inside the zone
     // is zone work — red, and gone when the zone closes
