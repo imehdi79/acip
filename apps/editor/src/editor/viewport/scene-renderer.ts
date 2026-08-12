@@ -12,15 +12,13 @@ import {
   WallEntity,
   buildDisplayList,
   detectSpaces,
-  findSpaceTag,
   hasGrips,
-  isEntityVisible,
-  spaceName,
   wallAssemblyStrips,
 } from '@acip/editor-core';
 import type { Viewport2D } from './viewport2d';
 import type { OverlayState, UnderlayState } from '../ui-state';
 import { formatLength } from '../units';
+import { visibleSpaceName } from '../spaces';
 import { planDimensions } from './wall-dimensions';
 
 const COLORS = {
@@ -489,11 +487,8 @@ export function drawScene(
     for (const space of spaces) {
       if (space.netArea * viewport.scale * viewport.scale < 40 * 40) continue;
       const at = viewport.toScreen(space.labelPoint);
-      // named rooms read as a name first: the area drops to a caption under it.
-      // A tag on a hidden layer is a hidden name — the room keeps its area.
-      const tag = findSpaceTag(doc, space);
-      const name =
-        tag && isEntityVisible(doc, tag) ? spaceName(doc, space) : '';
+      // named rooms read as a name first: the area drops to a caption under it
+      const name = visibleSpaceName(doc, space);
       const area = `${space.netArea.toFixed(1)} m²`;
       if (name) {
         ctx.font = '600 13px system-ui, sans-serif';
