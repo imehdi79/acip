@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Modal } from '@heroui/react';
-import { IconCalculator } from '@tabler/icons-react';
+import {
+  IconArrowsMaximize,
+  IconCalculator,
+  IconFocusCentered,
+} from '@tabler/icons-react';
 import type { BBox } from '@acip/editor-core';
 import { useSession } from '@/editor/session-context';
 import { useRuntime } from '@/editor/runtime';
@@ -74,6 +78,21 @@ function ShapeWizard({ close }: { close: () => void }) {
     [session, levelId],
   );
   const [index, setIndex] = useState(0);
+  /**
+   * Frame the WHOLE drawing instead of the shape.
+   *
+   * Close on the shape is the right default — the walk is about one shape at a
+   * time — but a wall filling the screen is a wall with nothing around it, and
+   * "which one of these is W7" is a question only the rest of the plan answers.
+   *
+   * It is a MODE, not a one-off button: it survives Next and Back, because
+   * someone reading the plan in context wants to stay in context, and having to
+   * press it again on every step would make it useless for exactly the walk it
+   * is meant to help with. In this framing the selection colour is all that
+   * says which shape is being named, which is why the step effect below sets
+   * the selection either way.
+   */
+  const [wholePlan, setWholePlan] = useState(false);
 
   const step = steps[index];
   const last = index >= steps.length - 1;
@@ -93,9 +112,10 @@ function ShapeWizard({ close }: { close: () => void }) {
     };
   }, [session]);
 
-  // On the step, and ONLY on the step: opening, Next and Back move the camera
-  // and light up the shape, a re-render does neither. Anything else and a plan
-  // the user had panned or pinched to read would be yanked back under them.
+  // On the step and on the framing, and on nothing else: opening, Next, Back
+  // and the toggle move the camera and light up the shape, a re-render does
+  // neither. Anything else and a plan the user had panned or pinched to read
+  // would be yanked back under them.
   //
   // Selecting is what makes the camera legible: framing a stretch of plan says
   // "somewhere around here", while the selection colour says "this one" — and
@@ -104,12 +124,20 @@ function ShapeWizard({ close }: { close: () => void }) {
     if (!step) return;
     session.selection.clear();
     for (const id of step.entityIds) session.selection.add(id);
+    // no argument = the whole drawing, worked out by the viewport from what is
+    // actually visible. No skirt here on purpose: the plan is being shown whole
+    // and a shape near its bottom edge may sit under the sheet, but padding the
+    // frame down would shrink the very thing this mode is for.
+    if (wholePlan) {
+      ui.requestFit();
+      return;
+    }
     const { minX, minY, maxX, maxY } = step.bounds;
     // a shape with no geometry gives the camera nowhere to go; leaving the plan
     // where it is beats sending the viewport to NaN
     if (![minX, minY, maxX, maxY].every(Number.isFinite)) return;
     ui.requestFit(framing(step.bounds));
-  }, [session, ui, step]);
+  }, [session, ui, step, wholePlan]);
 
   return (
     <>
@@ -133,9 +161,31 @@ function ShapeWizard({ close }: { close: () => void }) {
         )}
       </Modal.Body>
       <Modal.Footer className="flex justify-between gap-2">
-        <Button variant="ghost" onPress={close}>
-          Close
-        </Button>
+        {/* the camera control shares the row with Close instead of taking one
+            of its own: the sheet is parked over the plan it is describing, so a
+            second row would cost more drawing than the button is worth */}
+        <div className="flex gap-2">
+          <Button variant="ghost" onPress={close}>
+            Close
+          </Button>
+          {step && (
+            <Button
+              isIconOnly
+              aria-label={
+                wholePlan ? 'Showing the whole plan' : 'Show the whole plan'
+              }
+              aria-pressed={wholePlan}
+              // filled accent against the sheet's ghost buttons when on: which
+              // framing you are in is the one thing this button has to say, and
+              // the icon says it twice — the shape in a frame, or the plan
+              // pushed out to its corners
+              variant={wholePlan ? 'primary' : 'ghost'}
+              onPress={() => setWholePlan((on) => !on)}
+            >
+              {wholePlan ? <IconArrowsMaximize /> : <IconFocusCentered />}
+            </Button>
+          )}
+        </div>
         {step && (
           <div className="flex gap-2">
             <Button
