@@ -18,6 +18,7 @@ export type Permission =
   | 'footer.rename'
   | 'footer.moveMode'
   | 'footer.multiSelect'
+  | 'footer.freeDraw'
   | 'footer.doorHang'
   | 'footer.dangerZone'
   | 'footer.estimator'
@@ -48,6 +49,8 @@ const EDITING_PERMISSIONS: Permission[] = [
   // gathering a selection changes nothing on its own, but everything it is
   // gathered FOR does — it travels with the editing set rather than ahead of it
   'footer.multiSelect',
+  // the pen draws walls, so it is exactly as privileged as the wall tool
+  'footer.freeDraw',
   'footer.doorHang',
   'footer.dangerZone',
   // reading a cost off the plan changes nothing, so this could widen to

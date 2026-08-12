@@ -5,6 +5,7 @@ import { ToolManager } from './tools/tool-manager';
 import { SelectTool } from './tools/select-tool';
 import { ChainedDrawTool } from './tools/chained-draw-tool';
 import { HostedPlaceTool } from './tools/hosted-place-tool';
+import { SketchTool } from './tools/sketch-tool';
 import { OVERLAPPING_COMMANDS, withResolvedWalls } from './walls';
 
 export interface EditorRuntime {
@@ -73,6 +74,19 @@ export function createRuntime(session: EditorSession): EditorRuntime {
   );
   tools.register(
     new HostedPlaceTool('door', 'DOOR', 'DOOR.ADD', ui, tolerance, finish),
+  );
+  // free draw: same walls, same params as the wall tool — ink is a way of
+  // asking for a wall, not a different kind of thing to end up with
+  tools.register(
+    new SketchTool(ui, () => {
+      const levelId = ui.activeLevelId.get();
+      const wallTypes = session.doc.types.list('wall');
+      return {
+        ...activeLayer(),
+        ...(levelId ? { levelId } : {}),
+        ...(wallTypes.length > 0 ? { typeId: wallTypes[0].id } : {}),
+      };
+    }),
   );
   tools.useById('select');
 

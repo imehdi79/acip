@@ -88,6 +88,13 @@ export function Tools({
     else useTool(item.id, session, ui, tools);
   };
 
+  const showMenu = folded.length > 0 && !armed && canInsert;
+  // Nothing to show: a tool from OUTSIDE this cluster is armed (the pen lives
+  // in the bar's session run), or the user may not insert anything. The slack
+  // still has to be held open, or the end of the bar slides across — but an
+  // empty ButtonGroup renders as a stray pill, so only the spacer stays.
+  if (shown.length === 0 && !showMenu) return <div className="flex-1" />;
+
   return (
     <div className="flex flex-1 items-center">
       {/* the spacers are what move the group: at rest they share the slack and
@@ -109,7 +116,7 @@ export function Tools({
             {item.icon}
           </Button>
         ))}
-        {folded.length > 0 && !armed && canInsert && (
+        {showMenu && (
           <Dropdown>
             <Button
               isIconOnly

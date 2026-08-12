@@ -5,6 +5,7 @@ import {
   type FooterApi,
 } from '@/app/components/layout/footer/actions';
 import type { FooterContext } from '@/app/components/layout/footer/context';
+import { INSERT_ITEMS } from '@/app/components/layout/footer/insert';
 import { can, type User } from '@/app/stores/global/settings.store';
 
 /**
@@ -39,6 +40,7 @@ describe('resolveFooter', () => {
       'danger-zone',
       'estimator',
       'multi-select',
+      'pen',
       'tools',
     ]);
     expect(enabledOf(ctx(), 'undo')).toBe(false);
@@ -56,6 +58,7 @@ describe('resolveFooter', () => {
       'danger-zone',
       'estimator',
       'multi-select',
+      'pen',
       'tools',
     ]);
   });
@@ -72,6 +75,7 @@ describe('resolveFooter', () => {
       'danger-zone',
       'estimator',
       'multi-select',
+      'pen',
       'measure',
       'move-mode',
       'duplicate',
@@ -86,6 +90,7 @@ describe('resolveFooter', () => {
       'danger-zone',
       'estimator',
       'multi-select',
+      'pen',
       // a room IS a wall-only selection, so the wall dialog applies to all of it
       'measure',
       'rename',
@@ -112,6 +117,7 @@ describe('resolveFooter', () => {
       'danger-zone',
       'estimator',
       'multi-select',
+      'pen',
       'measure-opening',
       'door-hang',
       'delete',
@@ -123,6 +129,7 @@ describe('resolveFooter', () => {
       'danger-zone',
       'estimator',
       'multi-select',
+      'pen',
       'measure-opening',
       'delete',
     ]);
@@ -147,7 +154,14 @@ describe('resolveFooter', () => {
   it('leaves a mixed selection with delete only', () => {
     expect(
       ids(ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 })),
-    ).toEqual(['undo', 'danger-zone', 'estimator', 'multi-select', 'delete']);
+    ).toEqual([
+      'undo',
+      'danger-zone',
+      'estimator',
+      'multi-select',
+      'pen',
+      'delete',
+    ]);
   });
 
   // `selection` is the entity's own type, so a future type needs no change in
@@ -155,7 +169,14 @@ describe('resolveFooter', () => {
   it('carries an unknown future entity type through as its own kind', () => {
     expect(
       ids(ctx({ selection: 'stair', types: ['stair'], count: 1 })),
-    ).toEqual(['undo', 'danger-zone', 'estimator', 'multi-select', 'delete']);
+    ).toEqual([
+      'undo',
+      'danger-zone',
+      'estimator',
+      'multi-select',
+      'pen',
+      'delete',
+    ]);
   });
 
   it('gives guests nothing, whatever the context', () => {
@@ -172,7 +193,14 @@ describe('resolveFooter', () => {
   // the cluster stays put while a tool is armed — it carries the armed tool
   // AND the way to put it down, so there is no separate Cancel to appear
   it('keeps the tools while a tool is armed', () => {
-    const bar = ['undo', 'danger-zone', 'estimator', 'multi-select', 'tools'];
+    const bar = [
+      'undo',
+      'danger-zone',
+      'estimator',
+      'multi-select',
+      'pen',
+      'tools',
+    ];
     expect(ids(ctx())).toEqual(bar);
     expect(ids(ctx({ tool: 'wall' }))).toEqual(bar);
     expect(ids(ctx({ tool: 'window' }))).toEqual(bar);
@@ -326,6 +354,42 @@ describe('resolveFooter', () => {
     expect(toggle?.slot).toBe('start');
     expect(toggle?.group).toBe('session');
     expect(toggle?.iconOnly).toBe(true);
+  });
+
+  /*
+   * The pen is asked for by name: "free draw at all times". The tools cluster
+   * it would otherwise belong to disappears the moment anything is selected,
+   * so the pen sits in the session run instead — reachable mid-edit, with a
+   * selection, and while another tool is armed.
+   */
+  it('offers the pen whatever is selected and whatever is armed', () => {
+    const anywhere = [
+      ctx(),
+      ctx({ selection: 'wall', types: ['wall'], count: 1 }),
+      ctx({ selection: 'room', types: ['wall'], count: 4 }),
+      ctx({ tool: 'wall' }),
+      ctx({ tool: 'sketch' }),
+    ];
+    for (const c of anywhere) expect(ids(c)).toContain('pen');
+  });
+
+  it('keeps the pen out of the projects view, and away from guests', () => {
+    expect(ids(ctx({ view: 'projects' }))).not.toContain('pen');
+    expect(ids(ctx(), guest)).not.toContain('pen');
+  });
+
+  it('puts the pen in the session run, and never in the tools cluster', () => {
+    const pen = FOOTER_ITEMS.find((item) => item.id === 'pen');
+    expect(pen?.slot).toBe('start');
+    expect(pen?.group).toBe('session');
+    expect(pen?.iconOnly).toBe(true);
+  });
+
+  // the cluster in the middle carries the tools it owns; the pen is not one of
+  // them, so an armed pen must not leave it claiming to hold something
+  it('keeps the tools cluster from claiming the pen', () => {
+    expect(ids(ctx({ tool: 'sketch' }))).toContain('tools');
+    expect(INSERT_ITEMS.map((item) => item.id)).not.toContain('sketch');
   });
 
   /*

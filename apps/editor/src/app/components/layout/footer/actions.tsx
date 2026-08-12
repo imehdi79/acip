@@ -7,6 +7,7 @@ import {
   IconCalculator,
   IconCopy,
   IconListCheck,
+  IconPencil,
   IconRotateClockwise2,
   IconRulerMeasure,
   IconSignature,
@@ -26,6 +27,7 @@ import { OpeningMeasurements } from './opening-measurements-modal';
 import { RoomName } from './room-name';
 import { MoveMode } from './move-mode';
 import { MultiSelect } from './multi-select';
+import { Pen } from './pen';
 import { DangerZone } from './danger-zone';
 import { Estimator } from './estimator';
 import { cycleDoorHang } from './door-hang';
@@ -156,6 +158,20 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
      */
     visible: (ctx) => ctx.view === 'editor',
     render: ({ ui }) => <MultiSelect ui={ui} />,
+  },
+  {
+    id: 'pen',
+    label: 'Free draw',
+    icon: <IconPencil />,
+    slot: 'start',
+    group: 'session',
+    iconOnly: true,
+    permission: 'footer.freeDraw',
+    // In the session run and never gated on the selection: the pen is meant to
+    // be there at any moment, and the tools cluster it would otherwise live in
+    // comes and goes with what is selected.
+    visible: (ctx) => ctx.view === 'editor',
+    render: ({ ui, tools }) => <Pen ui={ui} tools={tools} />,
   },
   {
     id: 'measure',
