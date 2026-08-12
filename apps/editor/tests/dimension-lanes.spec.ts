@@ -154,17 +154,18 @@ describe('layOutDimensions', () => {
 });
 
 describe('planDimensions over a real document', () => {
-  it('measures each distinct span once', () => {
+  it('measures every wall of a room, not one of each opposing pair', () => {
+    // opposite edges read the same number, but they are two different walls in
+    // two different places: hiding one leaves a plan whose sides are unlabelled
     const ids = room(0, 0, 6, 4);
-    // opposite edges of a rectangle measure the same thing, so two will do
     const shown = dims().map((d) => d.entityId);
-    expect(shown).toHaveLength(2);
-    for (const id of shown) expect(ids).toContain(id);
+    expect(shown).toHaveLength(4);
+    for (const id of ids) expect(shown).toContain(id);
     expect(
       dims()
         .map((d) => Math.round(d.length * 100) / 100)
         .sort(),
-    ).toEqual([4.3, 6.3]);
+    ).toEqual([4.3, 4.3, 6.3, 6.3]);
   });
 
   it('gives a clean room its dimensions in the first lane', () => {
@@ -222,8 +223,7 @@ describe('planDimensions over a real document', () => {
     const ids = room(0, 0, 6, 4);
     session.dispatch('ENTITY.ERASE', { ids: [ids[0]] });
     expect(dims().map((d) => d.entityId)).not.toContain(ids[0]);
-    // the remaining top wall, plus one of the two equal sides
-    expect(dims()).toHaveLength(2);
+    expect(dims()).toHaveLength(3);
   });
 
   it('returns nothing for the 3D view', () => {
@@ -238,19 +238,21 @@ describe('planDimensions over a real document', () => {
 });
 
 describe('duplicate spans', () => {
-  it('keeps one dimension when two walls measure the same span', () => {
-    // opposite sides of a band: same x range, same length, different y
+  it('keeps both sides of a band, each with its own number', () => {
+    // same x range, same length, different y — two walls, in two places, and
+    // a plan that labelled only one of them would leave the other bare
     addWall(point(0, 0), point(6, 0));
     addWall(point(0, 4), point(6, 4));
-    expect(dims()).toHaveLength(1);
+    expect(dims()).toHaveLength(2);
   });
 
-  it('sees past the caps: same wall positions, one dimension', () => {
+  it('prints the different lengths of walls that share a span', () => {
     // A room hung under a band. Its top wall is a piece of that band, capped
     // square where the band runs through and stopping short at the tee; its
     // bottom wall miters at both corners. Same 0..4.5 span, DRAWN extents 4.65
-    // and 4.80 — the very pair that showed up on one room in the plan.
-    // Reading placement off the baseline is what collapses them.
+    // and 4.80 — walls of genuinely different lengths, so both numbers belong
+    // on the plan. Collapsing them left the middle of a stacked pair of rooms
+    // claiming a length that was not its own.
     addWall(point(0, 0), point(8, 0));
     addWall(point(0, -4), point(4.5, -4));
     addWall(point(4.5, -4), point(4.5, 0));
@@ -264,18 +266,19 @@ describe('duplicate spans', () => {
       const { a, b } = w.getBaseline();
       return `${Math.min(a.x, b.x)}..${Math.max(a.x, b.x)}@${a.y}`;
     };
-    // the two walls really are capped differently — that is the trap
-    const extents = walls
-      .filter((w) => span(w) === '0..4.5@0' || span(w) === '0..4.5@-4')
+    const pair = walls.filter(
+      (w) => span(w) === '0..4.5@0' || span(w) === '0..4.5@-4',
+    );
+    const extents = pair
       .map((w) => Math.round(wallExtent(w)!.length * 100) / 100)
       .sort();
     expect(extents).toEqual([4.65, 4.8]);
 
-    // and yet only one dimension covers that stretch of x
-    const onX = dims().filter(
-      (d) => Math.abs(d.a.x - 0) < 0.35 && Math.abs(d.length - 4.5) < 0.4,
-    );
-    expect(onX).toHaveLength(1);
+    // both are drawn, each against its own wall
+    const shown = dims().filter((d) => pair.some((w) => w.id === d.entityId));
+    expect(shown.map((d) => Math.round(d.length * 100) / 100).sort()).toEqual([
+      4.65, 4.8,
+    ]);
   });
 
   it('keeps both when the spans differ, even slightly', () => {
@@ -297,19 +300,58 @@ describe('duplicate spans', () => {
     expect(dims()).toHaveLength(2);
   });
 
+  /*
+   * The plan that broke it: two rooms stacked in a column with a third beside
+   * the upper one. The column's three horizontal walls run between the same
+   * two x values at three heights, and measure 4.65, 4.35 and 4.80 — the outer
+   * two miter into their corners, the middle one is teed into by the sides
+   * running through it. Sharing a span made them one dimension, so the plan
+   * showed a single number and swapped WHICH number as the selection moved.
+   */
+  it('numbers all three walls of a stacked column, each with its own length', () => {
+    const top = addWall(point(0, 10), point(4.5, 10));
+    const mid = addWall(point(0, 5), point(4.5, 5));
+    const bot = addWall(point(0, 0), point(4.5, 0));
+    addWall(point(0, 0), point(0, 10));
+    addWall(point(4.5, 0), point(4.5, 10));
+    // the room beside the upper one, so the middle wall is a real divider
+    addWall(point(4.5, 10), point(8, 10));
+    addWall(point(8, 10), point(8, 5));
+    addWall(point(8, 5), point(4.5, 5));
+
+    const of = (id: EntityId) => dims().find((d) => d.entityId === id);
+    expect(of(top)?.length).toBeCloseTo(4.65, 2);
+    expect(of(mid)?.length).toBeCloseTo(4.35, 2);
+    expect(of(bot)?.length).toBeCloseTo(4.8, 2);
+
+    // and selecting one changes nothing but the highlight
+    const picked = planDimensions(session.doc, PLAN, new Set([mid]));
+    expect(
+      picked.filter((d) => [top, mid, bot].includes(d.entityId)),
+    ).toHaveLength(3);
+    expect(picked.find((d) => d.entityId === mid)?.selected).toBe(true);
+  });
+
   it('is the selected wall that survives a de-duplication', () => {
-    const lower = addWall(point(0, 0), point(6, 0));
-    const upper = addWall(point(0, 4), point(6, 4));
+    // one wall drawn straight over another, which is what the danger zone does
+    // on purpose: same line, same stretch of it, so only one number can be read
+    const under = addWall(point(0, 0), point(6, 0));
+    const over = addWall(point(0, 0), point(6, 0));
 
-    // with nothing selected the first one wins, stably
-    expect(dims()[0].entityId).toBe(lower);
+    expect(dims()).toHaveLength(1);
+    // whichever wins does so stably — the layout must not flicker between them
+    const winner = dims()[0].entityId;
+    expect([under, over]).toContain(winner);
+    expect(dims()[0].entityId).toBe(winner);
 
-    // selecting the other one hands it the dimension, so the highlight has
+    // selecting either hands it the dimension, so the highlight always has
     // something to land on
-    const picked = planDimensions(session.doc, PLAN, new Set([upper]));
-    expect(picked).toHaveLength(1);
-    expect(picked[0].entityId).toBe(upper);
-    expect(picked[0].selected).toBe(true);
+    for (const id of [under, over]) {
+      const picked = planDimensions(session.doc, PLAN, new Set([id]));
+      expect(picked).toHaveLength(1);
+      expect(picked[0].entityId).toBe(id);
+      expect(picked[0].selected).toBe(true);
+    }
   });
 });
 

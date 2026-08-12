@@ -159,22 +159,17 @@ interface Placed {
 const dotp = (p: Point, q: Point): number => p.x * q.x + p.y * q.y;
 
 /**
- * Which of two dimensions measuring the same run gets to print its number.
+ * Which of two dimensions in the same place gets to print its number. Only
+ * called for a pair already known to sit on one line over one stretch of it,
+ * so the two are drawn on top of each other and only one number can be read.
  *
  * A selection always wins, so the highlight has something to land on. Failing
- * that, only walls in the SAME PLACE are compared, and the longer extent wins:
- * a wall drawn over the locked original plan takes its own caps and so falls
- * short of it by a miter, and the shorter label would read as a dimension
- * stopping before the linework it measures.
- *
- * Walls that merely measure the same span from different offsets — a room's
- * two sides — are left to the stable first-in-order winner. Length says
- * nothing about them, and swapping which side carries the label every time a
- * far-off corner changes its cap would be worse than either choice.
+ * that the longer extent wins: a wall drawn over the locked original plan
+ * takes its own caps and so falls short of it by a miter, and the shorter
+ * label would read as a dimension stopping before the linework it measures.
  */
 function beats(item: Placed, other: Placed): boolean {
   if (item.dim.selected !== other.dim.selected) return item.dim.selected;
-  if (Math.abs(item.offset - other.offset) > SPAN_EPSILON) return false;
   return item.dim.length > other.dim.length + SPAN_EPSILON;
 }
 
@@ -249,15 +244,22 @@ export function layOutDimensions(
       (p.dim.entityId < q.dim.entityId ? -1 : 1),
   );
 
-  // Two walls measuring the SAME span on the same axis print the same number
-  // twice — a room's top and bottom edge, or the left and right walls of a
-  // band. One of them is enough, and a selected wall keeps its own so the
-  // highlight always has something to land on.
+  // Two walls in the SAME PLACE print the same number twice — one wall drawn
+  // over another, which is what the danger zone does on purpose. One of them
+  // is enough.
+  //
+  // Same place means the same line as well as the same stretch of it. Sharing
+  // a span is not sharing a position: the three horizontal walls of a stacked
+  // pair of rooms run between the same two x values at three different heights
+  // and measure three different lengths, and dropping two of them left the
+  // plan claiming its middle wall was as long as its outer one. Parallel
+  // neighbours are what LANES are for — they are drawn, spaced apart.
   const unique: Placed[] = [];
   for (const item of placed) {
     const twin = unique.findIndex(
       (other) =>
         Math.abs(other.axis - item.axis) <= PARALLEL_TOLERANCE &&
+        Math.abs(other.offset - item.offset) <= SPAN_EPSILON &&
         Math.abs(other.from - item.from) <= SPAN_EPSILON &&
         Math.abs(other.to - item.to) <= SPAN_EPSILON,
     );

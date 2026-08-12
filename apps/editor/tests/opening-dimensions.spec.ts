@@ -159,18 +159,17 @@ describe('openings in the lane layout', () => {
     expect(dimOf(upper)).toBeDefined();
   });
 
-  it('prints one number when two openings measure the same span', () => {
-    // aligned windows on the two sides of a room, the opening version of a
-    // room's top and bottom wall measuring the same width: saying 1.20 twice
-    // is what the de-duplication exists to stop
+  it('gives each of two aligned openings its own number', () => {
+    // windows facing each other across a room: the same 1.20 over the same
+    // stretch of x, but in two walls metres apart. One label between them
+    // would leave a window on the plan with no width against it.
     const walls = room(0, 0, 8, 5);
     const lower = addWindow(walls[0], 0.4, 1.2);
     const upper = addWindow(walls[2], 0.6, 1.2);
 
-    expect(dims().filter((d) => d.kind === 'opening')).toHaveLength(1);
+    expect(dims().filter((d) => d.kind === 'opening')).toHaveLength(2);
     expect(dimOf(lower)).toBeDefined();
-    // and selecting the other one hands it that dimension, so the highlight
-    // always has something to land on
+    expect(dimOf(upper)).toBeDefined();
     expect(dimOf(upper, new Set([upper]))?.selected).toBe(true);
   });
 });
