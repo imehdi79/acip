@@ -129,67 +129,6 @@ describe('planSegmentOverlaps', () => {
   });
 });
 
-describe('planSegmentOverlaps — immovable segments', () => {
-  const fixed = (
-    id: string,
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number,
-  ): OverlapSegment => ({ ...seg(id, ax, ay, bx, by), immovable: true });
-
-  test('an immovable segment is not cut, but still cuts the other one', () => {
-    expect(kept([fixed('a', 0, 0, 4, 0), seg('b', 2, -2, 2, 2)])).toEqual([
-      'a:0.00,0.00→4.00,0.00',
-      'b:2.00,-2.00→2.00,0.00',
-      'b:2.00,0.00→2.00,2.00',
-    ]);
-  });
-
-  test('an immovable host is not cut by a tee landing on its body', () => {
-    const plans = plan([fixed('a', 0, 0, 4, 0), seg('b', 2, 0, 2, 3)]);
-    expect(plans[0].keep).toEqual([{ a: point(0, 0), b: point(4, 0) }]);
-    expect(plans[0].dropped).toEqual([]);
-    expect(plans[1].keep).toHaveLength(1);
-  });
-
-  test('the immovable segment wins a shared run even when it comes second', () => {
-    const plans = plan([seg('newer', 0, 0, 4, 0), fixed('older', 0, 0, 4, 0)]);
-    expect(plans[0].keep).toEqual([]);
-    expect(plans[0].dropped).toHaveLength(1);
-    expect(plans[1].keep).toHaveLength(1);
-  });
-
-  test('a partial overlap is given up by the movable segment', () => {
-    // the 4..6 run belongs to the immovable segment, whichever came first
-    expect(kept([seg('A', 0, 0, 6, 0), fixed('B', 4, 0, 10, 0)])).toEqual([
-      'A:0.00,0.00→4.00,0.00',
-      'B:4.00,0.00→10.00,0.00',
-    ]);
-  });
-
-  test('a movable segment swallowed by an immovable one keeps nothing', () => {
-    const plans = plan([fixed('A', 0, 0, 10, 0), seg('B', 3, 0, 7, 0)]);
-    expect(plans[0].keep).toHaveLength(1);
-    expect(plans[1].keep).toEqual([]);
-  });
-
-  test('two immovable segments over each other are both left whole', () => {
-    const plans = plan([fixed('A', 0, 0, 6, 0), fixed('B', 4, 0, 10, 0)]);
-    expect(plans.every(isUnchanged)).toBe(true);
-  });
-
-  test('immovable: false is the plain case, byte for byte', () => {
-    const flagged = plan([
-      { ...seg('a', 0, 0, 4, 0), immovable: false },
-      { ...seg('b', 2, -2, 2, 2), immovable: false },
-    ]);
-    expect(flagged).toEqual(
-      plan([seg('a', 0, 0, 4, 0), seg('b', 2, -2, 2, 2)]),
-    );
-  });
-});
-
 /* -------------------------------------------------------------------------- */
 /* WALL.RESOLVE — the same rules applied to real entities                      */
 /* -------------------------------------------------------------------------- */
@@ -391,25 +330,25 @@ describe('WALL.RESOLVE', () => {
     expect(spans(session)).toEqual(before);
   });
 
-  test('protects a locked wall while still splitting the new one', () => {
+  test('a locked wall takes no part: neither wall is touched', () => {
     const session = new EditorSession();
     const layer = session.dispatch<LayerId>('LAYER.ADD', { name: 'original' });
     const original = addWall(session, point(0, 0), point(4, 0), {
       layerId: layer,
     });
     session.dispatch('LAYER.UPDATE', { id: layer, locked: true });
-    const drawn = addWall(session, point(2, -2), point(2, 2));
+    addWall(session, point(2, -2), point(2, 2));
 
     const result = session.dispatch<Result>('WALL.RESOLVE', {});
 
-    expect(result.split).toEqual([drawn]);
-    expect(result.created).toHaveLength(1);
-    expect(result.removed).toEqual([]);
+    // the survey is untouched, and the new wall stays ONE wall: it is not the
+    // locked plan's business to break it in half
+    expect(result).toEqual({ split: [], created: [], removed: [] });
     expect((session.doc.get(original) as WallEntity).getBaseline()).toEqual({
       a: point(0, 0),
       b: point(4, 0),
     });
-    expect(spans(session)).toEqual(['0,0→4,0', '2,-2→2,0', '2,0→2,2']);
+    expect(spans(session)).toEqual(['0,0→4,0', '2,-2→2,2']);
   });
 
   test('the same crossing splits both walls once the layer is unlocked', () => {
@@ -428,21 +367,55 @@ describe('WALL.RESOLVE', () => {
     ]);
   });
 
-  test('a wall drawn over a locked one is the duplicate that goes', () => {
+  test('a wall drawn straight over a locked one survives as drawn', () => {
     const session = new EditorSession();
-    const drawn = addWall(session, point(0, 0), point(4, 0));
-    // added SECOND, so document order would hand the run to the other one
     const layer = session.dispatch<LayerId>('LAYER.ADD', { name: 'original' });
     const original = addWall(session, point(0, 0), point(4, 0), {
       layerId: layer,
     });
     session.dispatch('LAYER.UPDATE', { id: layer, locked: true });
+    // marking up a wall to be rebuilt: the new line goes exactly where the old
+    // one is, and BOTH have to be there — one to build, one to tear out
+    const drawn = addWall(session, point(0, 0), point(4, 0));
 
     const result = session.dispatch<Result>('WALL.RESOLVE', {});
 
-    expect(result.removed).toEqual([drawn]);
-    expect(walls(session)).toHaveLength(1);
+    expect(result).toEqual({ split: [], created: [], removed: [] });
+    expect(session.doc.get(drawn)).not.toBeNull();
     expect(session.doc.get(original)).not.toBeNull();
+    expect(walls(session)).toHaveLength(2);
+  });
+
+  test('a wall drawn along PART of a locked one is not chopped at its end', () => {
+    const session = new EditorSession();
+    const layer = session.dispatch<LayerId>('LAYER.ADD', { name: 'original' });
+    addWall(session, point(0, 0), point(6, 0), { layerId: layer });
+    session.dispatch('LAYER.UPDATE', { id: layer, locked: true });
+    addWall(session, point(4, 0), point(10, 0));
+
+    session.dispatch('WALL.RESOLVE', {});
+
+    // one wall 4→10, not 4→6 plus 6→10: the survey's endpoints are not cuts
+    expect(spans(session)).toEqual(['0,0→6,0', '4,0→10,0']);
+  });
+
+  test('walls the user CAN edit still resolve against each other as before', () => {
+    const session = new EditorSession();
+    const layer = session.dispatch<LayerId>('LAYER.ADD', { name: 'original' });
+    addWall(session, point(0, 0), point(6, 0), { layerId: layer });
+    session.dispatch('LAYER.UPDATE', { id: layer, locked: true });
+    // two of the user's own, overlapping: the ordinary rule still applies
+    addWall(session, point(0, 2), point(6, 2));
+    addWall(session, point(4, 2), point(10, 2));
+
+    session.dispatch('WALL.RESOLVE', {});
+
+    expect(spans(session)).toEqual([
+      '0,0→6,0',
+      '0,2→4,2',
+      '4,2→6,2',
+      '6,2→10,2',
+    ]);
   });
 
   test('a locked wall keeps its window where it was', () => {

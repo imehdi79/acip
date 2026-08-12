@@ -159,6 +159,26 @@ interface Placed {
 const dotp = (p: Point, q: Point): number => p.x * q.x + p.y * q.y;
 
 /**
+ * Which of two dimensions measuring the same run gets to print its number.
+ *
+ * A selection always wins, so the highlight has something to land on. Failing
+ * that, only walls in the SAME PLACE are compared, and the longer extent wins:
+ * a wall drawn over the locked original plan takes its own caps and so falls
+ * short of it by a miter, and the shorter label would read as a dimension
+ * stopping before the linework it measures.
+ *
+ * Walls that merely measure the same span from different offsets — a room's
+ * two sides — are left to the stable first-in-order winner. Length says
+ * nothing about them, and swapping which side carries the label every time a
+ * far-off corner changes its cap would be worse than either choice.
+ */
+function beats(item: Placed, other: Placed): boolean {
+  if (item.dim.selected !== other.dim.selected) return item.dim.selected;
+  if (Math.abs(item.offset - other.offset) > SPAN_EPSILON) return false;
+  return item.dim.length > other.dim.length + SPAN_EPSILON;
+}
+
+/**
  * Assign each dimension a side and a lane so that no two of them are drawn on
  * top of each other.
  *
@@ -242,9 +262,7 @@ export function layOutDimensions(
         Math.abs(other.to - item.to) <= SPAN_EPSILON,
     );
     if (twin < 0) unique.push(item);
-    else if (item.dim.selected && !unique[twin].dim.selected) {
-      unique[twin] = item;
-    }
+    else if (beats(item, unique[twin])) unique[twin] = item;
   }
 
   const done: Placed[] = [];

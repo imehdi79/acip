@@ -50,7 +50,7 @@ import type {
 import { cutsOpening } from '../base/capabilities.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
 import type { Transaction } from '../../document/history/transaction.js';
-import { isEntityVisible } from '../../views/index.js';
+import { isEntityInteractive, isEntityVisible } from '../../views/index.js';
 
 /** which end of a wall's baseline — `start` is `a`, `end` is `b` */
 export type WallEndSide = 'start' | 'end';
@@ -153,16 +153,24 @@ export class WallEntity
    * An empty list means a free end. Proximity alone never counts: a wall
    * passing 5 cm away is not joined to anything.
    *
-   * A join holds only between two walls that are both on the drawing. It is
-   * not bookkeeping — it changes how BOTH walls are drawn — so a hidden wall
-   * neither takes a join nor gives one: mitering a wall against something the
-   * user cannot see is a corner cut to fit a ghost. Hidden hides everywhere,
-   * and this is one of the everywheres.
+   * Two rules about WHICH walls count, both about the fact that a join is not
+   * bookkeeping — it changes how the wall is drawn:
+   *
+   * - a hidden wall neither takes a join nor gives one. Mitering a corner to
+   *   fit a wall the user cannot see is a corner cut to fit a ghost.
+   * - a LOCKED wall joins only other locked walls. Locking is how the original
+   *   survey is held still while new work is drawn over it, and a miter is
+   *   mutual: without this rule, drawing a wall onto the plan would re-cut the
+   *   plan's own corners. New work still joins the locked plan — that is what
+   *   makes it meet cleanly — the influence simply runs one way.
    */
   getJoinsAt(which: WallEndSide): WallJoin[] {
     const doc = this.doc;
     if (!doc || this.getLength() < JOIN_TOLERANCE) return [];
     if (!isEntityVisible(doc, this)) return [];
+    // both walls are visible by the time this is used, so "interactive" here
+    // reads as "unlocked": editable work adapts to the plan, never the reverse
+    const held = !isEntityInteractive(doc, this);
     const p = which === 'start' ? this.a : this.b;
     const nearby: WallEntity[] = [];
     for (const other of doc.queryBBox(
@@ -170,6 +178,7 @@ export class WallEntity
     )) {
       if (other === this || !(other instanceof WallEntity)) continue;
       if (!isEntityVisible(doc, other)) continue;
+      if (held && isEntityInteractive(doc, other)) continue;
       const bl = other.getBaseline();
       if (distance(bl.a, bl.b) < JOIN_TOLERANCE) continue;
       nearby.push(other);

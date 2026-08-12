@@ -11,7 +11,7 @@ import type { EditorRuntime } from '@/editor/runtime';
 import { enterDangerZone, leaveDangerZone } from '@/editor/danger-zone';
 import { duplicateSelection } from '@/app/components/layout/footer/duplicate';
 import { planDimensions } from '@/editor/viewport/wall-dimensions';
-import { planDragSnap } from '@/editor/tools/drafting';
+import { alignGuides, planDragSnap } from '@/editor/tools/drafting';
 import { resizeWallLength } from '@/editor/rooms';
 
 /**
@@ -230,6 +230,101 @@ describe('what the zone still lets you do', () => {
     draw(point(6.05, 4.05), point(9, 4));
 
     expect(zoneWalls()[0]).toBeDefined();
+  });
+
+  /**
+   * Drawing a new wall ALONG an existing one is the everyday mark-up: a wall
+   * to be rebuilt, a partition to be thickened. The plan-wide "each stretch
+   * of wall exists once" repair used to run across the lock and treat the new
+   * line as the duplicate, so it was deleted the moment it was drawn.
+   */
+  describe('drawing over the plan itself', () => {
+    it('keeps a wall drawn straight onto one of the plan’s own', () => {
+      const plan = survey();
+      draw(point(0, 0), point(6, 0)); // exactly over the original bottom wall
+
+      const mine = zoneWalls();
+      expect(mine).toHaveLength(1);
+      expect(mine[0].getBaseline()).toEqual({ a: point(0, 0), b: point(6, 0) });
+      expect(survey()).toBe(plan); // and the original is still whole
+    });
+
+    it('keeps one drawn along PART of one, in one piece', () => {
+      const plan = survey();
+      draw(point(3, 4), point(9, 4)); // half on the top wall, half past its end
+
+      const mine = zoneWalls();
+      expect(mine).toHaveLength(1);
+      // not chopped at x=6 where the survey happens to stop
+      expect(mine[0].getLength()).toBeCloseTo(6, 6);
+      expect(survey()).toBe(plan);
+    });
+
+    it('keeps one drawn across the plan whole, and does not split the plan', () => {
+      const plan = survey();
+      draw(point(3, -2), point(3, 6));
+
+      expect(zoneWalls()).toHaveLength(1);
+      expect(survey()).toBe(plan);
+    });
+
+    it('does not re-cut the corners of the wall it is drawn over', () => {
+      // a miter is MUTUAL: the overlay shares both endpoints with the plan, so
+      // an ordinary join would have reshaped the plan's corners to fit it
+      const bottom = session.doc.get(original[0]) as WallEntity;
+      const corners = () =>
+        bottom
+          .getOutline()
+          .map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`)
+          .join(' ');
+      const before = corners();
+
+      draw(point(0, 0), point(6, 0));
+
+      expect(corners()).toBe(before);
+    });
+
+    it('does not change the number printed under that wall', () => {
+      const before = drawn().dimensions;
+      draw(point(0, 0), point(6, 0));
+
+      // the overlay keeps its own (shorter, uncornered) extent, but the label
+      // on that run still measures the linework the user can see
+      expect(drawn().dimensions).toEqual(before);
+    });
+
+    it('leaves the room under the overlay a single room', () => {
+      draw(point(0, 0), point(6, 0));
+
+      // a doubled wall must not read as a room of its own, however thin
+      const rooms = detectSpaces(session.doc, null, { visibleOnly: true });
+      expect(rooms).toHaveLength(1);
+      expect(rooms[0].grossArea).toBeCloseTo(24, 6);
+    });
+
+    it('still offers the plan’s own corners to snap to', () => {
+      // guidance is what makes drawing ONTO the plan practical, and locked
+      // walls stay snappable: only hidden ones drop out
+      const snap = session.snap.snap(point(0.05, 0.05), 0.3);
+      expect(snap).not.toBeNull();
+      expect(snap?.point).toEqual(point(0, 0));
+
+      const guides = alignGuides(session.doc, point(6.05, 2), 0.3);
+      expect(guides.guides.length).toBeGreaterThan(0);
+      expect(guides.point.x).toBeCloseTo(6, 6);
+    });
+
+    it('lets the overlay be moved afterwards, and still keeps it', () => {
+      const plan = survey();
+      draw(point(0, 0), point(6, 0));
+      const mine = zoneWalls()[0];
+      session.selection.add(mine.id);
+      drag(point(3, 0), point(3, 0.2));
+
+      expect(zoneWalls()).toHaveLength(1);
+      expect(session.doc.get(mine.id)).not.toBeNull();
+      expect(survey()).toBe(plan);
+    });
   });
 });
 

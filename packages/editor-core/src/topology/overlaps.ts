@@ -23,17 +23,18 @@ import { closestPointOnSegment } from '../geometry/curves/segment.js';
  * junctions.ts pattern.
  */
 
+/**
+ * A segment to resolve. Everything passed in is a participant: callers leave
+ * OUT what they are not allowed to rewrite (walls on locked or hidden layers)
+ * rather than passing it as an obstacle. A segment that must not be cut must
+ * also not push another segment off a shared run — protecting the old drawing
+ * by deleting the new one is not protection — and "not in the set" says both
+ * at once.
+ */
 export interface OverlapSegment {
   readonly id: string;
   readonly a: Point;
   readonly b: Point;
-  /**
-   * An obstacle rather than a participant: never cut, never dropped, and it
-   * wins any run it shares whatever the input order. Callers flag the runs they
-   * are not allowed to rewrite — a wall on a locked layer — so drawing over the
-   * existing plan repairs the NEW segment instead of the untouchable one.
-   */
-  readonly immovable?: boolean;
 }
 
 export interface SegmentPiece {
@@ -58,7 +59,6 @@ interface Working {
   readonly a: Point;
   readonly b: Point;
   readonly len: number;
-  readonly immovable: boolean;
   /** parameters in (0,1) where this segment must be cut */
   readonly splits: number[];
 }
@@ -94,10 +94,6 @@ function cut(seg: Working, t: number, tolerance: number): void {
  *   keeps the shared stretch and its id.
  *
  * Endpoint-to-endpoint connections need no cut and produce none.
- *
- * Segments marked `immovable` sit outside all of that: they come back whole,
- * and they claim their stretches before anyone else, so the run they share is
- * always the other segment's to give up.
  */
 export function planSegmentOverlaps(
   segments: readonly OverlapSegment[],
@@ -107,19 +103,9 @@ export function planSegmentOverlaps(
   for (const s of segments) {
     const len = distance(s.a, s.b);
     if (len <= tolerance) continue;
-    working.push({
-      id: s.id,
-      a: s.a,
-      b: s.b,
-      len,
-      immovable: s.immovable === true,
-      splits: [],
-    });
+    working.push({ id: s.id, a: s.a, b: s.b, len, splits: [] });
   }
 
-  // immovable segments are cut here like any other: the pieces are what a
-  // shared run is matched on below, so both sides must break at the same
-  // bounds. Their cuts are dropped again when the plan is emitted.
   for (let i = 0; i < working.length; i++) {
     for (let j = i + 1; j < working.length; j++) {
       const A = working[i];
@@ -171,18 +157,9 @@ export function planSegmentOverlaps(
           distance(other.b, piece.a) <= tolerance),
     );
 
-  // immovable segments claim ahead of the rest, so a run they share is lost by
-  // the other segment however late they were added; within each group the
-  // caller's order still decides, which is what keeps ids stable
-  const indices = working.map((_, i) => i);
-  const claimOrder = [
-    ...indices.filter((i) => working[i].immovable),
-    ...indices.filter((i) => !working[i].immovable),
-  ];
-
   const keep: SegmentPiece[][] = working.map(() => []);
   const dropped: SegmentPiece[][] = working.map(() => []);
-  for (const i of claimOrder) {
+  for (let i = 0; i < working.length; i++) {
     for (const piece of pieces[i]) {
       if (covers(piece)) dropped[i].push(piece);
       else {
@@ -192,13 +169,11 @@ export function planSegmentOverlaps(
     }
   }
 
-  return working.map((seg, i) =>
-    seg.immovable
-      ? // it took part above only to push the others off its run; two immovables
-        // sharing a run therefore both come back whole, and neither is cut
-        { id: seg.id, keep: [{ a: seg.a, b: seg.b }], dropped: [] }
-      : { id: seg.id, keep: keep[i], dropped: dropped[i] },
-  );
+  return working.map((seg, i) => ({
+    id: seg.id,
+    keep: keep[i],
+    dropped: dropped[i],
+  }));
 }
 
 /** the segment broken at its cuts, in order along a→b */

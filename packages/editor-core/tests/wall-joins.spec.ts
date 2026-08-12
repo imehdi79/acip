@@ -345,4 +345,41 @@ describe('WallEntity — derived auto-joins', () => {
     session.dispatch('LAYER.UPDATE', { id: other, visible: true });
     expect(wall.getJoinsAt('start').length).toBe(1);
   });
+
+  test('a locked wall is joined TO, but never joins back', () => {
+    const session = new EditorSession();
+    const layer = session.dispatch<LayerId>('LAYER.ADD', { name: 'original' });
+    const survey = session.dispatch<EntityId>('WALL.ADD', {
+      a: point(0, 0),
+      b: point(6, 0),
+      thickness: 0.3,
+      height: 3,
+      layerId: layer,
+    });
+    const other = session.dispatch<EntityId>('WALL.ADD', {
+      a: point(0, 0),
+      b: point(0, 5),
+      thickness: 0.3,
+      height: 3,
+      layerId: layer,
+    });
+    session.dispatch('LAYER.UPDATE', { id: layer, locked: true });
+    // the survey's own corner is untouched by the lock
+    const locked = session.doc.get(survey) as WallEntity;
+    expect(locked.getJoinsAt('start').length).toBe(1);
+    const cornered = boundaryOf(session, survey).map((p) => `${p.x},${p.y}`);
+
+    // now draw new work into that same corner
+    const drawn = addWall(session, 0, 0, 0, -5);
+
+    // the new wall miters onto the plan — that is what makes it meet cleanly
+    expect(
+      (session.doc.get(drawn) as WallEntity).getJoinsAt('start'),
+    ).toHaveLength(2);
+    // but the plan's own corner is exactly as it was: it never sees the newcomer
+    expect(locked.getJoinsAt('start').map((j) => j.wall.id)).toEqual([other]);
+    expect(boundaryOf(session, survey).map((p) => `${p.x},${p.y}`)).toEqual(
+      cornered,
+    );
+  });
 });

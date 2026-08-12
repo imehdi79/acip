@@ -22,11 +22,17 @@ Consequences accepted with the decision:
   derived resolver just reads them.
 - Quantities stay **centerline-based**; the miter does not change takeoff.
   This matches common measurement rules and keeps the estimator independent.
-- A join needs BOTH walls visible (2026-08-12). `getJoinsAt` skips walls on
-  hidden layers and returns nothing for a hidden wall, so a wall the user
-  cannot see never miters, tees or shortens one they can — the drawn corner
-  always matches the drawn walls. Safe precisely because of the line above:
-  joins are a drawing concern, so dropping one changes no quantity.
+- Layers decide who may join whom (2026-08-12). Two rules in `getJoinsAt`,
+  both following from "a join changes how the wall is DRAWN", and both safe
+  precisely because of the line above — joins are a drawing concern, so
+  dropping one changes no quantity:
+  - **Hidden joins nothing, in either direction.** A wall the user cannot see
+    never miters, tees or shortens one they can.
+  - **A locked wall joins only other locked walls.** Locking is how the
+    original survey is held still while new work is drawn over it, and a miter
+    is mutual — without this, drawing a wall onto the plan would re-cut the
+    plan's own corners. Influence runs one way: new work still joins the
+    locked plan, so it meets it cleanly, but the plan never adapts to it.
 
 ## The wheel algorithm (`topology/junctions.ts`)
 
