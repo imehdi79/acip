@@ -4,6 +4,7 @@ import {
   IconAlertTriangle,
   IconArrowBackUp,
   IconArrowForwardUp,
+  IconCalculator,
   IconCopy,
   IconRotateClockwise2,
   IconRulerMeasure,
@@ -24,6 +25,7 @@ import { OpeningMeasurements } from './opening-measurements-modal';
 import { RoomName } from './room-name';
 import { MoveMode } from './move-mode';
 import { DangerZone } from './danger-zone';
+import { Estimator } from './estimator';
 import { cycleDoorHang } from './door-hang';
 import { duplicateSelection } from './duplicate';
 
@@ -63,12 +65,18 @@ export interface FooterItem {
  * selection kind, so each kind of thing gets its own set of buttons.
  */
 export const FOOTER_ITEMS: readonly FooterItem[] = [
+  /*
+   * The `session` run: the buttons that are about the drawing as a whole
+   * rather than about whatever is selected. They are always in the bar, in the
+   * same place, so they read as one control at the left — the mirror of the
+   * `selection` run at the right, which changes with every tap.
+   */
   {
     id: 'undo',
     label: 'Undo',
     icon: <IconArrowBackUp />,
     slot: 'start',
-    group: 'history',
+    group: 'session',
     iconOnly: true,
     permission: 'footer.undo',
     // stays put and greys out, so the bar does not reflow on every edit
@@ -81,7 +89,7 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     label: 'Redo',
     icon: <IconArrowForwardUp />,
     slot: 'start',
-    group: 'history',
+    group: 'session',
     iconOnly: true,
     permission: 'footer.redo',
     // nothing to redo until you undo, so it appears rather than sits greyed
@@ -93,6 +101,7 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     label: 'Danger zone',
     icon: <IconAlertTriangle />,
     slot: 'start',
+    group: 'session',
     iconOnly: true,
     permission: 'footer.dangerZone',
     /*
@@ -101,11 +110,26 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
      * is anything to select — and, once on, reachable from wherever the user
      * ends up, or the mode becomes a trap.
      *
-     * Ungrouped, and away from the contextual run at the end, so it never
-     * reads as another thing to do to the selection.
+     * In the session run, well away from the contextual buttons at the end, so
+     * it never reads as another thing to do to the selection.
      */
     visible: (ctx) => ctx.view === 'editor',
-    render: ({ session, ui }) => <DangerZone session={session} ui={ui} />,
+    render: ({ session, ui }, ctx) => (
+      <DangerZone session={session} ui={ui} compact={ctx.count > 0} />
+    ),
+  },
+  {
+    id: 'estimator',
+    label: 'Estimator',
+    icon: <IconCalculator />,
+    slot: 'start',
+    group: 'session',
+    iconOnly: true,
+    permission: 'footer.estimator',
+    // what the whole drawing costs — no selection in the gate, because the
+    // estimate is of the plan, not of whatever happens to be tapped
+    visible: (ctx) => ctx.view === 'editor',
+    render: () => <Estimator />,
   },
   {
     id: 'measure',

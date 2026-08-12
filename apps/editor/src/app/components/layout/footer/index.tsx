@@ -34,7 +34,10 @@ function FooterButton({
   ctx: FooterContext;
 }) {
   const { item, enabled } = entry;
-  if (item.render) return <>{item.render(api, ctx)}</>;
+  // returned bare, not wrapped: ButtonGroup marks its DIRECT children, and a
+  // Fragment in the way both swallows that marker and takes a prop React does
+  // not allow it to have
+  if (item.render) return item.render(api, ctx);
   return (
     <Button
       isIconOnly={item.iconOnly}

@@ -34,7 +34,7 @@ const enabledOf = (c: FooterContext, id: string) =>
 
 describe('resolveFooter', () => {
   it('shows undo and the tools on a fresh plan, with undo greyed out', () => {
-    expect(ids(ctx())).toEqual(['undo', 'danger-zone', 'tools']);
+    expect(ids(ctx())).toEqual(['undo', 'danger-zone', 'estimator', 'tools']);
     expect(enabledOf(ctx(), 'undo')).toBe(false);
   });
 
@@ -48,6 +48,7 @@ describe('resolveFooter', () => {
       'undo',
       'redo',
       'danger-zone',
+      'estimator',
       'tools',
     ]);
   });
@@ -62,6 +63,7 @@ describe('resolveFooter', () => {
     expect(ids(ctx({ selection: 'wall', types: ['wall'], count: 1 }))).toEqual([
       'undo',
       'danger-zone',
+      'estimator',
       'measure',
       'move-mode',
       'duplicate',
@@ -74,6 +76,7 @@ describe('resolveFooter', () => {
     expect(ids(room)).toEqual([
       'undo',
       'danger-zone',
+      'estimator',
       'rename',
       'move-mode',
       'duplicate',
@@ -96,13 +99,20 @@ describe('resolveFooter', () => {
     expect(ids(ctx({ selection: 'door', types: ['door'], count: 1 }))).toEqual([
       'undo',
       'danger-zone',
+      'estimator',
       'measure-opening',
       'door-hang',
       'delete',
     ]);
     expect(
       ids(ctx({ selection: 'window', types: ['window'], count: 1 })),
-    ).toEqual(['undo', 'danger-zone', 'measure-opening', 'delete']);
+    ).toEqual([
+      'undo',
+      'danger-zone',
+      'estimator',
+      'measure-opening',
+      'delete',
+    ]);
   });
 
   it('never offers both measurements buttons at once', () => {
@@ -124,7 +134,7 @@ describe('resolveFooter', () => {
   it('leaves a mixed selection with delete only', () => {
     expect(
       ids(ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 })),
-    ).toEqual(['undo', 'danger-zone', 'delete']);
+    ).toEqual(['undo', 'danger-zone', 'estimator', 'delete']);
   });
 
   // `selection` is the entity's own type, so a future type needs no change in
@@ -132,7 +142,7 @@ describe('resolveFooter', () => {
   it('carries an unknown future entity type through as its own kind', () => {
     expect(
       ids(ctx({ selection: 'stair', types: ['stair'], count: 1 })),
-    ).toEqual(['undo', 'danger-zone', 'delete']);
+    ).toEqual(['undo', 'danger-zone', 'estimator', 'delete']);
   });
 
   it('gives guests nothing, whatever the context', () => {
@@ -149,15 +159,17 @@ describe('resolveFooter', () => {
   // the cluster stays put while a tool is armed — it carries the armed tool
   // AND the way to put it down, so there is no separate Cancel to appear
   it('keeps the tools while a tool is armed', () => {
-    expect(ids(ctx())).toEqual(['undo', 'danger-zone', 'tools']);
+    expect(ids(ctx())).toEqual(['undo', 'danger-zone', 'estimator', 'tools']);
     expect(ids(ctx({ tool: 'wall' }))).toEqual([
       'undo',
       'danger-zone',
+      'estimator',
       'tools',
     ]);
     expect(ids(ctx({ tool: 'window' }))).toEqual([
       'undo',
       'danger-zone',
+      'estimator',
       'tools',
     ]);
   });
@@ -220,12 +232,40 @@ describe('resolveFooter', () => {
     expect(ids(ctx(), guest)).not.toContain('danger-zone');
   });
 
-  // it belongs with undo/redo, not with the things done to a selection — and
-  // ungrouped, so it never joins that run
-  it('sits at the start on its own', () => {
+  // it belongs with undo/redo, not with the things done to a selection
+  it('sits at the start, in the session run', () => {
     const zone = FOOTER_ITEMS.find((item) => item.id === 'danger-zone')!;
     expect(zone.slot).toBe('start');
-    expect(zone.group).toBeUndefined();
+    expect(zone.group).toBe('session');
+  });
+
+  it('offers the estimator alongside it, whatever is selected', () => {
+    const anywhere = [
+      ctx(),
+      ctx({ selection: 'wall', types: ['wall'], count: 1 }),
+      ctx({ selection: 'room', types: ['wall'], count: 4 }),
+      ctx({ tool: 'wall' }),
+    ];
+    for (const c of anywhere) expect(ids(c)).toContain('estimator');
+    expect(ids(ctx({ view: 'projects' }))).not.toContain('estimator');
+    expect(ids(ctx(), guest)).not.toContain('estimator');
+  });
+
+  /*
+   * The left of the bar is one control too: undo, redo, the danger zone and
+   * the estimator are all about the drawing as a whole. The renderer joins a
+   * run only while consecutive items share a group name, so a single stray
+   * descriptor would split them into loose pills — and redo comes and goes,
+   * which must not break the run either.
+   */
+  it('gives the start slot a single joined run, with or without redo', () => {
+    for (const c of [ctx(), ctx({ canRedo: true })]) {
+      const groups = resolveFooter(FOOTER_ITEMS, c, editor)
+        .filter((entry) => entry.item.slot === 'start')
+        .map((entry) => entry.item.group);
+      expect(groups.length).toBeGreaterThan(1);
+      expect(new Set(groups)).toEqual(new Set(['session']));
+    }
   });
 
   /*

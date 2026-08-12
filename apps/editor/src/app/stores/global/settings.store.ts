@@ -19,6 +19,7 @@ export type Permission =
   | 'footer.moveMode'
   | 'footer.doorHang'
   | 'footer.dangerZone'
+  | 'footer.estimator'
   | 'header.settings'
   | 'header.profile';
 
@@ -45,6 +46,10 @@ const EDITING_PERMISSIONS: Permission[] = [
   'footer.moveMode',
   'footer.doorHang',
   'footer.dangerZone',
+  // reading a cost off the plan changes nothing, so this could widen to
+  // viewers later; it starts with the editing set because what it will show is
+  // money, and that is a decision to make deliberately rather than by default
+  'footer.estimator',
 ];
 
 /** Signed-out users are treated as `guest`. */
