@@ -17,6 +17,19 @@ import type { EditorUi } from '../ui-state';
 const MIN_SAMPLE = 0.02;
 
 /**
+ * How near an existing corner a recognized end has to land to be welded onto
+ * it, in meters.
+ *
+ * The same radius the recognizer welds a stroke's OWN corners with, so the pen
+ * has one reach in and out: a hand that draws two ends together means them
+ * together, whether the other end belongs to this stroke or to the plan it is
+ * being drawn against. It is tighter than the wall tool's touch snap (24 px,
+ * about half a meter at a normal zoom), so this welds less eagerly than
+ * tapping a wall into place does.
+ */
+const WELD_TOLERANCE = 0.35;
+
+/**
  * Free draw: ink in, walls out.
  *
  * One stroke is one gesture — press, drag, release — and the walls appear the
@@ -98,7 +111,39 @@ export class SketchTool implements Tool {
     // a tap, or a flick too small to mean anything: the ink simply goes
     if (segments.length === 0) return;
 
-    for (const segment of segments) {
+    /*
+     * Weld the recognized ends onto the plan they were drawn against.
+     *
+     * The recognizer welds a stroke's own corners, and knows nothing else — it
+     * is pure math over one set of strokes. So a second stroke came out a
+     * centimetre or two off the first one's corners, and a centimetre is a
+     * mile: walls that do not share an endpoint do not join, so their caps do
+     * not miter (they overshoot and lie across each other), and the loop does
+     * not close, so no room is detected. A room drawn under another one simply
+     * did not become a room.
+     *
+     * A wall placed by tapping never has this problem, because the taps
+     * THEMSELVES are snapped to existing geometry before the command sees them.
+     * This gives the pen the same thing at the same point in the story: after
+     * the shape is decided, before it is committed. Endpoints only — an end
+     * landing on a wall's BODY is a tee, and the join and resolve rules
+     * already handle that without moving anything.
+     *
+     * Welding is decided against the document as it stands at lift-off, not
+     * one wall at a time, so a stroke cannot chase corners it is creating.
+     */
+    const weld = (p: Point): Point =>
+      ctx.snap.snap(p, WELD_TOLERANCE, ['endpoint'])?.point ?? p;
+    const welded = segments.map((s) => ({ a: weld(s.a), b: weld(s.b) }));
+
+    for (const segment of welded) {
+      // a segment whose ends welded to the same corner is not a wall
+      if (
+        Math.hypot(segment.b.x - segment.a.x, segment.b.y - segment.a.y) <
+        WELD_TOLERANCE / 2
+      ) {
+        continue;
+      }
       ctx.dispatch<EntityId>('WALL.ADD', {
         a: segment.a,
         b: segment.b,

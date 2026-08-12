@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { EditorSession, WallEntity, point } from '@acip/editor-core';
+import {
+  EditorSession,
+  WallEntity,
+  detectSpaces,
+  point,
+} from '@acip/editor-core';
 import type { EntityId, LayerId, Point } from '@acip/editor-core';
 import { createRuntime } from '@/editor/runtime';
 import type { EditorRuntime } from '@/editor/runtime';
@@ -167,6 +172,79 @@ describe('the pen', () => {
     // which is what makes empty ground pan instead
     runtime.tools.useById('select');
     expect(runtime.tools.hitDraggable(point(9, 9), 0.2)).toBe(false);
+  });
+
+  /*
+   * The recognizer welds a stroke's OWN corners and knows nothing else, so a
+   * second stroke used to come out a centimetre or two off the first one's
+   * corners — and a centimetre is a mile. Walls that do not share an endpoint
+   * do not join, so their caps do not miter (they overshoot and lie across
+   * each other), and the loop does not close, so no room is detected.
+   *
+   * A wall placed by tapping never has this problem: the taps are snapped to
+   * existing geometry before the command sees them. The pen has to end up in
+   * the same place.
+   */
+  describe('drawn against what is already there', () => {
+    /** a closed rectangle in one stroke */
+    const room = (x0: number, y0: number, x1: number, y1: number) =>
+      draw(
+        point(x0, y0),
+        point(x1, y0),
+        point(x1, y1),
+        point(x0, y1),
+        point(x0, y0),
+      );
+
+    it('makes a room under a room, sharing the wall between them', () => {
+      room(0, 0, 7, 5);
+      expect(detectSpaces(session.doc, null)).toHaveLength(1);
+
+      // the second stroke misses the first one's corners by a hand's width
+      draw(
+        point(0.04, -0.03),
+        point(7.03, 0.02),
+        point(7.02, -5),
+        point(0.02, -5),
+        point(0.03, -0.02),
+      );
+
+      const rooms = detectSpaces(session.doc, null);
+      expect(rooms).toHaveLength(2);
+      // and no sliver between them: a 2 cm gap left as its own "room" is the
+      // shape of the bug, not a room anybody drew
+      for (const space of rooms) expect(space.netArea).toBeGreaterThan(5);
+    });
+
+    it('welds a stroke onto the corner it was aimed at', () => {
+      session.dispatch('WALL.ADD', {
+        a: point(0, 0),
+        b: point(6, 0),
+        thickness: 0.3,
+      });
+      // start a hand's width off the existing end
+      draw(point(6.08, 0.06), point(6.05, 4));
+
+      const drawn = walls().find((w) => w.getBaseline().b.y > 3);
+      // welded, so the corner miters instead of the two walls crossing
+      expect(drawn?.getJoinsAt('start') ?? []).not.toHaveLength(0);
+    });
+
+    it('leaves a stroke that is near nothing exactly where it was drawn', () => {
+      session.dispatch('WALL.ADD', {
+        a: point(0, 0),
+        b: point(6, 0),
+        thickness: 0.3,
+      });
+      draw(point(0, 9), point(6, 9));
+
+      const away = walls().find((w) => w.getBaseline().a.y > 8);
+      expect(away).toBeDefined();
+      // welding must not reach across the plan and drag a wall onto something
+      // metres away — it is a hand's imprecision, not a magnet
+      expect(away?.getBaseline().a.y ?? 0).toBeGreaterThan(8);
+      expect(away?.getJoinsAt('start') ?? []).toHaveLength(0);
+    });
   });
 
   describe('guidance', () => {
