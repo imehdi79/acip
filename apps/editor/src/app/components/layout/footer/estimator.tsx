@@ -219,10 +219,22 @@ function ShapeWizard({ close }: { close: () => void }) {
  * The button alone lives out here. Everything that reads the session is inside
  * the dialog, which does not render until it opens — the footer mounts this in
  * a ButtonGroup, where it must stay a bare <button> and nothing more.
+ *
+ * `defaultOpen` and `onOpenChange` exist for the modes menu, which opens the
+ * dialog by mounting this already open: an estimate picked from a menu should
+ * arrive, not leave a second button to find. They are the Modal's own props,
+ * passed straight through, so the button keeps working as a plain trigger when
+ * nobody passes them.
  */
-export function Estimator() {
+export function Estimator({
+  defaultOpen,
+  onOpenChange,
+}: {
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
   return (
-    <Modal>
+    <Modal defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
       <Button
         isIconOnly
         aria-label="Estimator"

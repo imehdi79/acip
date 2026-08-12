@@ -1,13 +1,9 @@
 import type { ReactNode } from 'react';
 import type { EditorSession } from '@acip/editor-core';
 import {
-  IconAlertTriangle,
   IconArrowBackUp,
   IconArrowForwardUp,
-  IconCalculator,
   IconCopy,
-  IconListCheck,
-  IconPencil,
   IconRotateClockwise2,
   IconRulerMeasure,
   IconSignature,
@@ -26,10 +22,7 @@ import { WallMeasurements } from './measurements-modal';
 import { OpeningMeasurements } from './opening-measurements-modal';
 import { RoomName } from './room-name';
 import { MoveMode } from './move-mode';
-import { MultiSelect } from './multi-select';
-import { Pen } from './pen';
-import { DangerZone } from './danger-zone';
-import { Estimator } from './estimator';
+import { Modes } from './modes';
 import { cycleDoorHang } from './door-hang';
 import { duplicateSelection } from './duplicate';
 
@@ -96,82 +89,35 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     group: 'session',
     iconOnly: true,
     permission: 'footer.redo',
-    // nothing to redo until you undo, so it appears rather than sits greyed
-    visible: (ctx) => ctx.view === 'editor' && ctx.canRedo,
+    // Always there, greyed when there is nothing to redo. It used to appear
+    // only when it had work to do, which kept the bar tidy at the cost of the
+    // thing next to it jumping sideways under the thumb on every edit — and
+    // undo is what sits next to it.
+    visible: (ctx) => ctx.view === 'editor',
+    enabled: (ctx) => ctx.canRedo,
     run: ({ session }) => void session.redo(),
   },
   {
-    id: 'danger-zone',
-    label: 'Danger zone',
-    icon: <IconAlertTriangle />,
+    id: 'modes',
+    label: 'Modes',
+    icon: null,
     slot: 'start',
     group: 'session',
     iconOnly: true,
-    permission: 'footer.dangerZone',
     /*
-     * The one editing button with no selection in its gate: it decides what
-     * happens to the NEXT thing drawn, so it has to be reachable before there
-     * is anything to select — and, once on, reachable from wherever the user
-     * ends up, or the mode becomes a trap.
+     * The modes menu, and whichever mode is live right now.
      *
-     * In the session run, well away from the contextual buttons at the end, so
-     * it never reads as another thing to do to the selection.
+     * Ungated as a descriptor, like the tools cluster: what it OFFERS is gated
+     * item by item inside, and a menu that vanished entirely would take the way
+     * OUT of a mode with it.
+     *
+     * Its subject is the next tap rather than the current selection, so it sits
+     * in the session run with undo/redo — the half of the bar that does not
+     * reflow. In the selection run it would slide sideways under the thumb
+     * every time a tap changed which buttons that run holds.
      */
     visible: (ctx) => ctx.view === 'editor',
-    render: ({ session, ui }, ctx) => (
-      <DangerZone session={session} ui={ui} compact={ctx.count > 0} />
-    ),
-  },
-  {
-    id: 'estimator',
-    label: 'Estimator',
-    icon: <IconCalculator />,
-    slot: 'start',
-    group: 'session',
-    iconOnly: true,
-    permission: 'footer.estimator',
-    // what the whole drawing costs — no selection in the gate, because the
-    // estimate is of the plan, not of whatever happens to be tapped
-    visible: (ctx) => ctx.view === 'editor',
-    render: () => <Estimator />,
-  },
-  {
-    id: 'multi-select',
-    label: 'Multi-select',
-    icon: <IconListCheck />,
-    slot: 'start',
-    group: 'session',
-    iconOnly: true,
-    permission: 'footer.multiSelect',
-    /*
-     * The second button whose subject is the NEXT tap rather than the current
-     * selection, so it is gated like the danger zone and not like the run at
-     * the end: a toggle that waited for something to be selected could never
-     * start a multi-selection, and one that vanished once the selection was
-     * complete would strand the user in a mode with no way out.
-     *
-     * Last in the session run, nearest the middle — it belongs beside the
-     * things it is a mode for, and the session run is the half of the bar that
-     * does not reflow. In the selection run it would slide sideways under the
-     * thumb every time a tap changed which buttons that run holds, and the tap
-     * that follows a gathered tap is the one you least want landing on Delete.
-     */
-    visible: (ctx) => ctx.view === 'editor',
-    render: ({ ui }) => <MultiSelect ui={ui} />,
-  },
-  {
-    id: 'pen',
-    label: 'Free draw',
-    icon: <IconPencil />,
-    slot: 'start',
-    group: 'session',
-    iconOnly: true,
-    permission: 'footer.freeDraw',
-    // In the session run and never gated on the selection: the pen is meant to
-    // be there at any moment, and the tools cluster it would otherwise live in
-    // comes and goes with what is selected.
-    visible: (ctx) => ctx.view === 'editor',
-    render: ({ ui, tools }) => <Pen ui={ui} tools={tools} />,
+    render: (api, ctx) => <Modes {...api} compact={ctx.count > 0} />,
   },
   {
     id: 'measure',
@@ -272,12 +218,18 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     id: 'tools',
     label: 'Tools',
     icon: null,
-    slot: 'center',
+    slot: 'end',
     /*
      * Deliberately ungated, unlike every other editing button: the cluster
      * carries the armed tool AND the way to put it down, and arming a tool
      * must never be a one-way door. What it OFFERS is gated inside, on the
      * same footer.insert permission the old Insert menu used.
+     *
+     * At the END of the bar, with the buttons that act on a selection: both are
+     * about the drawing in front of you, while the left is about the session
+     * around it. It no longer travels from the middle either — the cluster
+     * simply stands where the selection run stands, which is where the thumb
+     * already is.
      */
     visible: (ctx) =>
       ctx.view === 'editor' &&

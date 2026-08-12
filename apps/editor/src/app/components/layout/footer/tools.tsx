@@ -47,13 +47,12 @@ export function useTool(
 }
 
 /**
- * The drawing tools, as ONE group in the middle of the bar.
+ * The drawing tools, as ONE group at the end of the bar.
  *
- * Arming a tool leaves that tool alone in the group, pressed, and the group
- * travels to the right end of the bar — where Cancel used to sit. The armed
- * tool keeps its own icon and simply reads as held: pressing it again puts it
- * down. One button does the job of two, and the tool in your hand stays the
- * thing under your thumb.
+ * Arming a tool leaves that tool alone in the group, pressed. The armed tool
+ * keeps its own icon and simply reads as held: pressing it again puts it down.
+ * One button does the job of two, and the tool in your hand stays the thing
+ * under your thumb — which is why it no longer travels anywhere to be put down.
  *
  * The buttons are direct children of the ButtonGroup, which is the only way it
  * joins them into one control — wrap any of them and each renders as its own
@@ -89,68 +88,57 @@ export function Tools({
   };
 
   const showMenu = folded.length > 0 && !armed && canInsert;
-  // Nothing to show: a tool from OUTSIDE this cluster is armed (the pen lives
-  // in the bar's session run), or the user may not insert anything. The slack
-  // still has to be held open, or the end of the bar slides across — but an
-  // empty ButtonGroup renders as a stray pill, so only the spacer stays.
-  if (shown.length === 0 && !showMenu) return <div className="flex-1" />;
+  // Nothing to show: a tool from OUTSIDE this cluster is armed (the pen is one
+  // of the modes, at the other end of the bar), or the user may not insert
+  // anything. Nothing is the right answer — the cluster stands at the end of
+  // the bar now, so there is no slack of its own to hold open.
+  if (shown.length === 0 && !showMenu) return null;
 
   return (
-    <div className="flex flex-1 items-center">
-      {/* the spacers are what move the group: at rest they share the slack and
-          centre it, and when a tool is armed the trailing one gives up its
-          share so the group slides to the end. flex-grow animates; a change of
-          justify-content does not. */}
-      <div className="transition-[flex-grow] duration-300 ease-out grow" />
-      <ButtonGroup>
-        {shown.map((item) => (
+    <ButtonGroup>
+      {shown.map((item) => (
+        <Button
+          key={item.id}
+          isIconOnly
+          aria-label={item.label}
+          aria-pressed={item.id === activeTool}
+          variant={item.id === activeTool ? 'primary' : 'tertiary'}
+          className="text-foreground"
+          onPress={() => press(item)}
+        >
+          {item.icon}
+        </Button>
+      ))}
+      {showMenu && (
+        <Dropdown>
           <Button
-            key={item.id}
             isIconOnly
-            aria-label={item.label}
-            aria-pressed={item.id === activeTool}
-            variant={item.id === activeTool ? 'primary' : 'tertiary'}
+            aria-label="More tools"
+            variant="tertiary"
             className="text-foreground"
-            onPress={() => press(item)}
           >
-            {item.icon}
+            <IconDotsVertical stroke={2} />
           </Button>
-        ))}
-        {showMenu && (
-          <Dropdown>
-            <Button
-              isIconOnly
-              aria-label="More tools"
-              variant="tertiary"
-              className="text-foreground"
+          <Dropdown.Popover placement="top end">
+            <Dropdown.Menu
+              onAction={(key) =>
+                useTool(key as InsertItemType, session, ui, tools)
+              }
             >
-              <IconDotsVertical stroke={2} />
-            </Button>
-            <Dropdown.Popover placement="top end">
-              <Dropdown.Menu
-                onAction={(key) =>
-                  useTool(key as InsertItemType, session, ui, tools)
-                }
-              >
-                {folded.map((item) => (
-                  <Dropdown.Item
-                    id={item.id}
-                    key={item.id}
-                    textValue={item.label}
-                  >
-                    {item.icon}
-                    <Label>{item.label}</Label>
-                  </Dropdown.Item>
-                ))}
-              </Dropdown.Menu>
-            </Dropdown.Popover>
-          </Dropdown>
-        )}
-      </ButtonGroup>
-      <div
-        className="transition-[flex-grow] duration-300 ease-out"
-        style={{ flexGrow: armed ? 0 : 1 }}
-      />
-    </div>
+              {folded.map((item) => (
+                <Dropdown.Item
+                  id={item.id}
+                  key={item.id}
+                  textValue={item.label}
+                >
+                  {item.icon}
+                  <Label>{item.label}</Label>
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
+      )}
+    </ButtonGroup>
   );
 }

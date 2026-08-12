@@ -6,6 +6,7 @@ import {
 } from '@/app/components/layout/footer/actions';
 import type { FooterContext } from '@/app/components/layout/footer/context';
 import { INSERT_ITEMS } from '@/app/components/layout/footer/insert';
+import { MODE_ITEMS } from '@/app/components/layout/footer/modes';
 import { can, type User } from '@/app/stores/global/settings.store';
 
 /**
@@ -35,14 +36,7 @@ const enabledOf = (c: FooterContext, id: string) =>
 
 describe('resolveFooter', () => {
   it('shows undo and the tools on a fresh plan, with undo greyed out', () => {
-    expect(ids(ctx())).toEqual([
-      'undo',
-      'danger-zone',
-      'estimator',
-      'multi-select',
-      'pen',
-      'tools',
-    ]);
+    expect(ids(ctx())).toEqual(['undo', 'redo', 'modes', 'tools']);
     expect(enabledOf(ctx(), 'undo')).toBe(false);
   });
 
@@ -50,17 +44,12 @@ describe('resolveFooter', () => {
     expect(enabledOf(ctx({ canUndo: true }), 'undo')).toBe(true);
   });
 
-  it('appears redo only when there is something to redo', () => {
-    expect(ids(ctx())).not.toContain('redo');
-    expect(ids(ctx({ canRedo: true }))).toEqual([
-      'undo',
-      'redo',
-      'danger-zone',
-      'estimator',
-      'multi-select',
-      'pen',
-      'tools',
-    ]);
+  // it used to appear only when it had work to do, which kept the bar tidy at
+  // the cost of undo — the button beside it — jumping sideways on every edit
+  it('always shows redo, greyed until there is something to redo', () => {
+    expect(ids(ctx())).toContain('redo');
+    expect(enabledOf(ctx(), 'redo')).toBe(false);
+    expect(enabledOf(ctx({ canRedo: true }), 'redo')).toBe(true);
   });
 
   it('drops the tools once anything is selected', () => {
@@ -72,10 +61,8 @@ describe('resolveFooter', () => {
   it('gives a wall selection its own edit set instead of insert', () => {
     expect(ids(ctx({ selection: 'wall', types: ['wall'], count: 1 }))).toEqual([
       'undo',
-      'danger-zone',
-      'estimator',
-      'multi-select',
-      'pen',
+      'redo',
+      'modes',
       'measure',
       'move-mode',
       'duplicate',
@@ -87,10 +74,8 @@ describe('resolveFooter', () => {
     const room = ctx({ selection: 'room', types: ['wall'], count: 4 });
     expect(ids(room)).toEqual([
       'undo',
-      'danger-zone',
-      'estimator',
-      'multi-select',
-      'pen',
+      'redo',
+      'modes',
       // a room IS a wall-only selection, so the wall dialog applies to all of it
       'measure',
       'rename',
@@ -114,25 +99,15 @@ describe('resolveFooter', () => {
   it('offers the hang toggle for a door alone', () => {
     expect(ids(ctx({ selection: 'door', types: ['door'], count: 1 }))).toEqual([
       'undo',
-      'danger-zone',
-      'estimator',
-      'multi-select',
-      'pen',
+      'redo',
+      'modes',
       'measure-opening',
       'door-hang',
       'delete',
     ]);
     expect(
       ids(ctx({ selection: 'window', types: ['window'], count: 1 })),
-    ).toEqual([
-      'undo',
-      'danger-zone',
-      'estimator',
-      'multi-select',
-      'pen',
-      'measure-opening',
-      'delete',
-    ]);
+    ).toEqual(['undo', 'redo', 'modes', 'measure-opening', 'delete']);
   });
 
   it('never offers both measurements buttons at once', () => {
@@ -154,14 +129,7 @@ describe('resolveFooter', () => {
   it('leaves a mixed selection with delete only', () => {
     expect(
       ids(ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 })),
-    ).toEqual([
-      'undo',
-      'danger-zone',
-      'estimator',
-      'multi-select',
-      'pen',
-      'delete',
-    ]);
+    ).toEqual(['undo', 'redo', 'modes', 'delete']);
   });
 
   // `selection` is the entity's own type, so a future type needs no change in
@@ -169,17 +137,10 @@ describe('resolveFooter', () => {
   it('carries an unknown future entity type through as its own kind', () => {
     expect(
       ids(ctx({ selection: 'stair', types: ['stair'], count: 1 })),
-    ).toEqual([
-      'undo',
-      'danger-zone',
-      'estimator',
-      'multi-select',
-      'pen',
-      'delete',
-    ]);
+    ).toEqual(['undo', 'redo', 'modes', 'delete']);
   });
 
-  it('gives guests nothing, whatever the context', () => {
+  it('gives guests nothing they can act on, whatever the context', () => {
     const busy = ctx({
       canUndo: true,
       canRedo: true,
@@ -187,20 +148,16 @@ describe('resolveFooter', () => {
       types: ['wall'],
       count: 4,
     });
-    expect(ids(busy, guest)).toEqual([]);
+    // only the ungated modes menu resolves (the tools cluster is hidden by the
+    // selection), and it renders nothing for a user who may use none of what it
+    // holds — see the per-item gates below
+    expect(ids(busy, guest)).toEqual(['modes']);
   });
 
   // the cluster stays put while a tool is armed — it carries the armed tool
   // AND the way to put it down, so there is no separate Cancel to appear
   it('keeps the tools while a tool is armed', () => {
-    const bar = [
-      'undo',
-      'danger-zone',
-      'estimator',
-      'multi-select',
-      'pen',
-      'tools',
-    ];
+    const bar = ['undo', 'redo', 'modes', 'tools'];
     expect(ids(ctx())).toEqual(bar);
     expect(ids(ctx({ tool: 'wall' }))).toEqual(bar);
     expect(ids(ctx({ tool: 'window' }))).toEqual(bar);
@@ -216,12 +173,12 @@ describe('resolveFooter', () => {
   it('lets even a guest put a tool down', () => {
     // guests hold no footer.* permission, but the cluster is ungated on
     // purpose — arming a tool must never be a one-way door
-    expect(ids(ctx({ tool: 'wall' }), guest)).toEqual(['tools']);
+    expect(ids(ctx({ tool: 'wall' }), guest)).toEqual(['modes', 'tools']);
   });
 
   it('gives a guest nothing to arm in the first place', () => {
     // ungated does not mean unguarded: the cluster shows, its tools do not
-    expect(ids(ctx(), guest)).toEqual(['tools']);
+    expect(ids(ctx(), guest)).toEqual(['modes', 'tools']);
     expect(can(guest, 'footer.insert')).toBe(false);
   });
 
@@ -245,57 +202,65 @@ describe('resolveFooter', () => {
     expect(ids(ctx())).not.toContain('move-mode');
   });
 
-  // the danger zone decides what happens to the NEXT thing drawn, so unlike
-  // every other editing button it cannot wait for a selection to exist
-  it('offers the danger zone whatever is selected and whatever is armed', () => {
+  /*
+   * The modes — free draw, multi-select, the danger zone, the estimator — live
+   * behind one menu, and whichever is live puts its own button back beside
+   * undo/redo. The menu itself is in the bar at all times: each of them decides
+   * what the NEXT tap does, so one gated on a selection could never be started,
+   * and one that vanished once a selection existed would strand the user in a
+   * mode with no way out of it.
+   */
+  it('offers the modes menu whatever is selected and whatever is armed', () => {
     const anywhere = [
       ctx(),
       ctx({ selection: 'wall', types: ['wall'], count: 1 }),
+      ctx({ selection: 'wall', types: ['wall'], count: 5 }),
       ctx({ selection: 'room', types: ['wall'], count: 4 }),
       ctx({ selection: 'window', types: ['window'], count: 1 }),
       ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 }),
       ctx({ tool: 'wall' }),
+      ctx({ tool: 'sketch' }),
     ];
-    for (const c of anywhere) expect(ids(c)).toContain('danger-zone');
+    for (const c of anywhere) expect(ids(c)).toContain('modes');
   });
 
-  it('keeps the danger zone out of the projects view, and away from guests', () => {
-    expect(ids(ctx({ view: 'projects' }))).not.toContain('danger-zone');
-    expect(ids(ctx(), guest)).not.toContain('danger-zone');
+  it('keeps the modes menu out of the projects view', () => {
+    expect(ids(ctx({ view: 'projects' }))).not.toContain('modes');
   });
 
-  // it belongs with undo/redo, not with the things done to a selection
-  it('sits at the start, in the session run', () => {
-    const zone = FOOTER_ITEMS.find((item) => item.id === 'danger-zone')!;
-    expect(zone.slot).toBe('start');
-    expect(zone.group).toBe('session');
-  });
-
-  it('offers the estimator alongside it, whatever is selected', () => {
-    const anywhere = [
-      ctx(),
-      ctx({ selection: 'wall', types: ['wall'], count: 1 }),
-      ctx({ selection: 'room', types: ['wall'], count: 4 }),
-      ctx({ tool: 'wall' }),
-    ];
-    for (const c of anywhere) expect(ids(c)).toContain('estimator');
-    expect(ids(ctx({ view: 'projects' }))).not.toContain('estimator');
-    expect(ids(ctx(), guest)).not.toContain('estimator');
+  // in the half of the bar that does not reflow: the selection run rearranges
+  // itself on every tap, and a mode toggle must not move under the thumb
+  it('puts the modes menu in the session run, not the selection one', () => {
+    const modes = FOOTER_ITEMS.find((item) => item.id === 'modes');
+    expect(modes?.slot).toBe('start');
+    expect(modes?.group).toBe('session');
   });
 
   /*
-   * The left of the bar is one control too: undo, redo, the danger zone and
-   * the estimator are all about the drawing as a whole. The renderer joins a
-   * run only while consecutive items share a group name, so a single stray
-   * descriptor would split them into loose pills — and redo comes and goes,
-   * which must not break the run either.
+   * Folding four buttons into a menu must not be a way of losing their gates.
+   * The menu is ungated as a descriptor — like the tools cluster, because the
+   * way OUT of a mode cannot be gated away — so every entry carries its own.
    */
-  it('gives the start slot a single joined run, with or without redo', () => {
+  it('gates every mode in the menu, one by one', () => {
+    expect(MODE_ITEMS.length).toBeGreaterThan(0);
+    for (const item of MODE_ITEMS) {
+      expect(item.permission).toBeTruthy();
+      expect(can(editor, item.permission)).toBe(true);
+      expect(can(guest, item.permission)).toBe(false);
+    }
+  });
+
+  /*
+   * The left of the bar is one control: undo, redo and the modes menu. The
+   * renderer joins a run only while consecutive items share a group name, so a
+   * single stray descriptor would split them into loose pills.
+   */
+  it('gives the start slot a single joined run', () => {
     for (const c of [ctx(), ctx({ canRedo: true })]) {
       const groups = resolveFooter(FOOTER_ITEMS, c, editor)
         .filter((entry) => entry.item.slot === 'start')
         .map((entry) => entry.item.group);
-      expect(groups.length).toBeGreaterThan(1);
+      expect(groups.length).toBe(3);
       expect(new Set(groups)).toEqual(new Set(['session']));
     }
   });
@@ -324,75 +289,6 @@ describe('resolveFooter', () => {
   });
 
   /*
-   * Multi-select is the second button whose subject is the next tap rather than
-   * the current selection, so it is gated like the danger zone: always there.
-   * Gated on a selection it could never start one, and dropped once the
-   * selection was complete it would leave the user in a mode with no way out.
-   */
-  it('offers multi-select whatever is selected and whatever is armed', () => {
-    const anywhere = [
-      ctx(),
-      ctx({ selection: 'wall', types: ['wall'], count: 1 }),
-      ctx({ selection: 'wall', types: ['wall'], count: 5 }),
-      ctx({ selection: 'room', types: ['wall'], count: 4 }),
-      ctx({ selection: 'window', types: ['window'], count: 1 }),
-      ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 }),
-      ctx({ tool: 'wall' }),
-    ];
-    for (const c of anywhere) expect(ids(c)).toContain('multi-select');
-  });
-
-  it('keeps multi-select out of the projects view, and away from guests', () => {
-    expect(ids(ctx({ view: 'projects' }))).not.toContain('multi-select');
-    expect(ids(ctx(), guest)).not.toContain('multi-select');
-  });
-
-  // in the half of the bar that does not reflow: the selection run rearranges
-  // itself on every tap, and a mode toggle must not move under the thumb
-  it('puts multi-select in the session run, not the selection one', () => {
-    const toggle = FOOTER_ITEMS.find((item) => item.id === 'multi-select');
-    expect(toggle?.slot).toBe('start');
-    expect(toggle?.group).toBe('session');
-    expect(toggle?.iconOnly).toBe(true);
-  });
-
-  /*
-   * The pen is asked for by name: "free draw at all times". The tools cluster
-   * it would otherwise belong to disappears the moment anything is selected,
-   * so the pen sits in the session run instead — reachable mid-edit, with a
-   * selection, and while another tool is armed.
-   */
-  it('offers the pen whatever is selected and whatever is armed', () => {
-    const anywhere = [
-      ctx(),
-      ctx({ selection: 'wall', types: ['wall'], count: 1 }),
-      ctx({ selection: 'room', types: ['wall'], count: 4 }),
-      ctx({ tool: 'wall' }),
-      ctx({ tool: 'sketch' }),
-    ];
-    for (const c of anywhere) expect(ids(c)).toContain('pen');
-  });
-
-  it('keeps the pen out of the projects view, and away from guests', () => {
-    expect(ids(ctx({ view: 'projects' }))).not.toContain('pen');
-    expect(ids(ctx(), guest)).not.toContain('pen');
-  });
-
-  it('puts the pen in the session run, and never in the tools cluster', () => {
-    const pen = FOOTER_ITEMS.find((item) => item.id === 'pen');
-    expect(pen?.slot).toBe('start');
-    expect(pen?.group).toBe('session');
-    expect(pen?.iconOnly).toBe(true);
-  });
-
-  // the cluster in the middle carries the tools it owns; the pen is not one of
-  // them, so an armed pen must not leave it claiming to hold something
-  it('keeps the tools cluster from claiming the pen', () => {
-    expect(ids(ctx({ tool: 'sketch' }))).toContain('tools');
-    expect(INSERT_ITEMS.map((item) => item.id)).not.toContain('sketch');
-  });
-
-  /*
    * What multi-select is FOR: several walls in front of one dialog. A gathered
    * set of walls that happens to close a loop classifies as a room, and hiding
    * the measurements button for exactly that selection would defeat the
@@ -405,9 +301,18 @@ describe('resolveFooter', () => {
     expect(enabledOf(room, 'measure')).toBe(true);
   });
 
-  it('keeps the tools out of the selection run, in the centre', () => {
-    const tools = FOOTER_ITEMS.find((item) => item.id === 'tools')!;
-    expect(tools.slot).toBe('center');
-    expect(tools.group).toBeUndefined();
+  // the tools stand with the buttons that act on the drawing, at the end of the
+  // bar — the left is the session around it, the right is the plan in front of
+  // it. They keep their own group, so they read as a cluster of their own.
+  it('puts the tools at the end, beside the selection run', () => {
+    const tools = FOOTER_ITEMS.find((item) => item.id === 'tools');
+    expect(tools?.slot).toBe('end');
+    expect(tools?.group).toBeUndefined();
+  });
+
+  // the pen is a mode, not one of the insert tools, so an armed pen must not
+  // leave the cluster claiming to hold something
+  it('keeps the tools cluster from claiming the pen', () => {
+    expect(INSERT_ITEMS.map((item) => item.id)).not.toContain('sketch');
   });
 });
