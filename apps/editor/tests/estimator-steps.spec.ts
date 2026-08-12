@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EditorSession, SpaceTagEntity, point } from '@acip/editor-core';
 import type { EntityId, LayerId, LevelId } from '@acip/editor-core';
-import { estimatorSteps } from '@/app/components/layout/footer/estimator-steps';
+import {
+  estimatorSteps,
+  type EstimatorStep,
+} from '@/app/components/layout/footer/estimator-steps';
 
 /**
  * What the estimator wizard walks, without React: the list is one pure
@@ -136,6 +139,78 @@ describe('estimatorSteps', () => {
     // a type in the plan's mark table reads as the plan draws it; one without
     // still names itself rather than dropping out of the walk
     expect(names().slice(-2)).toEqual(['Line 1', 'Stair ST1']);
+  });
+
+  // the wizard sends the camera to step.bounds, so a step that names a shape
+  // and points somewhere else is worse than not moving the camera at all
+  describe('says where each shape is', () => {
+    /** the one step this matches — every shape in the walk is there once */
+    const stepFor = (
+      match: (step: EstimatorStep) => boolean,
+    ): EstimatorStep => {
+      const found = estimatorSteps(session.doc, null).find(match);
+      if (!found) throw new Error('no step matched');
+      return found;
+    };
+
+    it('covers the wall it names', () => {
+      drawRoom();
+      const wall = stepFor((step) => step.name === 'Wall W1');
+
+      // W1 runs (0,0)→(6,0), 0.3 thick: the box holds the whole run and is a
+      // wall's worth of thickness deep, not a room's worth
+      expect(wall.bounds.minX).toBeLessThanOrEqual(0);
+      expect(wall.bounds.maxX).toBeGreaterThanOrEqual(6);
+      expect(wall.bounds.maxX - wall.bounds.minX).toBeLessThan(7);
+      expect(wall.bounds.minY).toBeGreaterThanOrEqual(-1);
+      expect(wall.bounds.maxY).toBeLessThanOrEqual(1);
+    });
+
+    it('covers the room it names, walls included', () => {
+      drawRoom();
+      const room = stepFor((step) => step.kind === 'room');
+
+      // a room is derived, so this comes from its loop: the gross one, which
+      // reaches the wall centerlines of the 6×4 box
+      expect(room.bounds).toEqual({ minX: 0, minY: 0, maxX: 6, maxY: 4 });
+    });
+
+    it('puts an opening where its wall is, not where its wall starts', () => {
+      const walls = drawRoom();
+      session.dispatch('DOOR.ADD', { wallId: walls[0], t: 0.5, width: 0.9 });
+      const door = stepFor((step) => step.kind === 'door');
+
+      // the leaf and its swing sit around the halfway point of (0,0)→(6,0):
+      // the box holds x=3 and is nothing like the length of the host wall
+      expect(door.bounds.minX).toBeLessThanOrEqual(3);
+      expect(door.bounds.maxX).toBeGreaterThanOrEqual(3);
+      expect(door.bounds.maxX - door.bounds.minX).toBeLessThan(3);
+    });
+
+    it('gives every step a box the camera can actually use', () => {
+      const walls = drawRoom();
+      session.dispatch('WINDOW.ADD', { wallId: walls[1], t: 0.4 });
+      session.dispatch('STAIR.ADD', { origin: point(2, 1), height: 3 });
+
+      for (const step of estimatorSteps(session.doc, null)) {
+        const { minX, minY, maxX, maxY } = step.bounds;
+        // an infinite or inverted box is what an empty geometry produces, and
+        // it would send the camera to NaN rather than to the shape
+        for (const n of [minX, minY, maxX, maxY])
+          expect(Number.isFinite(n)).toBe(true);
+        expect(maxX).toBeGreaterThanOrEqual(minX);
+        expect(maxY).toBeGreaterThanOrEqual(minY);
+      }
+    });
+
+    it('reports the same box twice for the same document', () => {
+      drawRoom();
+      // deterministic down to the geometry: the walk is re-derived every time
+      // the wizard opens, and the camera must not drift between openings
+      expect(estimatorSteps(session.doc, null).map((s) => s.bounds)).toEqual(
+        estimatorSteps(session.doc, null).map((s) => s.bounds),
+      );
+    });
   });
 
   it('walks one level at a time, and the unassigned shapes on all of them', () => {

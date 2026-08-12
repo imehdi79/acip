@@ -1,8 +1,15 @@
-import type { DrawingDocument, Entity, LevelId } from '@acip/editor-core';
+import type {
+  BBox,
+  DrawingDocument,
+  Entity,
+  LevelId,
+  SpaceInfo,
+} from '@acip/editor-core';
 import {
   HostedOpeningEntity,
   SpaceTagEntity,
   WallEntity,
+  bboxFromPoints,
   detectSpaces,
   entitiesInView,
   isEntityVisible,
@@ -17,6 +24,13 @@ export interface EstimatorStep {
   readonly kind: string;
   /** what the step shows, e.g. `Wall W3` or `Room — Kitchen` */
   readonly name: string;
+  /**
+   * Where the shape sits in the plan, so the wizard can send the camera to it.
+   * Part of the step rather than looked up in the component: "what does this
+   * step point at" is the same decision as "what does this step name", and it
+   * belongs with it — testable from a document, with no React in the way.
+   */
+  readonly bounds: BBox;
 }
 
 /**
@@ -51,7 +65,24 @@ function entityStep(entity: Entity): EstimatorStep {
       entity.mark === undefined
         ? label
         : `${label} ${MARK_PREFIX[entity.type] ?? ''}${entity.mark}`,
+    // effective geometry, so a wall is the box the PLAN draws (openings cut,
+    // ends mitered into their junctions) rather than its bare baseline
+    bounds: entity.getBounds(),
   };
+}
+
+/**
+ * Where a room is. A room is not an entity and has no getBounds() to ask, so
+ * the box comes from its loop — the GROSS one, along the wall centerlines, so
+ * the walls that make it a room are inside the frame instead of cropped at the
+ * plaster. Detection always returns a loop; the label anchor is the honest
+ * fallback for the case where one day it does not.
+ */
+function spaceBounds(space: SpaceInfo): BBox {
+  const loop = space.grossBoundary.length
+    ? space.grossBoundary
+    : space.boundary;
+  return bboxFromPoints(loop.length > 0 ? loop : [space.labelPoint]);
 }
 
 /**
@@ -112,6 +143,7 @@ export function estimatorSteps(
         kind: 'room',
         // an unnamed room has nothing to call it but its size
         name: name ? `Room — ${name}` : `Room ${space.netArea.toFixed(1)} m²`,
+        bounds: spaceBounds(space),
       };
     },
   );
