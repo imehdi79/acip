@@ -115,6 +115,34 @@ describe('the pen', () => {
     expect(vertical).toHaveLength(1);
   });
 
+  it('squares a corner the hand missed square by a few degrees', () => {
+    // a room drawn on the diagonal — neither leg is near an axis, so nothing
+    // straightens them and the 93° the hand drew would have stayed 93°
+    const leg = (deg: number) => ({
+      x: 4 * Math.cos((deg * Math.PI) / 180),
+      y: 4 * Math.sin((deg * Math.PI) / 180),
+    });
+    draw(leg(46.5), point(0, 0), leg(-46.5));
+
+    expect(walls()).toHaveLength(2);
+    const [w1, w2] = walls().map((w) => w.getBaseline());
+    const same = (p: Point, q: Point) =>
+      Math.hypot(p.x - q.x, p.y - q.y) < 1e-9;
+    const at = [w1.a, w1.b].find((p) => same(p, w2.a) || same(p, w2.b));
+    if (!at) throw new Error('the two walls do not share a corner');
+
+    const f1 = same(w1.a, at) ? w1.b : w1.a;
+    const f2 = same(w2.a, at) ? w2.b : w2.a;
+    const ux = f1.x - at.x;
+    const uy = f1.y - at.y;
+    const vx = f2.x - at.x;
+    const vy = f2.y - at.y;
+    const angle =
+      (Math.abs(Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy)) * 180) /
+      Math.PI;
+    expect(angle).toBeCloseTo(90, 6);
+  });
+
   it('stays armed, so a plan is drawn stroke after stroke', () => {
     draw(point(0, 0), point(5, 0));
     expect(runtime.ui.activeToolId.get()).toBe(PEN_TOOL);
@@ -228,6 +256,66 @@ describe('the pen', () => {
       const drawn = walls().find((w) => w.getBaseline().b.y > 3);
       // welded, so the corner miters instead of the two walls crossing
       expect(drawn?.getJoinsAt('start') ?? []).not.toHaveLength(0);
+    });
+
+    /*
+     * Welding moves one end of a wall, which pivots it about the other. The
+     * recognizer had made this wall exactly vertical; welded the old way it
+     * came back 8.24° off — because it is only 1.43 m long and the weld pulled
+     * its foot 32 cm sideways. The same weld on a 5 m wall is 2.25°, and a
+     * realistic 3 cm weld on a 5 m wall is 0.11°, which is why this went
+     * unnoticed: it is the SHORT walls, the closet and the corridor stub, that
+     * the weld visibly bends.
+     */
+    it('slides a stroke onto its one weld instead of leaning it over', () => {
+      session.dispatch('WALL.ADD', {
+        a: point(0, 0),
+        b: point(6, 0),
+        thickness: 0.3,
+      });
+      // a short wall, started a hand's width off the existing corner
+      draw(point(6.25, 0.2), point(6.2, 1.4));
+
+      const drawn = walls().find((w) => w.getBaseline().b.y > 0.5);
+      if (!drawn) throw new Error('the stroke built no wall');
+
+      const { a, b } = drawn.getBaseline();
+      expect(a.x).toBeCloseTo(b.x, 9); // still exactly vertical
+      // the weld itself is untouched: the end still lands ON the corner
+      expect(Math.hypot(a.x - 6, a.y)).toBeLessThan(1e-9);
+      expect(drawn.getJoinsAt('start')).not.toHaveLength(0);
+      // the shape slid, it did not stretch — the far end kept its distance
+      expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(1.2, 6);
+    });
+
+    it('lets the plan decide when a stroke is anchored at both ends', () => {
+      // two existing ends that are NOT square to each other
+      session.dispatch('WALL.ADD', {
+        a: point(0, -3),
+        b: point(0, 0),
+        thickness: 0.3,
+      });
+      session.dispatch('WALL.ADD', {
+        a: point(4, 3.3),
+        b: point(4, 0.3),
+        thickness: 0.3,
+      });
+      draw(point(0.1, 0.05), point(3.9, 0.25));
+
+      // no slide can reach both, and it should not try: a wall drawn between
+      // two corners of the plan runs where the plan puts it, tilt and all
+      const drawn = walls().find(
+        (w) =>
+          Math.abs(w.getBaseline().b.x - w.getBaseline().a.x) > 3 &&
+          Math.abs(w.getBaseline().b.x - w.getBaseline().a.x) < 5,
+      );
+      if (!drawn) throw new Error('the stroke built no wall');
+
+      const { a, b } = drawn.getBaseline();
+      expect(Math.hypot(a.x, a.y)).toBeLessThan(1e-9);
+      expect(Math.hypot(b.x - 4, b.y - 0.3)).toBeLessThan(1e-9);
+      expect(drawn.getJoinsAt('start')).not.toHaveLength(0);
+      expect(drawn.getJoinsAt('end')).not.toHaveLength(0);
     });
 
     it('leaves a stroke that is near nothing exactly where it was drawn', () => {

@@ -5,6 +5,7 @@ import type {
   Tool,
   ToolContext,
   ToolInputEvent,
+  WallSegment,
 } from '@acip/editor-core';
 import { recognizeWalls } from '@acip/editor-core';
 import type { EditorUi } from '../ui-state';
@@ -28,6 +29,88 @@ const MIN_SAMPLE = 0.02;
  * tapping a wall into place does.
  */
 const WELD_TOLERANCE = 0.35;
+
+/**
+ * Two recognized corners are the same corner when their coordinates match. The
+ * recognizer emits a shared corner as one node's coordinates twice, so this is
+ * exact; the rounding is only there so it stays exact if that ever stops being
+ * bit-for-bit true.
+ */
+const cornerKey = (p: Point): string =>
+  `${Math.round(p.x * 1e6)}:${Math.round(p.y * 1e6)}`;
+
+/**
+ * Weld a recognized shape onto the plan it was drawn against — without tilting
+ * what the recognizer just made straight.
+ *
+ * Welding moves endpoints, and moving ONE end of a wall pivots it about the
+ * other. On a 5 m wall a 3 cm weld is a lean of 0.11°, invisible. But a 1.4 m
+ * wall welded 32 cm sideways comes out 8.2° off vertical, and 8° is not a
+ * wobble — the recognizer had made that wall exactly vertical, and the weld
+ * undid it, along with everything that follows from a wall being axis-true: the
+ * square corner at its far end, the through-run at its junction, the length
+ * that reads as a round number.
+ *
+ * So a shape with exactly ONE end to weld is not pivoted, it is SLID: every
+ * corner of it moves by the same vector. Angles, lengths and shared corners
+ * survive untouched, the welded end still lands exactly on its target, and the
+ * price is that the far end moves — by at most the weld reach, a hand's width,
+ * which is the same imprecision welding exists to forgive in the first place.
+ *
+ * A shape with two or more ends to weld cannot be slid onto both, and should
+ * not be: two anchors mean the plan decides where that wall runs, not the hand.
+ * Those weld corner by corner, exactly as before — which is what a room drawn
+ * under another room is, and how it keeps sharing the wall between them.
+ */
+function weldOntoPlan(
+  segments: readonly WallSegment[],
+  weld: (p: Point) => Point,
+): WallSegment[] {
+  const index = new Map<string, number>();
+  const corners: Point[] = [];
+  const idOf = (p: Point): number => {
+    const key = cornerKey(p);
+    const found = index.get(key);
+    if (found !== undefined) return found;
+    index.set(key, corners.length);
+    corners.push(p);
+    return corners.length - 1;
+  };
+  const pairs = segments.map((s) => [idOf(s.a), idOf(s.b)] as const);
+
+  // one shape is one connected run of segments, and what slides slides whole
+  const parent = corners.map((_, i) => i);
+  const find = (i: number): number => {
+    while (parent[i] !== i) i = parent[i] = parent[parent[i]];
+    return i;
+  };
+  for (const [i, j] of pairs) parent[find(i)] = find(j);
+
+  const target = corners.map(weld);
+  const anchors = new Map<number, number[]>();
+  for (let i = 0; i < corners.length; i++) {
+    const moved = Math.hypot(
+      target[i].x - corners[i].x,
+      target[i].y - corners[i].y,
+    );
+    if (moved < 1e-9) continue; // found nothing to weld to
+    const shape = find(i);
+    const found = anchors.get(shape);
+    if (found) found.push(i);
+    else anchors.set(shape, [i]);
+  }
+
+  const placed = corners.map((p, i) => {
+    const anchor = anchors.get(find(i));
+    if (anchor?.length !== 1) return target[i];
+    const [only] = anchor;
+    return {
+      x: p.x + (target[only].x - corners[only].x),
+      y: p.y + (target[only].y - corners[only].y),
+    };
+  });
+  return pairs.map(([i, j]) => ({ a: placed[i], b: placed[j] }));
+}
 
 /**
  * Free draw: ink in, walls out.
@@ -131,10 +214,15 @@ export class SketchTool implements Tool {
      *
      * Welding is decided against the document as it stands at lift-off, not
      * one wall at a time, so a stroke cannot chase corners it is creating.
+     *
+     * How the shape is moved onto its welds is `weldOntoPlan`'s business: a
+     * single anchor slides the whole shape rather than pivoting a wall off the
+     * axis the recognizer just gave it.
      */
-    const weld = (p: Point): Point =>
-      ctx.snap.snap(p, WELD_TOLERANCE, ['endpoint'])?.point ?? p;
-    const welded = segments.map((s) => ({ a: weld(s.a), b: weld(s.b) }));
+    const welded = weldOntoPlan(
+      segments,
+      (p) => ctx.snap.snap(p, WELD_TOLERANCE, ['endpoint'])?.point ?? p,
+    );
 
     for (const segment of welded) {
       // a segment whose ends welded to the same corner is not a wall

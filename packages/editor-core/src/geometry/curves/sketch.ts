@@ -35,6 +35,14 @@ export interface RecognizeWallsOptions {
    * real corners (default 35).
    */
   cornerDegrees?: number;
+  /**
+   * Square-up window, in degrees. A corner that lands within this many degrees
+   * of a right angle is turned into exactly 90° — a hand aiming at square
+   * misses by a few degrees, and 93° is 93° wrong in every room, quantity and
+   * elevation downstream. Set to 0 to leave corners exactly as drawn
+   * (default 5).
+   */
+  squareDegrees?: number;
 }
 
 const DEFAULTS: Required<RecognizeWallsOptions> = {
@@ -43,6 +51,7 @@ const DEFAULTS: Required<RecognizeWallsOptions> = {
   minLength: 0.25,
   axisSnapDegrees: 35,
   cornerDegrees: 35,
+  squareDegrees: 5,
 };
 
 /** drop points closer than eps to their predecessor — a pen dwelling in place */
@@ -111,7 +120,10 @@ function turnDegrees(a: Point, b: Point, c: Point): number {
  * corners and survive. The retained previous point anchors the run, so a gentle
  * arc collapses to one segment rather than a staircase.
  */
-function mergeCollinear(points: readonly Point[], cornerDegrees: number): Point[] {
+function mergeCollinear(
+  points: readonly Point[],
+  cornerDegrees: number,
+): Point[] {
   if (points.length <= 2) return [...points];
   const out: Point[] = [points[0]];
   for (let i = 1; i < points.length - 1; i++) {
@@ -133,7 +145,8 @@ type Axis = 'h' | 'v' | null;
  * around 45° is treated as an intentional diagonal.
  */
 function classifyAxis(a: Point, b: Point, snapDegrees: number): Axis {
-  const deg = (Math.atan2(Math.abs(b.y - a.y), Math.abs(b.x - a.x)) * 180) / Math.PI; // 0..90 from horizontal
+  const deg =
+    (Math.atan2(Math.abs(b.y - a.y), Math.abs(b.x - a.x)) * 180) / Math.PI; // 0..90 from horizontal
   if (deg <= snapDegrees) return 'h';
   if (deg >= 90 - snapDegrees) return 'v';
   return null;
@@ -178,6 +191,92 @@ function averageGroups(
 }
 
 /**
+ * Pull nearly-right corners onto exactly 90°.
+ *
+ * Which corners are those? Not the obvious ones. Straightening has already made
+ * every corner between two axis-classified legs exactly square, and a leg
+ * cannot come within `squareDegrees` of perpendicular to an axis leg without
+ * classifying to the perpendicular axis itself — `squareDegrees` is the smaller
+ * window. So the corners left over are the ones where BOTH legs were drawn
+ * clearly diagonal: a room drawn at a slant, where nothing has been forced true
+ * and a 93° corner stays 93°.
+ *
+ * Rotating a leg about its corner moves its FAR node, and that node may anchor
+ * other walls — turn one leg and the rest of the shape has to follow, which is
+ * how a closed loop comes apart. So a leg turns only when nothing depends on
+ * where it ends (its far node carries no other segment), and only when it is a
+ * diagonal, because turning an axis-classified leg would undo the straightening
+ * that just made it true. Both ends free, each takes half the error; one end
+ * free, it takes all of it; neither, the corner stays as drawn — a corner is
+ * not worth breaking the room it belongs to. In a closed loop no end is free,
+ * so a loop can never be pulled apart here.
+ */
+function squareCorners(
+  nodes: { x: number; y: number }[],
+  segs: readonly { i: number; j: number; axis: Axis }[],
+  squareDegrees: number,
+): void {
+  const incident: number[][] = nodes.map(() => []);
+  for (let s = 0; s < segs.length; s++) {
+    incident[segs[s].i].push(s);
+    incident[segs[s].j].push(s);
+  }
+
+  // a free end that has already turned is spent: turning it again for the next
+  // corner would un-square the one it was just moved for
+  const spent = new Set<number>();
+  const farNode = (s: number, at: number): number =>
+    segs[s].i === at ? segs[s].j : segs[s].i;
+  /** the node this leg may swing, or null if the leg has to stay as drawn */
+  const swingable = (s: number, at: number): number | null => {
+    if (segs[s].axis !== null) return null;
+    const far = farNode(s, at);
+    return incident[far].length === 1 && !spent.has(far) ? far : null;
+  };
+  const swing = (n: number, at: number, degrees: number): void => {
+    const rad = (degrees * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const dx = nodes[n].x - nodes[at].x;
+    const dy = nodes[n].y - nodes[at].y;
+    nodes[n].x = nodes[at].x + dx * cos - dy * sin;
+    nodes[n].y = nodes[at].y + dx * sin + dy * cos;
+    spent.add(n);
+  };
+
+  for (let at = 0; at < nodes.length; at++) {
+    const legs = incident[at];
+    for (let p = 0; p < legs.length; p++) {
+      for (let q = p + 1; q < legs.length; q++) {
+        const n1 = farNode(legs[p], at);
+        const n2 = farNode(legs[q], at);
+        const ux = nodes[n1].x - nodes[at].x;
+        const uy = nodes[n1].y - nodes[at].y;
+        const vx = nodes[n2].x - nodes[at].x;
+        const vy = nodes[n2].y - nodes[at].y;
+        // signed, so the correction knows which way the corner has to turn
+        const between =
+          (Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy) * 180) / Math.PI;
+        const error = Math.abs(between) - 90;
+        if (Math.abs(error) > squareDegrees || Math.abs(error) < 1e-9) continue;
+        // turning the second leg by this much opens (or closes) the corner to 90°
+        const correction = -error * Math.sign(between);
+        const first = swingable(legs[p], at);
+        const second = swingable(legs[q], at);
+        if (first !== null && second !== null) {
+          swing(first, at, -correction / 2);
+          swing(second, at, correction / 2);
+        } else if (second !== null) {
+          swing(second, at, correction);
+        } else if (first !== null) {
+          swing(first, at, -correction);
+        }
+      }
+    }
+  }
+}
+
+/**
  * Turn freehand strokes into clean wall segments. Each stroke is simplified,
  * its vertices are welded into shared corner nodes, and every segment is
  * straightened to horizontal or vertical UNLESS it was drawn clearly
@@ -185,7 +284,9 @@ function averageGroups(
  * axis-aligned walls are geometrically exact and joined corners line up — a
  * wobbly hand-drawn rectangle comes back as four square walls sharing exact
  * corners, ready for WALL.ADD and room detection, while a real diagonal wall
- * keeps its slope.
+ * keeps its slope. Corners that survive all that still nearly square are
+ * finally turned onto exactly 90° (see `squareDegrees`), which is what a room
+ * drawn at a slant needs.
  */
 export function recognizeWalls(
   strokes: readonly (readonly Point[])[],
@@ -197,11 +298,14 @@ export function recognizeWalls(
     minLength,
     axisSnapDegrees,
     cornerDegrees,
+    squareDegrees,
   } = { ...DEFAULTS, ...options };
 
   // simplify, then fold each wavering-but-straight run back into one segment
   const simplified = strokes
-    .map((s) => mergeCollinear(simplifyStroke(s, simplifyTolerance), cornerDegrees))
+    .map((s) =>
+      mergeCollinear(simplifyStroke(s, simplifyTolerance), cornerDegrees),
+    )
     .filter((s) => s.length >= 2);
   if (simplified.length === 0) return [];
 
@@ -254,13 +358,22 @@ export function recognizeWalls(
   averageGroups(nodes, xuf, 'x');
   averageGroups(nodes, yuf, 'y');
 
-  // 4) emit segments from final node positions, dropping stray flicks
-  const out: WallSegment[] = [];
-  for (const s of segs) {
-    const a = { x: nodes[s.i].x, y: nodes[s.i].y };
-    const b = { x: nodes[s.j].x, y: nodes[s.j].y };
-    if (Math.hypot(b.x - a.x, b.y - a.y) < minLength) continue;
-    out.push({ a, b });
-  }
-  return out;
+  // 4) drop stray flicks BEFORE squaring, so a stub that will never be a wall
+  //    neither pins a node nor gets a real wall squared onto it. Swinging a leg
+  //    about its corner keeps its length, so nothing here changes afterwards.
+  const kept = segs.filter(
+    (s) =>
+      Math.hypot(nodes[s.j].x - nodes[s.i].x, nodes[s.j].y - nodes[s.i].y) >=
+      minLength,
+  );
+
+  // 5) square the near-right corners straightening could not reach — the ones
+  //    between two diagonals, which no axis was ever forced on
+  if (squareDegrees > 0) squareCorners(nodes, kept, squareDegrees);
+
+  // 6) emit segments from final node positions
+  return kept.map((s) => ({
+    a: { x: nodes[s.i].x, y: nodes[s.i].y },
+    b: { x: nodes[s.j].x, y: nodes[s.j].y },
+  }));
 }
