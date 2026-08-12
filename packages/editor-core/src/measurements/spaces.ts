@@ -19,6 +19,7 @@ import {
   pointInLoop,
 } from '../topology/arrangement.js';
 import { JOIN_TOLERANCE, intersectLines } from '../topology/junctions.js';
+import { isEntityVisible } from '../views/index.js';
 
 /**
  * A detected space (room): a bounded region of the wall arrangement.
@@ -150,18 +151,26 @@ function interiorPoint(
 /**
  * Detect spaces bounded by walls on a level. Walls are collected the way
  * plan views query (level-unassigned walls bound rooms on every level;
- * `levelId: null` = all walls); layer visibility is ignored — spaces are a
- * model fact, like quantities. Free function by design: derived on read,
- * no cache on the document.
+ * `levelId: null` = all walls); layer visibility is ignored by default —
+ * spaces are a model fact, like quantities. Free function by design: derived
+ * on read, no cache on the document.
+ *
+ * `visibleOnly` is for the one caller that cannot use the model fact: a plan
+ * VIEW, which may only shade and label rooms the user can see the walls of.
+ * It re-runs the arrangement without the hidden walls rather than filtering
+ * the finished rooms, which is the difference between a room that a hidden
+ * partition no longer divides and no room at all.
  */
 function collectWallSegments(
   doc: DrawingDocument,
   levelId: LevelId | null,
+  visibleOnly = false,
 ): { walls: Map<string, WallEntity>; segments: ArrangementSegment[] } {
   const walls = new Map<string, WallEntity>();
   const segments: ArrangementSegment[] = [];
   for (const entity of doc.all()) {
     if (!(entity instanceof WallEntity)) continue;
+    if (visibleOnly && !isEntityVisible(doc, entity)) continue;
     if (
       levelId !== null &&
       entity.baseLevelId !== null &&
@@ -180,11 +189,21 @@ function collectWallSegments(
   return { walls, segments };
 }
 
+export interface SpaceQuery {
+  /** skip walls on hidden layers — what a plan view shades and labels */
+  readonly visibleOnly?: boolean;
+}
+
 export function detectSpaces(
   doc: DrawingDocument,
   levelId: LevelId | null,
+  query: SpaceQuery = {},
 ): SpaceInfo[] {
-  const { walls, segments } = collectWallSegments(doc, levelId);
+  const { walls, segments } = collectWallSegments(
+    doc,
+    levelId,
+    query.visibleOnly === true,
+  );
 
   const halfWidthOf = (id: string): number => {
     const wall = walls.get(id);

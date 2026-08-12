@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { InputModifiers, ViewDefinition } from '@acip/editor-core';
+import { isEntityVisible } from '@acip/editor-core';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
 import { Viewport2D } from './viewport2d';
@@ -139,7 +140,11 @@ export function Viewport2DView() {
           );
           return;
         }
-        const entities = session.doc.all();
+        // fit what is on the screen: hidden work would otherwise zoom the plan
+        // out to make room for something nobody can see
+        const entities = session.doc
+          .all()
+          .filter((entity) => isEntityVisible(session.doc, entity));
         if (entities.length === 0) {
           viewport.fit(-6, -6, 6, 6, w, h); // empty plan → ~12 m around origin
           return;

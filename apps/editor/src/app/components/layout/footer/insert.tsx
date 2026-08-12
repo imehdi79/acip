@@ -5,6 +5,7 @@ import {
   IconWindow,
 } from '@tabler/icons-react';
 import type { EditorSession, EntityId, Point } from '@acip/editor-core';
+import { isEntityVisible } from '@acip/editor-core';
 import type { EditorUi } from '@/editor/ui-state';
 import { withResolvedWalls } from '@/editor/walls';
 
@@ -23,7 +24,11 @@ const ROOM_GAP = 1;
  * One history group, so it is a single undo.
  */
 export function insertRoom(session: EditorSession, ui: EditorUi): void {
-  const entities = session.doc.all();
+  // "everything drawn" is everything DRAWN: clearing hidden work would drop
+  // the new room far off to one side of a plan that looks empty there
+  const entities = session.doc
+    .all()
+    .filter((entity) => isEntityVisible(session.doc, entity));
   let minX = 0;
   let minY = 0;
   if (entities.length > 0) {

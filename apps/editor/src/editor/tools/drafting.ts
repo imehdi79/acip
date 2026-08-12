@@ -1,4 +1,4 @@
-import { WallEntity, hasGrips } from '@acip/editor-core';
+import { WallEntity, hasGrips, isEntityVisible } from '@acip/editor-core';
 import type { DrawingDocument, EntityId, Point } from '@acip/editor-core';
 
 /**
@@ -6,6 +6,12 @@ import type { DrawingDocument, EntityId, Point } from '@acip/editor-core';
  * clean angle, and read the live angles at a corner being dragged. Pure
  * geometry — the tools decide when to apply it and the renderer draws the
  * feedback.
+ *
+ * Every scan here reads VISIBLE entities only, matching the core snap engine:
+ * locked still snaps (drawing onto a plan you may not edit is the point), but
+ * hidden never — a guide line to a corner that is not on the screen, or a drag
+ * that sticks to one, is the drawing fighting back for no reason the user can
+ * see.
  */
 
 const RAD = Math.PI / 180;
@@ -77,7 +83,7 @@ function bearingsAt(
   const here = near(p, anchor) ? cursor : p;
   const out: number[] = [];
   for (const e of doc.all()) {
-    if (!(e instanceof WallEntity)) continue;
+    if (!(e instanceof WallEntity) || !isEntityVisible(doc, e)) continue;
     const { a, b } = e.getBaseline();
     const ma = move(a);
     const mb = move(b);
@@ -132,7 +138,7 @@ export function cornerAngles(
   addCorner(cursor);
   // the far end of every wall welded to the dragged corner
   for (const e of doc.all()) {
-    if (!(e instanceof WallEntity)) continue;
+    if (!(e instanceof WallEntity) || !isEntityVisible(doc, e)) continue;
     const { a, b } = e.getBaseline();
     if (near(a, anchor)) addCorner(b);
     else if (near(b, anchor)) addCorner(a);
@@ -187,7 +193,7 @@ export function planDragSnap(
   const movingNodes: Point[] = [];
   const fixedNodes: { point: Point; entityId: EntityId }[] = [];
   for (const e of doc.all()) {
-    if (!hasGrips(e)) continue;
+    if (!hasGrips(e) || !isEntityVisible(doc, e)) continue;
     if (moving.has(e.id as string)) {
       for (const g of e.getGrips()) movingNodes.push(g.point);
     } else {
@@ -282,7 +288,7 @@ export function alignGuides(
   let bestX: { at: Point; d: number } | null = null;
   let bestY: { at: Point; d: number } | null = null;
   for (const e of doc.all()) {
-    if (!hasGrips(e)) continue;
+    if (!hasGrips(e) || !isEntityVisible(doc, e)) continue;
     for (const g of e.getGrips()) {
       const p = g.point;
       if (exclude && near(p, exclude)) continue;

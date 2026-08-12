@@ -12,6 +12,7 @@ import type {
   ArrangementSegment,
   EntityId,
   JsonObject,
+  LayerId,
   LevelId,
   Point,
 } from '../src/index.js';
@@ -253,6 +254,56 @@ describe('detectSpaces — derived rooms', () => {
       elevation: 0,
     });
     expect(detectSpaces(unassigned.doc, ul1).length).toBe(1);
+  });
+
+  test('hiding a partition keeps the room in the model but not in the view', () => {
+    const session = new EditorSession();
+    drawRoom(session);
+    const other = session.dispatch<LayerId>('LAYER.ADD', { name: 'other' });
+    session.dispatch<EntityId>('WALL.ADD', {
+      a: point(3, 0),
+      b: point(3, 4),
+      thickness: 0.3,
+      height: 3,
+      layerId: other,
+    });
+    expect(detectSpaces(session.doc, null).length).toBe(2);
+
+    session.dispatch('LAYER.UPDATE', { id: other, visible: false });
+
+    // the model fact is unchanged: those walls still enclose two regions, and
+    // quantities must not swing on a view toggle
+    expect(detectSpaces(session.doc, null).length).toBe(2);
+
+    // a plan view asks for what it can draw, and gets ONE room back — not two
+    // halves dropped for touching a hidden wall
+    const shown = detectSpaces(session.doc, null, { visibleOnly: true });
+    expect(shown.length).toBe(1);
+    expect(shown[0].grossArea).toBeCloseTo(24, 6);
+
+    session.dispatch('LAYER.UPDATE', { id: other, visible: true });
+    expect(detectSpaces(session.doc, null, { visibleOnly: true }).length).toBe(
+      2,
+    );
+  });
+
+  test('a room made only of hidden walls is not drawn as one', () => {
+    const session = new EditorSession();
+    const other = session.dispatch<LayerId>('LAYER.ADD', { name: 'other' });
+    const corners = [point(0, 0), point(6, 0), point(6, 4), point(0, 4)];
+    for (let i = 0; i < corners.length; i++) {
+      session.dispatch<EntityId>('WALL.ADD', {
+        a: corners[i],
+        b: corners[(i + 1) % corners.length],
+        thickness: 0.3,
+        height: 3,
+        layerId: other,
+      });
+    }
+    session.dispatch('LAYER.UPDATE', { id: other, visible: false });
+
+    expect(detectSpaces(session.doc, null).length).toBe(1);
+    expect(detectSpaces(session.doc, null, { visibleOnly: true })).toEqual([]);
   });
 
   test('digest carries spaces so agents can address rooms', () => {

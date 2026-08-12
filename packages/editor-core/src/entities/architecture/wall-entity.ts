@@ -50,6 +50,7 @@ import type {
 import { cutsOpening } from '../base/capabilities.js';
 import type { SnapKind, SnapPoint } from '../base/snap.js';
 import type { Transaction } from '../../document/history/transaction.js';
+import { isEntityVisible } from '../../views/index.js';
 
 /** which end of a wall's baseline — `start` is `a`, `end` is `b` */
 export type WallEndSide = 'start' | 'end';
@@ -151,16 +152,24 @@ export class WallEntity
    *
    * An empty list means a free end. Proximity alone never counts: a wall
    * passing 5 cm away is not joined to anything.
+   *
+   * A join holds only between two walls that are both on the drawing. It is
+   * not bookkeeping — it changes how BOTH walls are drawn — so a hidden wall
+   * neither takes a join nor gives one: mitering a wall against something the
+   * user cannot see is a corner cut to fit a ghost. Hidden hides everywhere,
+   * and this is one of the everywheres.
    */
   getJoinsAt(which: WallEndSide): WallJoin[] {
     const doc = this.doc;
     if (!doc || this.getLength() < JOIN_TOLERANCE) return [];
+    if (!isEntityVisible(doc, this)) return [];
     const p = which === 'start' ? this.a : this.b;
     const nearby: WallEntity[] = [];
     for (const other of doc.queryBBox(
       bboxExpand(bboxFromPoints([p]), JOIN_TOLERANCE),
     )) {
       if (other === this || !(other instanceof WallEntity)) continue;
+      if (!isEntityVisible(doc, other)) continue;
       const bl = other.getBaseline();
       if (distance(bl.a, bl.b) < JOIN_TOLERANCE) continue;
       nearby.push(other);

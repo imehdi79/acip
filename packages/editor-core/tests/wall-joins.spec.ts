@@ -6,7 +6,7 @@ import {
   resolveJunction,
   resolveTeeCap,
 } from '../src/index.js';
-import type { EntityId, Point, WallEnd } from '../src/index.js';
+import type { EntityId, LayerId, Point, WallEnd } from '../src/index.js';
 
 const H = 0.15; // halfWidth of a 0.3m wall
 
@@ -310,5 +310,39 @@ describe('WallEntity — derived auto-joins', () => {
     expect(after.maxX).toBeCloseTo(before.maxX, 9);
     // wall area unchanged by the interior opening despite the mitered corner
     expect(session.measure.areaOf(wallA)).toBeGreaterThan(0);
+  });
+
+  test('a wall on a hidden layer joins nothing', () => {
+    const session = new EditorSession();
+    const wallA = addWall(session, 0, 0, 6, 0);
+    const free = boundaryOf(session, wallA).map((p) => `${p.x},${p.y}`);
+
+    // a wall into its end, but on a layer that is switched off
+    const other = session.dispatch<LayerId>('LAYER.ADD', { name: 'other' });
+    const wallB = session.dispatch<EntityId>('WALL.ADD', {
+      a: point(0, 0),
+      b: point(0, 5),
+      thickness: 0.3,
+      height: 3,
+      layerId: other,
+    });
+    const wall = session.doc.get(wallA) as WallEntity;
+    expect(wall.getJoinsAt('start').length).toBe(1); // visible: joined
+
+    session.dispatch('LAYER.UPDATE', { id: other, visible: false });
+
+    // the corner is gone, and with it the miter: a wall you cannot see must
+    // not change the shape of one you can
+    expect(wall.getJoinsAt('start')).toEqual([]);
+    expect(boundaryOf(session, wallA).map((p) => `${p.x},${p.y}`)).toEqual(
+      free,
+    );
+    // and the hidden wall does not miter into the visible one either
+    expect((session.doc.get(wallB) as WallEntity).getJoinsAt('start')).toEqual(
+      [],
+    );
+
+    session.dispatch('LAYER.UPDATE', { id: other, visible: true });
+    expect(wall.getJoinsAt('start').length).toBe(1);
   });
 });

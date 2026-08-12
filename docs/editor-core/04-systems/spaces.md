@@ -97,11 +97,19 @@ widths, the other measures outer overall extents.
 - `topology/arrangement.ts` — `arrangeSegments(segments, tolerance)`: pure,
   entity-free, testable in isolation (the junctions.ts pattern). Each face
   edge remembers its source segment id and is oriented interior-on-the-left.
-- `measurements/spaces.ts` — `detectSpaces(doc, levelId)`: collects walls the
-  way plan views do (`baseLevelId === levelId`, level-unassigned walls appear
-  on every level), feeds the arrangement, builds gross/net polygons, returns
-  `SpaceInfo[]` sorted stably. Layer visibility is ignored — spaces are a
-  model fact, like quantities.
+- `measurements/spaces.ts` — `detectSpaces(doc, levelId, query?)`: collects
+  walls the way plan views do (`baseLevelId === levelId`, level-unassigned
+  walls appear on every level), feeds the arrangement, builds gross/net
+  polygons, returns `SpaceInfo[]` sorted stably. Layer visibility is ignored by
+  default — spaces are a model fact, like quantities, and hiding a layer must
+  not silently drop rooms from a schedule.
+  - `{ visibleOnly: true }` (added 2026-08-12) is the exception a plan VIEW
+    needs: it may only shade and label rooms whose walls are on the screen.
+    The flag re-runs the arrangement without hidden walls rather than
+    filtering finished rooms — the difference between "a hidden partition no
+    longer divides this room" (one room) and "both halves touch a hidden wall,
+    drop them" (no room at all). Renderer and room-picking pass it; the
+    estimator, finishes and the LLM digest do not.
 - **Names** — `findSpaceTag(doc, space)` / `spaceName(doc, space)` in
   `measurements/spaces.ts`: the read side of naming, free functions like
   everything else here. Consumers draw the name wherever they already put the

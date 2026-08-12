@@ -438,11 +438,17 @@ export class SelectTool implements Tool {
     return hits[hits.length - 1] ?? null;
   }
 
-  /** boundary walls of the detected room containing the point, or null */
+  /**
+   * Boundary walls of the detected room containing the point, or null.
+   *
+   * Visible rooms only: tapping inside one selects its walls, and a room whose
+   * sides are switched off would hand back a selection of things that are not
+   * on the screen.
+   */
   private roomWallsAt(point: Point): EntityId[] | null {
     const ctx = this.ctx;
     if (!ctx) return null;
-    for (const space of detectSpaces(ctx.doc, null)) {
+    for (const space of detectSpaces(ctx.doc, null, { visibleOnly: true })) {
       if (
         space.boundaryWallIds.length > 0 &&
         pointInLoop(point, space.boundary)
@@ -484,6 +490,11 @@ export class SelectTool implements Tool {
    * Every grippable endpoint sitting on the given corner (within the wall
    * join tolerance), across ALL entities — not just the selected one. Dragging
    * that corner moves them together so a joined junction stays joined.
+   *
+   * "All entities" still means all the ones this drag is allowed to move. A
+   * locked wall is on the drawing but not yours to edit, and a hidden one is
+   * not on the drawing at all — carrying either because something happened to
+   * share its corner would edit through a lock, silently.
    */
   private coincidentGrips(anchor: Point): { id: EntityId; index: number }[] {
     const ctx = this.ctx;
@@ -494,6 +505,7 @@ export class SelectTool implements Tool {
       // an opening's ends are a width, not a junction: a window sitting flush
       // against a wall corner must not be stretched when that corner moves
       if (!hasGrips(entity) || entity instanceof HostedOpeningEntity) continue;
+      if (!isEntityInteractive(ctx.doc, entity)) continue;
       for (const grip of entity.getGrips()) {
         if (distance(grip.point, anchor) <= JOIN_TOLERANCE) {
           out.push({ id: entity.id, index: grip.index });

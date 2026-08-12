@@ -22,6 +22,11 @@ Consequences accepted with the decision:
   derived resolver just reads them.
 - Quantities stay **centerline-based**; the miter does not change takeoff.
   This matches common measurement rules and keeps the estimator independent.
+- A join needs BOTH walls visible (2026-08-12). `getJoinsAt` skips walls on
+  hidden layers and returns nothing for a hidden wall, so a wall the user
+  cannot see never miters, tees or shortens one they can — the drawn corner
+  always matches the drawn walls. Safe precisely because of the line above:
+  joins are a drawing concern, so dropping one changes no quantity.
 
 ## The wheel algorithm (`topology/junctions.ts`)
 

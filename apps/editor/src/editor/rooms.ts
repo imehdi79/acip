@@ -1,5 +1,5 @@
 import type { DrawingDocument, EntityId, Point } from '@acip/editor-core';
-import { WallEntity } from '@acip/editor-core';
+import { WallEntity, isEntityInteractive } from '@acip/editor-core';
 
 const TOL = 1e-3;
 
@@ -202,9 +202,12 @@ export function planWallResize(
     to: { x: moved.x + delta.x, y: moved.y + delta.y },
   });
 
-  // carry the corner partners at that end, rigid so their own size is kept
+  // carry the corner partners at that end, rigid so their own size is kept —
+  // except the ones under a lock, which are joined to this wall but not open
+  // to being moved by it
   for (const join of joins[anchorIndex === 0 ? 'end' : 'start']) {
     if (join.kind !== 'corner') continue;
+    if (!isEntityInteractive(doc, join.wall)) continue;
     const plan = planStickyWallMove(doc, [join.wall.id], delta);
     if (plan) for (const m of plan.moves) put(m);
   }
@@ -244,6 +247,11 @@ export interface StickyWallMovePlan {
  * follow (stretching, its far end fixed) so junctions stay intact. Returns
  * null unless every selected entity is a wall — other selections fall back to
  * a plain translate.
+ *
+ * Only walls the user may actually edit are carried. A wall welded to a locked
+ * one does not drag it along: sharing a corner is not permission, and the
+ * junction simply comes apart where the lock is — which is the honest outcome
+ * of moving one of two walls that were joined.
  */
 export function planStickyWallMove(
   doc: DrawingDocument,
@@ -266,6 +274,7 @@ export function planStickyWallMove(
   const onCorner = (p: Point) => movingCorners.some((c) => samePt(c, p));
   for (const e of doc.all()) {
     if (!(e instanceof WallEntity) || idSet.has(e.id)) continue;
+    if (!isEntityInteractive(doc, e)) continue;
     const { a, b } = e.getBaseline();
     if (onCorner(a)) {
       const to = { x: a.x + delta.x, y: a.y + delta.y };

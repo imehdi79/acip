@@ -4,7 +4,11 @@ import type {
   Point,
   ViewDefinition,
 } from '@acip/editor-core';
-import { HostedOpeningEntity, WallEntity } from '@acip/editor-core';
+import {
+  HostedOpeningEntity,
+  WallEntity,
+  isEntityVisible,
+} from '@acip/editor-core';
 
 /**
  * What a dimension measures. Walls and the openings cut into them share every
@@ -291,6 +295,12 @@ function centreOf(dims: readonly { a: Point; b: Point }[]): Point {
  * Openings are reached through their hosts rather than scanned for, because
  * the host is what puts them on a level at all: nothing about a window says
  * which storey it belongs to.
+ *
+ * Hidden entities are measured by nobody. A dimension is drawn linework like
+ * any other, and one standing off a wall that is not on the screen is a number
+ * hanging in space — which is exactly what a closed danger zone used to leave
+ * behind. An opening is checked on its own account as well as its host's: it
+ * can sit on a layer of its own.
  */
 export function planDimensions(
   doc: DrawingDocument,
@@ -305,11 +315,13 @@ export function planDimensions(
   for (const entity of doc.all()) {
     if (!(entity instanceof WallEntity)) continue;
     if ((entity.baseLevelId ?? null) !== levelId) continue;
+    if (!isEntityVisible(doc, entity)) continue;
     const dim = wallExtent(entity);
     if (dim) walls.push({ ...dim, selected: selection.has(entity.id) });
     for (const hostedId of doc.relations.dependentsOf(entity.id)) {
       const hosted = doc.get(hostedId);
       if (!(hosted instanceof HostedOpeningEntity)) continue;
+      if (!isEntityVisible(doc, hosted)) continue;
       const span = openingExtent(hosted);
       if (span) openings.push({ ...span, selected: selection.has(hostedId) });
     }

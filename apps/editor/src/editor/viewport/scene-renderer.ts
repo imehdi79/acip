@@ -12,7 +12,9 @@ import {
   WallEntity,
   buildDisplayList,
   detectSpaces,
+  findSpaceTag,
   hasGrips,
+  isEntityVisible,
   spaceName,
   wallAssemblyStrips,
 } from '@acip/editor-core';
@@ -323,9 +325,14 @@ export function drawScene(
     ctx.restore();
   }
 
-  // detected rooms (derived on read): soft net-boundary fill under the walls
+  // detected rooms (derived on read): soft net-boundary fill under the walls.
+  // A view shades what it draws, so hidden walls take no part — a room the
+  // user cannot see the sides of is not a room on this drawing, and one that
+  // an invisible partition used to divide is a single room again.
   const spaces: SpaceInfo[] =
-    view.kind === 'plan' ? detectSpaces(doc, view.levelId) : [];
+    view.kind === 'plan'
+      ? detectSpaces(doc, view.levelId, { visibleOnly: true })
+      : [];
   if (spaces.length > 0) {
     ctx.fillStyle = COLORS.spaceFill;
     ctx.beginPath();
@@ -482,8 +489,11 @@ export function drawScene(
     for (const space of spaces) {
       if (space.netArea * viewport.scale * viewport.scale < 40 * 40) continue;
       const at = viewport.toScreen(space.labelPoint);
-      // named rooms read as a name first: the area drops to a caption under it
-      const name = spaceName(doc, space);
+      // named rooms read as a name first: the area drops to a caption under it.
+      // A tag on a hidden layer is a hidden name — the room keeps its area.
+      const tag = findSpaceTag(doc, space);
+      const name =
+        tag && isEntityVisible(doc, tag) ? spaceName(doc, space) : '';
       const area = `${space.netArea.toFixed(1)} m²`;
       if (name) {
         ctx.font = '600 13px system-ui, sans-serif';

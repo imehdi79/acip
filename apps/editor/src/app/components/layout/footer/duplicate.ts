@@ -5,7 +5,12 @@ import type {
   EntityId,
   Point,
 } from '@acip/editor-core';
-import { bboxExpand, bboxUnion, point } from '@acip/editor-core';
+import {
+  bboxExpand,
+  bboxUnion,
+  isEntityVisible,
+  point,
+} from '@acip/editor-core';
 import type { EditorUi } from '@/editor/ui-state';
 import { withResolvedWalls } from '@/editor/walls';
 
@@ -48,14 +53,24 @@ const shift = (b: BBox, by: Point): BBox => ({
   maxY: b.maxY + by.y,
 });
 
-/** is this spot empty, counting the selection itself as not in the way? */
+/**
+ * Is this spot empty, counting the selection itself as not in the way?
+ *
+ * Only what is on the screen can be in the way. A copy that dodges around
+ * hidden work lands in a gap the user cannot account for, which is worse than
+ * landing where the ground looks clear.
+ */
 function isFree(
   doc: DrawingDocument,
   spot: BBox,
   selected: ReadonlySet<EntityId>,
 ): boolean {
   const room = bboxExpand(spot, CLEARANCE);
-  return doc.queryBBox(room).every((entity) => selected.has(entity.id));
+  return doc
+    .queryBBox(room)
+    .every(
+      (entity) => selected.has(entity.id) || !isEntityVisible(doc, entity),
+    );
 }
 
 /**
