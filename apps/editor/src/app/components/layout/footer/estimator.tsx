@@ -9,6 +9,7 @@ import type { BBox } from '@acip/editor-core';
 import { useSession } from '@/editor/session-context';
 import { useRuntime } from '@/editor/runtime';
 import type { FitBounds } from '@/editor/ui-state';
+import { loadPrices, pricesFor, type PriceBook } from '@/data/prices';
 import { estimatorSteps } from './estimator-steps';
 
 /**
@@ -56,6 +57,38 @@ function framing(bounds: BBox): FitBounds {
 }
 
 /**
+ * The rates for the shape under the walk.
+ *
+ * A list, and nothing more: no quantities, no arithmetic, no totals. What a
+ * 4.65 m wall costs needs the takeoff as well as the rate, and putting a number
+ * on the screen before that arithmetic exists would be inventing one.
+ *
+ * A kind with no rates is a normal answer — the walk covers stairs and slabs
+ * too — so it says so rather than showing an empty box.
+ */
+function Rates({ book, kind }: { book: PriceBook | null; kind: string }) {
+  if (!book) return <p className="text-xs text-muted">Loading rates…</p>;
+  const rates = pricesFor(book, kind);
+  if (rates.length === 0) {
+    return <p className="text-xs text-muted">No rates for this yet.</p>;
+  }
+  return (
+    // capped and scrollable: the sheet sits over the plan it is describing, and
+    // a long list would push the drawing off the screen
+    <ul className="mt-1 max-h-32 overflow-y-auto text-left text-sm">
+      {rates.map((rate) => (
+        <li key={rate.id} className="flex justify-between gap-3 py-0.5">
+          <span>{rate.label}</span>
+          <span className="shrink-0 text-muted tabular-nums">
+            {rate.rate.toFixed(2)} / {rate.unit}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
  * The wizard: one shape at a time, first to last, so nothing in the plan is
  * priced by accident or missed. Only the name for now — the step is the frame
  * that the quantities and the rate for each shape go into next.
@@ -93,6 +126,22 @@ function ShapeWizard({ close }: { close: () => void }) {
    * the selection either way.
    */
   const [wholePlan, setWholePlan] = useState(false);
+  /** the rate book, once it arrives; null while it is still coming */
+  const [prices, setPrices] = useState<PriceBook | null>(null);
+
+  // Fetched once per opening, not once per step: the book covers every kind,
+  // and asking again on Next would be a request per tap. The flag is not
+  // ceremony — this sheet can be closed before a promise settles, and setting
+  // state on a wizard that is gone is a warning at best.
+  useEffect(() => {
+    let live = true;
+    void loadPrices().then((book) => {
+      if (live) setPrices(book);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const step = steps[index];
   const last = index >= steps.length - 1;
@@ -153,6 +202,7 @@ function ShapeWizard({ close }: { close: () => void }) {
               {index + 1} of {steps.length}
             </p>
             <p className="text-lg font-medium">{step.name}</p>
+            <Rates book={prices} kind={step.kind} />
           </>
         ) : (
           <p className="text-sm text-muted">
