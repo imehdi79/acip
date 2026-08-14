@@ -1,0 +1,36 @@
+# Local development database for editor-admin.
+#
+# Separate from the root docker-compose.yml, which deploys editor-server to a
+# VPS — this one only ever runs on a developer machine, and owns the
+# `editor_admin` database rather than editor-server's `acip`.
+#
+#   docker compose up -d
+#   bun run db:migrate    # first run: --name init
+#   bun run db:seed
+#
+# Port 5434 on the host. 5432 is where editor-server's Postgres goes, and 5433
+# is already taken by an unrelated `pg` container on this machine — two
+# databases fighting over one port is a confusing failure, and connecting to
+# the wrong one is worse.
+name: acip-editor-admin
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: editor_admin
+    ports:
+      - '5434:5432'
+    volumes:
+      - editor_admin_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d editor_admin']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  editor_admin_pgdata:

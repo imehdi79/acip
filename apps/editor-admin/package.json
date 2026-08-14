@@ -1,0 +1,36 @@
+{
+  "name": "@acip/editor-admin",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@heroui/react": "^3.2.4",
+    "@heroui/styles": "^3.2.4",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "@react-aria/i18n": "^3.13.1",
+    "@react-aria/ssr": "^3.10.1",
+    "@react-aria/utils": "^3.34.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "dotenv": "^17.4.2",
+    "next": "~16.1.6",
+    "pg": "^8.23.0",
+    "postcss": "^8.5.26",
+    "react": "^19.0.0",
+    "react-aria": "^3.51.0",
+    "react-aria-components": "^1.20.0",
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.21.0",
+    "prisma": "^7.9.1",
+    "tsx": "^4.23.12"
+  }
+}

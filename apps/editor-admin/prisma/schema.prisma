@@ -1,0 +1,30 @@
+// Admin logins for the editor. Its own `editor_admin` database, deliberately
+// not the `acip` one editor-server owns — credentials and drawing/pricing data
+// have no reason to share a blast radius or a migration history.
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7 takes the connection URL from prisma.config.ts, not from here.
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id String @id @default(uuid())
+
+  email String  @unique
+  name  String?
+
+  /// `scrypt$<saltHex>$<keyHex>` — Node's built-in scrypt, so signing in
+  /// costs us no native dependency. Never a plaintext password, anywhere.
+  passwordHash String
+
+  /// "admin" for now. A plain string keeps adding a role a data change
+  /// rather than a migration; there is no second role worth an enum yet.
+  role String @default("admin")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
