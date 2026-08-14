@@ -26,9 +26,6 @@
     },
     {
       "path": "./apps/editor"
-    },
-    {
-      "path": "./apps/editor-admin"
     }
   ]
 }
