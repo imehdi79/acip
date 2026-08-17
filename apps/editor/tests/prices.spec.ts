@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EditorSession, point } from '@acip/editor-core';
 import type { EntityId } from '@acip/editor-core';
-import { loadPrices, pricesFor } from '@/data/prices';
+import { buildFor, loadBuilds, loadPrices, pricesFor } from '@/data/prices';
 import { estimatorSteps } from '@/app/components/layout/footer/estimator-steps';
 
 /**
@@ -38,6 +38,26 @@ describe('the rate book', () => {
   });
 
   /*
+   * `detail` is OPTIONAL in the type, because a book fetched from a server may
+   * hold numbers and no prose, and the sheet has an on-screen answer for that.
+   * It is not optional of the book that ships here: these twelve are written by
+   * hand, and a hand that can write "Plaster, two coats" can write the line
+   * saying it is measured per face. So the contract is checked where it lives —
+   * the type keeps the view honest, this test keeps the DATA honest.
+   */
+  it('explains every rate it ships with', async () => {
+    const book = await loadPrices();
+    for (const rates of Object.values(book)) {
+      for (const rate of rates) {
+        expect(rate.detail?.trim()).toBeTruthy();
+        // the row already prints the number, and there is still no currency
+        // modelled for the line to name — writing one would invent it
+        expect(rate.detail).not.toMatch(/[$€£¥]/);
+      }
+    }
+  });
+
+  /*
    * The book is keyed by `EstimatorStep.kind`, which is the ENTITY's own type
    * — not a name chosen here. Key it 'windows' and the list silently never
    * appears for a window, with nothing to see but an empty panel. So the two
@@ -62,8 +82,60 @@ describe('the rate book', () => {
       estimatorSteps(session.doc, null).map((step) => step.kind),
     );
     expect(kinds).toEqual(new Set(['wall', 'room', 'window', 'door']));
+    const builds = await loadBuilds();
     for (const kind of kinds) {
       expect(pricesFor(book, kind).length).toBeGreaterThan(0);
+      // the build item is keyed the same way, and gets the same guard: a key
+      // that does not match a step's kind is a row that silently never appears
+      expect(buildFor(builds, kind)).not.toBeNull();
+    }
+  });
+});
+
+/**
+ * The build book is the same seam with a different shape: what a thing is made
+ * OF rather than what it costs. Its ids are what the wizard carries between
+ * steps, so the namespacing is not cosmetic — it is what stops a floor arriving
+ * pre-answered as brick.
+ */
+describe('the build book', () => {
+  it('says what every shape the estimator walks is built from', async () => {
+    const builds = await loadBuilds();
+    for (const kind of ['wall', 'room', 'window', 'door']) {
+      const item = buildFor(builds, kind);
+      expect(item?.label.trim()).toBeTruthy();
+      expect(item?.detail.trim()).toBeTruthy();
+      // a choice of one is not a choice; a picker needs somewhere to go
+      expect(item?.options.length).toBeGreaterThan(1);
+      for (const option of item?.options ?? []) {
+        expect(option.label.trim()).toBeTruthy();
+      }
+    }
+  });
+
+  it('answers with nothing for a kind nobody has described', async () => {
+    const builds = await loadBuilds();
+    expect(buildFor(builds, 'stair')).toBeNull();
+    expect(buildFor(builds, 'not-a-thing')).toBeNull();
+  });
+
+  it('namespaces every id by its kind', async () => {
+    // what makes carrying the answers across Next safe: cross from the walls
+    // into the rooms and nothing matches, so the sheet arrives blank rather
+    // than quietly claiming the floor is made of brick
+    const builds = await loadBuilds();
+    for (const [kind, item] of Object.entries(builds)) {
+      expect(item.id).toBe(`${kind}.built`);
+      for (const option of item.options) {
+        expect(option.id.startsWith(`${kind}.built.`)).toBe(true);
+      }
+    }
+  });
+
+  it('keeps a currency out of the prose, as the rates do', async () => {
+    const builds = await loadBuilds();
+    for (const item of Object.values(builds)) {
+      expect(item.detail).not.toMatch(/[$€£¥]/);
     }
   });
 });
