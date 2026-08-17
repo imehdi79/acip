@@ -65,10 +65,16 @@ export class HistoryStack {
       throw new DocumentError('cannot undo while a history group is open');
     const entry = this.undoStack.pop();
     if (!entry) return null;
+    // the entry moves stacks BEFORE the replay, and the order is load-bearing:
+    // each replayed record ends in a synchronous change event, and a listener
+    // that reads canUndo/canRedo from inside one — the footer does, to grey its
+    // buttons — must never catch the entry mid-flight, on neither stack. With
+    // the push last, the footer recorded canRedo: false during the undo and no
+    // later event ever corrected it, so Redo could not be pressed at all.
+    this.redoStack.push(entry);
     for (let i = entry.length - 1; i >= 0; i--) {
       this.undoRecord(entry[i]);
     }
-    this.redoStack.push(entry);
     return entry;
   }
 
@@ -77,10 +83,12 @@ export class HistoryStack {
       throw new DocumentError('cannot redo while a history group is open');
     const entry = this.redoStack.pop();
     if (!entry) return null;
+    // mirror of undo(): the stack move precedes the replay so that a listener
+    // reading canUndo during the redo events sees the state redo ended in
+    this.undoStack.push(entry);
     for (const record of entry) {
       this.redoRecord(record);
     }
-    this.undoStack.push(entry);
     return entry;
   }
 

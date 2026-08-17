@@ -69,6 +69,20 @@ interface Transaction {
 Any throw → rollback; the document is untouched. An AI agent's tool-use call is literally
 `bus.dispatch(name, json)`.
 
+### A change event is emitted from a settled state
+
+Step 4's order — history first, event second — is a contract, not an implementation
+detail, and undo/redo obey the same rule: the entry moves between the stacks **before**
+its records are replayed. So `canUndo`/`canRedo` read from inside any `commit`/`undo`/
+`redo` event are the values the operation finished with, and a grouped entry moves
+atomically before the first of its events fires.
+
+The UI is a first-class consumer of this. A footer that greys its Undo/Redo buttons
+subscribes to the change event and has nowhere else to learn that history moved — with
+the push last it recorded `canRedo: false` during an undo and no later event ever
+corrected it, so Redo could not be pressed at all (fixed 2026-08-16). Anything that
+"tidies" the stack move back below the replay reintroduces that.
+
 ## The commit record — quietly the most valuable object in the system
 
 Commit produces one immutable record:
