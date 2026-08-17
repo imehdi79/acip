@@ -16,7 +16,7 @@ import {
   wallAssemblyStrips,
 } from '@acip/editor-core';
 import type { Viewport2D } from './viewport2d';
-import type { OverlayState, UnderlayState } from '../ui-state';
+import type { MeasureMode, OverlayState, UnderlayState } from '../ui-state';
 import { formatLength } from '../units';
 import { visibleSpaceName } from '../spaces';
 import { planDimensions } from './wall-dimensions';
@@ -514,6 +514,11 @@ const DIM_LANE_PX = 22;
  *
  * Drawn entirely in screen space, so line weights and glyphs stay a fixed size
  * at any zoom and text is never Y-mirrored by the world transform.
+ *
+ * `mode` is passed straight through to the layout: outer overall extents or
+ * inner clear widths. Nothing here changes with it — the anchors already are
+ * whatever was measured, so the pass below draws the inner span exactly the way
+ * it draws the outer one.
  */
 export function drawPlanDimensions(
   canvas: HTMLCanvasElement,
@@ -521,10 +526,11 @@ export function drawPlanDimensions(
   doc: DrawingDocument,
   view: ViewDefinition,
   selection: ReadonlySet<string> = new Set(),
+  mode: MeasureMode = 'outside',
 ): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const dims = planDimensions(doc, view, selection);
+  const dims = planDimensions(doc, view, selection, mode);
   if (dims.length === 0) return;
 
   const dpr = window.devicePixelRatio || 1;

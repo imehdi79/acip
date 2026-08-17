@@ -10,6 +10,7 @@ import {
 import { IconRulerMeasure } from '@tabler/icons-react';
 import type { EditorSession } from '@acip/editor-core';
 import { unitLabel } from '@/editor/units';
+import { useRuntime } from '@/editor/runtime';
 import {
   applyMeasurements,
   commonValue,
@@ -17,6 +18,7 @@ import {
   selectedWalls,
   wallLength,
   type MeasurementField,
+  type MeasureView,
 } from './measurements';
 
 /**
@@ -37,11 +39,20 @@ function Fields({
   session: EditorSession;
   close: () => void;
 }) {
+  const { ui } = useRuntime();
   const walls = selectedWalls(session);
   const single = walls.length === 1 ? walls[0] : null;
+  // Read once, at the moment the dialog opens, and used for both the prefill
+  // and the Apply: the settings sheet cannot be reached from inside this
+  // dialog, so the mode cannot change under it — and pinning it means the
+  // number Apply subtracts from is the number the field was filled with.
+  const view: MeasureView = {
+    levelId: ui.activeLevelId.get(),
+    mode: ui.measureMode.get(),
+  };
 
   const [length, setLength] = useState(() =>
-    prefill(single ? wallLength(single) : null),
+    prefill(single ? wallLength(session.doc, single, view) : null),
   );
   const [height, setHeight] = useState(() =>
     prefill(commonValue(walls, (wall) => wall.getHeight())),
@@ -55,11 +66,12 @@ function Fields({
   const mixed = walls.length > 1 ? 'Mixed' : unit;
 
   const apply = () => {
-    const bad = applyMeasurements(session, walls, {
-      length,
-      height,
-      thickness,
-    });
+    const bad = applyMeasurements(
+      session,
+      walls,
+      { length, height, thickness },
+      view,
+    );
     setInvalid(bad);
     if (bad.length === 0) close();
   };

@@ -12,6 +12,20 @@ export type ViewTab = 'plan' | '3d';
 
 export type StarterMode = 'replace' | 'add';
 
+/**
+ * Which face of a wall the automatic plan dimensions measure.
+ *
+ * The two-sided wall rule from docs/editor-core/04-systems/dimensions.md, as a
+ * view setting rather than per dimension: `outside` is the overall extent, from
+ * outer corner to outer corner, and `inside` is the clear width — the face on
+ * the opposite side from the one the dimension line stands off on, which for a
+ * room is the face you would run a tape along.
+ *
+ * A drawing setting, not document content: nothing is stored, so switching it
+ * costs no edit and no undo step.
+ */
+export type MeasureMode = 'outside' | 'inside';
+
 export interface FitBounds {
   minX: number;
   minY: number;
@@ -154,6 +168,13 @@ export class EditorUi {
   readonly showDemolition = new ValueStore<boolean>(false);
   /** price walls solid (توپر): openings are not deducted, costed as separate items */
   readonly solidWalls = new ValueStore<boolean>(false);
+  /**
+   * Outer overall extents or inner clear widths on the plan's automatic
+   * dimensions. Outside is the default because it is what the linework already
+   * showed before there was a choice — a setting must not change the drawing
+   * the moment it exists.
+   */
+  readonly measureMode = new ValueStore<MeasureMode>('outside');
   /** starter modal (preset picker) — shown on first empty load and on New */
   readonly starterOpen = new ValueStore<boolean>(false);
   /** side panels open as a drawer on mobile (desktop always shows them) */

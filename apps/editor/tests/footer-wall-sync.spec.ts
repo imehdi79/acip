@@ -64,11 +64,15 @@ const centreline = (w: WallEntity): number => {
 const ends = (w: WallEntity) => w.getBaseline();
 
 const setLength = (w: WallEntity, length: number) =>
-  applyMeasurements(session, [w], {
-    length: String(length),
-    height: '',
-    thickness: '',
-  });
+  applyMeasurements(
+    session,
+    [w],
+    { length: String(length), height: '', thickness: '' },
+    // outside, matching `shown` above: this file is about which END moves, and
+    // the inside/outside choice is about which FACE is measured — mixing the
+    // two would only make every expected number a thickness harder to read
+    { levelId: null, mode: 'outside' },
+  );
 
 beforeEach(() => {
   session = new EditorSession();

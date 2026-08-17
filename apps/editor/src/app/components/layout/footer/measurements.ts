@@ -1,13 +1,32 @@
-import type { EditorSession } from '@acip/editor-core';
+import type {
+  DrawingDocument,
+  EditorSession,
+  LevelId,
+} from '@acip/editor-core';
 import { WallEntity, distance } from '@acip/editor-core';
 import { formatLengthValue, lengthUnit, parseLength } from '@/editor/units';
 import { resizeWallLength } from '@/editor/rooms';
-import { wallExtent } from '@/editor/viewport/wall-dimensions';
+import { labelledWallLength } from '@/editor/viewport/wall-dimensions';
+import type { MeasureMode } from '@/editor/ui-state';
 
 export type MeasurementField = 'length' | 'height' | 'thickness';
 
 /** what the three inputs hold; blank means "leave this alone" */
 export type MeasurementEdits = Record<MeasurementField, string>;
+
+/**
+ * Which drawing the dialog is talking about — the level it is showing and
+ * whether it is measuring outer extents or inner clear widths.
+ *
+ * Carried rather than assumed, because a wall's length is no longer a property
+ * of the wall: the same wall reads 6.30 or 5.70 depending on a toggle in the
+ * settings sheet, and the dialog is only trustworthy if it is reading the same
+ * one the user is.
+ */
+export interface MeasureView {
+  readonly levelId: LevelId | null;
+  readonly mode: MeasureMode;
+}
 
 /** the selected walls, in selection order */
 export function selectedWalls(session: EditorSession): WallEntity[] {
@@ -20,14 +39,27 @@ export function selectedWalls(session: EditorSession): WallEntity[] {
 }
 
 /**
- * The length this wall is LABELLED with on the plan — its overall drawn
- * extent, outer corner to outer corner, not its centreline. The dialog has to
- * agree with the number the user is reading off the drawing, or "7.15 → 8.00"
- * silently means something else.
+ * The length this wall is LABELLED with on the plan, not its centreline. The
+ * dialog has to agree with the number the user is reading off the drawing, or
+ * "7.15 → 8.00" silently means something else.
+ *
+ * Which number that IS now depends on the view: the overall drawn extent, outer
+ * corner to outer corner, or the inner clear width. So it is asked of the same
+ * function that prints it rather than measured again here — the two agreeing is
+ * the whole requirement, and one computation cannot disagree with itself.
  */
-export const wallLength = (wall: WallEntity): number => {
-  const extent = wallExtent(wall);
-  if (extent) return extent.length;
+export const wallLength = (
+  doc: DrawingDocument,
+  wall: WallEntity,
+  view: MeasureView,
+): number => {
+  const labelled = labelledWallLength(
+    doc,
+    { kind: 'plan', levelId: view.levelId },
+    wall,
+    view.mode,
+  );
+  if (labelled !== null) return labelled;
   const { a, b } = wall.getBaseline();
   return distance(a, b);
 };
@@ -74,9 +106,21 @@ function meters(text: string): number | null {
  * predict what the miters become after the edit, the DELTA is carried across
  * unchanged: grow the label by 0.85 and the centreline grows by 0.85, which is
  * the same thing for any join that survives the edit.
+ *
+ * That trick is what makes inside mode cost nothing here. The delta is measured
+ * against whatever the label said, so asking for a clear width of 6.70 where it
+ * read 5.70 adds a metre to the centreline exactly as asking for an overall
+ * 7.30 where it read 6.30 does — the mode only has to be the same on both sides
+ * of the subtraction.
  */
-function targetBaseline(wall: WallEntity, wantedExtent: number): number | null {
-  const target = baselineLength(wall) + (wantedExtent - wallLength(wall));
+function targetBaseline(
+  doc: DrawingDocument,
+  wall: WallEntity,
+  view: MeasureView,
+  wantedExtent: number,
+): number | null {
+  const target =
+    baselineLength(wall) + (wantedExtent - wallLength(doc, wall, view));
   return target > 1e-3 ? target : null;
 }
 
@@ -91,6 +135,7 @@ export function applyMeasurements(
   session: EditorSession,
   walls: readonly WallEntity[],
   edits: MeasurementEdits,
+  view: MeasureView,
 ): MeasurementField[] {
   // length belongs to one baseline; there is no sensible way to give six
   // walls the same length at once, so it is a single-wall edit only
@@ -113,7 +158,9 @@ export function applyMeasurements(
   // miters, so the extent this length was measured against is the one the
   // user was looking at
   const baseline =
-    single && length !== null ? targetBaseline(single, length) : null;
+    single && length !== null
+      ? targetBaseline(session.doc, single, view, length)
+      : null;
   // a length that would leave nothing but corner miters is not a wall
   if (single && length !== null && baseline === null) invalid.push('length');
   if (invalid.length > 0) return invalid;

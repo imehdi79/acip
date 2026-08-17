@@ -85,6 +85,51 @@ renderer's job, like every other shape. Text auto-flips to stay readable
   on the rubber band while drawing walls/lines — meters appear as you drag,
   before anything is committed.
 
+## The mobile editor's automatic dimensions are the same rule, per view
+
+`apps/editor` labels every wall and opening without anyone placing a dimension.
+That is a **render pass**, not `DimensionEntity`: nothing is created, so there is
+nothing to undo, sync or strip before export — golden decision 1 taken to its
+limit, where even the entity is derived.
+
+It applies the two-sided rule as **one setting for the whole plan**
+(`EditorUi.measureMode`, `'outside' | 'inside'`) rather than per dimension,
+because a phone has no room to bind a side to each label one at a time. Outside
+is the default: a setting must not change the drawing the moment it exists.
+
+Which face "inside" means is decided from the normal pointing away from the
+plan's centre, so the file keeps one notion of outside instead of inventing a
+second. Inside measures the face pointing **into** the plan and **draws the
+dimension on that same side**: the two are one decision, because a clear width
+printed out beyond the outer face describes a room from a place no tape can
+reach. Outside rings the drawing; inside deliberately falls across it.
+
+A clear width stops at a **face**, never at a centreline. A mitered corner
+already cuts the inner face back to its neighbour's face, so the outline gives
+that for free — but `WALL.RESOLVE` splits a wall wherever a partition tees into
+it, and each half then runs to the junction _point_, which is the partition's
+centreline. So each end is additionally set back by `h / |sin θ|`, the offset at
+which the axis crosses the crossing wall's near face. At a miter that lands
+exactly where the miter already was, which is why it applies unconditionally.
+The tell that it was missing: three bays under one 5.70 m wall summing to
+exactly 5.70, with two 0.30 m partitions standing in that span.
+
+Three consequences worth knowing:
+
+- The setback belongs to the **inner face only**. A partition tee'd into a wall
+  stands on one side of it, so the far face runs past the junction untouched.
+- A wall **between two rooms** takes its inner face from the plan's centroid,
+  not from whichever room you tapped. Stable and deterministic; not always the
+  face that particular reader wanted.
+- Openings carry no faces, so a hole prints the same width in both modes — but
+  it still moves inside with its host, or a window's number would sit on the
+  opposite side of the wall from the wall's own.
+
+The wall-measurements dialog asks `labelledWallLength()` for its prefill rather
+than measuring again, because "the length of this wall" is no longer a property
+of the wall — the same wall reads 6.30 or 5.70 — and a dialog offering to edit a
+number different from the one on screen is worse than no dialog.
+
 ## Known V1 limitations
 
 - **Stale on wall deletion** — a walls-mode dimension whose wall is erased

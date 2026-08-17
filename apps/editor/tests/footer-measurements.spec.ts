@@ -7,6 +7,7 @@ import {
   prefill,
   selectedWalls,
   wallLength,
+  type MeasureView,
 } from '@/app/components/layout/footer/measurements';
 
 /**
@@ -26,6 +27,13 @@ const addWall = (ax: number, ay: number, bx: number, by: number) =>
 
 const wallOf = (id: EntityId) => session.doc.get(id) as WallEntity;
 
+/** the plan as it has always measured: overall extents, on the only level */
+const OUTSIDE: MeasureView = { levelId: null, mode: 'outside' };
+const INSIDE: MeasureView = { levelId: null, mode: 'inside' };
+
+const lengthOf = (wall: WallEntity, view: MeasureView = OUTSIDE) =>
+  wallLength(session.doc, wall, view);
+
 const edits = (patch: Partial<Record<string, string>> = {}) => ({
   length: '',
   height: '',
@@ -44,23 +52,23 @@ describe('applyMeasurements', () => {
     const id = addWall(0, 0, 4, 0);
     const wall = wallOf(id);
 
-    expect(applyMeasurements(session, [wall], edits({ length: '6' }))).toEqual(
-      [],
-    );
+    expect(
+      applyMeasurements(session, [wall], edits({ length: '6' }), OUTSIDE),
+    ).toEqual([]);
 
     expect(wall.getBaseline().a).toEqual(point(-1, 0));
     expect(wall.getBaseline().b).toEqual(point(5, 0));
-    expect(wallLength(wall)).toBeCloseTo(6);
+    expect(lengthOf(wall)).toBeCloseTo(6);
   });
 
   it('keeps the wall bearing when the length changes', () => {
     const id = addWall(0, 0, 3, 4); // 5 m at 3-4-5
     const wall = wallOf(id);
 
-    applyMeasurements(session, [wall], edits({ length: '10' }));
+    applyMeasurements(session, [wall], edits({ length: '10' }), OUTSIDE);
 
     const { a, b } = wall.getBaseline();
-    expect(wallLength(wall)).toBeCloseTo(10);
+    expect(lengthOf(wall)).toBeCloseTo(10);
     // same 3-4-5 direction, 2.5 m added off each end
     expect(a.x).toBeCloseTo(-1.5);
     expect(a.y).toBeCloseTo(-2);
@@ -75,6 +83,7 @@ describe('applyMeasurements', () => {
       session,
       walls,
       edits({ height: '2.4', thickness: '0.2' }),
+      OUTSIDE,
     );
 
     for (const wall of walls) {
@@ -86,10 +95,15 @@ describe('applyMeasurements', () => {
   it('ignores length for a multi-wall selection, applying the rest', () => {
     const walls = [addWall(0, 0, 4, 0), addWall(0, 4, 4, 4)].map(wallOf);
 
-    applyMeasurements(session, walls, edits({ length: '9', height: '2.4' }));
+    applyMeasurements(
+      session,
+      walls,
+      edits({ length: '9', height: '2.4' }),
+      OUTSIDE,
+    );
 
     for (const wall of walls) {
-      expect(wallLength(wall)).toBeCloseTo(4);
+      expect(lengthOf(wall)).toBeCloseTo(4);
       expect(wall.getHeight()).toBeCloseTo(2.4);
     }
   });
@@ -97,19 +111,24 @@ describe('applyMeasurements', () => {
   it('leaves blank fields alone', () => {
     const wall = wallOf(addWall(0, 0, 4, 0));
 
-    applyMeasurements(session, [wall], edits({ height: '2.4' }));
+    applyMeasurements(session, [wall], edits({ height: '2.4' }), OUTSIDE);
 
-    expect(wallLength(wall)).toBeCloseTo(4);
+    expect(lengthOf(wall)).toBeCloseTo(4);
     expect(wall.getThickness()).toBeCloseTo(0.3);
   });
 
   it('applies length and height as one undo', () => {
     const wall = wallOf(addWall(0, 0, 4, 0));
 
-    applyMeasurements(session, [wall], edits({ length: '6', height: '2.4' }));
+    applyMeasurements(
+      session,
+      [wall],
+      edits({ length: '6', height: '2.4' }),
+      OUTSIDE,
+    );
     session.undo();
 
-    expect(wallLength(wall)).toBeCloseTo(4);
+    expect(lengthOf(wall)).toBeCloseTo(4);
     expect(wall.getHeight()).toBeCloseTo(3);
   });
 
@@ -120,29 +139,100 @@ describe('applyMeasurements', () => {
       session,
       [wall],
       edits({ length: '6', height: 'tall' }),
+      OUTSIDE,
     );
 
     expect(bad).toEqual(['height']);
     // the good field must not land on its own — the dialog stays open
-    expect(wallLength(wall)).toBeCloseTo(4);
+    expect(lengthOf(wall)).toBeCloseTo(4);
   });
 
   it('treats zero and negative sizes as bad input', () => {
     const wall = wallOf(addWall(0, 0, 4, 0));
-    expect(applyMeasurements(session, [wall], edits({ length: '0' }))).toEqual([
-      'length',
-    ]);
-    expect(applyMeasurements(session, [wall], edits({ height: '-2' }))).toEqual(
-      ['height'],
-    );
+    expect(
+      applyMeasurements(session, [wall], edits({ length: '0' }), OUTSIDE),
+    ).toEqual(['length']);
+    expect(
+      applyMeasurements(session, [wall], edits({ height: '-2' }), OUTSIDE),
+    ).toEqual(['height']);
   });
 
   it('accepts a unit suffix, overriding the display unit', () => {
     const wall = wallOf(addWall(0, 0, 4, 0));
 
-    applyMeasurements(session, [wall], edits({ thickness: '200 mm' }));
+    applyMeasurements(session, [wall], edits({ thickness: '200 mm' }), OUTSIDE);
 
     expect(wall.getThickness()).toBeCloseTo(0.2);
+  });
+});
+
+/*
+ * The dialog's one job is to agree with the drawing. Since the plan gained an
+ * inside/outside toggle, "the length of this wall" is no longer a property of
+ * the wall — the same wall reads two different numbers — so the dialog has to
+ * be reading the same one the user is, and the edit has to land against it.
+ */
+describe('the dialog measures what the plan measures', () => {
+  /** a closed 6x4 room of 0.3 m walls, so every corner is mitered */
+  const room = () => {
+    const corners = [point(0, 0), point(6, 0), point(6, 4), point(0, 4)];
+    return corners.map((a, i) =>
+      wallOf(
+        session.dispatch<EntityId>('WALL.ADD', {
+          a,
+          b: corners[(i + 1) % corners.length],
+          thickness: 0.3,
+          height: 3,
+        }),
+      ),
+    );
+  };
+
+  it('reads the clear width in inside mode and the extent in outside', () => {
+    const [bottom] = room();
+    // 6 m centreline, mitered both ends: half a thickness past each corner
+    // outside, half a thickness short of each corner inside
+    expect(lengthOf(bottom, OUTSIDE)).toBeCloseTo(6.3);
+    expect(lengthOf(bottom, INSIDE)).toBeCloseTo(5.7);
+  });
+
+  it('lands an inside edit on the inside number', () => {
+    const [bottom] = room();
+
+    // asking for a 6 m clear width where it read 5.70
+    expect(
+      applyMeasurements(session, [bottom], edits({ length: '6' }), INSIDE),
+    ).toEqual([]);
+
+    expect(lengthOf(bottom, INSIDE)).toBeCloseTo(6);
+    // and the drawing's other number moved with it, by the same delta — the
+    // wall grew, it did not change what a miter is
+    expect(lengthOf(bottom, OUTSIDE)).toBeCloseTo(6.6);
+  });
+
+  it('would have applied the same edit somewhere else in outside mode', () => {
+    // the regression this whole seam exists for: before the view was carried,
+    // the dialog subtracted an OUTSIDE extent from an INSIDE figure, so a
+    // no-op edit moved the wall by a thickness
+    const [bottom] = room();
+    const clear = lengthOf(bottom, INSIDE);
+
+    applyMeasurements(
+      session,
+      [bottom],
+      edits({ length: clear.toFixed(2) }),
+      INSIDE,
+    );
+
+    // asking for the number already on the screen must change nothing
+    expect(lengthOf(bottom, INSIDE)).toBeCloseTo(clear);
+  });
+
+  it('measures an unjoined wall the same either way', () => {
+    // butt caps square off both faces at one place, so there is no inner face
+    // to be shorter — the toggle is about corners, and this wall has none
+    const wall = wallOf(addWall(0, 0, 4, 0));
+    expect(lengthOf(wall, INSIDE)).toBeCloseTo(lengthOf(wall, OUTSIDE));
   });
 });
 

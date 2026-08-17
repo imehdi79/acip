@@ -9,6 +9,7 @@ import {
   WallEntity,
   isEntityVisible,
 } from '@acip/editor-core';
+import type { MeasureMode } from '../ui-state';
 
 /**
  * What a dimension measures. Walls and the openings cut into them share every
@@ -16,6 +17,75 @@ import {
  * 0.9 m door is not mistaken for a 0.9 m stretch of wall.
  */
 export type DimensionKind = 'wall' | 'opening';
+
+/**
+ * One FACE of a wall, as the stretch of the wall's own AXIS that face covers.
+ *
+ * A wall has two, and neither of them is "the inside" on its own: which face a
+ * tape runs along depends on which room the person holding it is standing in.
+ * So both are carried, each with the unit normal it lies on, and the choice is
+ * left to the pass that already knows which way the plan is being read from.
+ *
+ * The anchors are projected back onto the BASELINE rather than left out on the
+ * face itself. The face only decides WHAT is measured — where the wall stops
+ * being wall — while where the dimension is drawn stays the wall's own line,
+ * so an inner and an outer dimension of the same wall still line up with each
+ * other and with everything else anchored on that line.
+ */
+export interface FaceExtent {
+  /** unit normal from the baseline out to this face — which side it lies on */
+  readonly normal: Point;
+  readonly a: Point;
+  readonly b: Point;
+  /** distance(a, b), the same promise every length here makes */
+  readonly length: number;
+}
+
+/** parallel within this many radians counts as "runs straight through" (~0.6°) */
+const THROUGH_TOLERANCE = 0.01;
+
+/**
+ * How far short of one END of the baseline a CLEAR width has to stop, because
+ * another wall crosses there.
+ *
+ * A wall standing across this one at angle θ, of half-thickness h, presents its
+ * near face `h / |sin θ|` back along this wall's axis — the offset at which
+ * this axis crosses that face line. Perpendicular is the common case and gives
+ * exactly the half-thickness.
+ *
+ * This is what a mitered corner already does to the inner face for free. It has
+ * to be worked out separately for the junction a wall runs STRAIGHT THROUGH:
+ * WALL.RESOLVE splits a wall wherever a partition tees into it, and each half
+ * then runs to the junction POINT — the partition's centreline. A clear width
+ * that swallows half a partition is not a width anybody can build to, and it is
+ * the reason three bays under one 5.70 m wall used to add up to exactly 5.70.
+ *
+ * A neighbour running straight through is skipped: two collinear halves of what
+ * the user drew as one wall do not obstruct each other. The largest setback
+ * wins — a span stops at the first thing it runs into, not the last.
+ */
+function setbackAt(wall: WallEntity, which: 'start' | 'end'): number {
+  const { a, b } = wall.getBaseline();
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len < 1e-9) return 0;
+  const ux = (b.x - a.x) / len;
+  const uy = (b.y - a.y) / len;
+
+  let most = 0;
+  for (const join of wall.getJoinsAt(which)) {
+    const other = join.wall.getBaseline();
+    const vlen = Math.hypot(other.b.x - other.a.x, other.b.y - other.a.y);
+    if (vlen < 1e-9) continue;
+    // the neighbour's own normal, dotted with this axis: |sin θ| by another name
+    const nx = -(other.b.y - other.a.y) / vlen;
+    const ny = (other.b.x - other.a.x) / vlen;
+    const sin = Math.abs(ux * nx + uy * ny);
+    if (sin <= THROUGH_TOLERANCE) continue;
+    const cut = join.wall.getThickness() / 2 / sin;
+    if (cut > most) most = cut;
+  }
+  return most;
+}
 
 /**
  * One automatic dimension, in world space.
@@ -43,6 +113,25 @@ export interface PlanExtent {
    * even when the walls sit exactly on top of one another.
    */
   readonly base?: { readonly a: Point; readonly b: Point };
+  /**
+   * The same thing measured along each of its two faces, for whoever wants the
+   * inner clear width instead of the overall extent. Present only when there
+   * ARE two sides to choose between: an opening carries none, because a hole is
+   * the same width whichever face of the wall you hold the tape against.
+   */
+  readonly faces?: readonly FaceExtent[];
+  /**
+   * How far short of each end of `base` a CLEAR width must stop, because
+   * something crosses the wall there. See `setbackAt`.
+   *
+   * Kept apart from `faces` rather than baked into them, because it applies to
+   * the inner face and not to the outer one: a partition tee'd into a wall
+   * stands on ONE side of it, so it interrupts the room's face while the far
+   * face runs past the junction untouched. Baking it in shortened both, which
+   * made a wall's outer face report the clear width — harmless where it is
+   * read today, wrong for anyone who reads it tomorrow.
+   */
+  readonly setback?: { readonly start: number; readonly end: number };
   /** its entity is selected: drawn highlighted, and it wins any de-duplication */
   readonly selected?: boolean;
 }
@@ -73,6 +162,13 @@ export interface PlanDimension extends PlanExtent {
  * - a wall teed into another's face may stop SHORT of its endpoint, and the
  *   dimension shortens with it — that is the drawn wall, faithfully.
  *
+ * The same projection also yields each FACE's span, which is what an inner
+ * clear width is made of: the outline's corners are split by which side of the
+ * baseline they fall on, and each side is measured on its own. A free-standing
+ * wall's butt caps square off both faces at once, so its two faces span the
+ * same stretch and inside reads exactly the same as outside — correct, and the
+ * reason nothing here special-cases it.
+ *
  * Returns null for a degenerate wall, which has no direction to measure along.
  */
 export function wallExtent(wall: WallEntity): PlanExtent | null {
@@ -83,15 +179,48 @@ export function wallExtent(wall: WallEntity): PlanExtent | null {
   if (length < 1e-9) return null;
   const ux = dx / length;
   const uy = dy / length;
+  // left of baseline travel — the face+ side, the convention the whole model
+  // already reads sides by (docs/editor-core/04-systems/spaces.md)
+  const nx = -uy;
+  const ny = ux;
 
   let min = Infinity;
   let max = -Infinity;
+  // Corners are sorted onto their face by WHICH SIDE OF THE BASELINE they fall
+  // on, not by their index in the outline. A join cap replaces corners rather
+  // than offsetting them, and a miter clamped at the spike limit is pulled off
+  // its face line entirely — but never across the baseline, because the clamp
+  // pulls it towards the junction and the junction sits on that line. The sign
+  // survives everything the cap mathematics can do; a fixed index does not.
+  const plus: number[] = [];
+  const minus: number[] = [];
   for (const corner of wall.getOutline()) {
-    const s = (corner.x - a.x) * ux + (corner.y - a.y) * uy;
+    const px = corner.x - a.x;
+    const py = corner.y - a.y;
+    const s = px * ux + py * uy;
     if (s < min) min = s;
     if (s > max) max = s;
+    (px * nx + py * ny >= 0 ? plus : minus).push(s);
   }
   if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
+
+  // A face needs two corners with real distance between them to be a length.
+  // Anything less is dropped rather than reported as a span of nothing: a wall
+  // of no thickness puts every corner on one side, and a corner clamped hard
+  // enough can collapse the face it belonged to. Dropping it lets the caller
+  // fall back to the overall extent instead of drawing a zero.
+  const faceSpan = (offsets: number[], sign: number): FaceExtent | null => {
+    if (offsets.length < 2) return null;
+    const lo = Math.min(...offsets);
+    const hi = Math.max(...offsets);
+    if (hi - lo < 1e-9) return null;
+    return {
+      normal: { x: nx * sign, y: ny * sign },
+      a: { x: a.x + ux * lo, y: a.y + uy * lo },
+      b: { x: a.x + ux * hi, y: a.y + uy * hi },
+      length: hi - lo,
+    };
+  };
 
   return {
     entityId: wall.id,
@@ -100,6 +229,12 @@ export function wallExtent(wall: WallEntity): PlanExtent | null {
     b: { x: a.x + ux * max, y: a.y + uy * max },
     length: max - min,
     base: { a, b },
+    faces: [faceSpan(plus, 1), faceSpan(minus, -1)].filter(
+      (face): face is FaceExtent => face !== null,
+    ),
+    // asked once per wall rather than once per face: whatever crosses an end
+    // crosses it at one place, and walking the joins is the expensive part
+    setback: { start: setbackAt(wall, 'start'), end: setbackAt(wall, 'end') },
   };
 }
 
@@ -111,6 +246,11 @@ export function wallExtent(wall: WallEntity): PlanExtent | null {
  * tell different stories. Those points already lie on the host's baseline,
  * which is where placement is decided from, so there is no separate `base` to
  * carry.
+ *
+ * No faces either, and deliberately so: an opening is a hole, and a hole is the
+ * same width measured against the near face of the wall as against the far one.
+ * There is nothing for inside mode to choose between, so an opening prints the
+ * same number in both modes — the wall around it changes, its door does not.
  *
  * Returns null for an opening with no host to hang on, or one collapsed to
  * nothing — neither has a span to measure.
@@ -174,6 +314,66 @@ function beats(item: Placed, other: Placed): boolean {
 }
 
 /**
+ * The face a tape held inside the room would run along: the one facing INTO
+ * the plan, against `outward`.
+ *
+ * `outward` already answers "which way is out of the plan", so the inner face is
+ * simply the face whose normal points most against it. That keeps ONE notion of
+ * outside in this file instead of inventing a second one.
+ *
+ * Null when the wall offers no such face — a wall of no thickness has only one,
+ * and a face can collapse under a hard-clamped miter. The caller then measures
+ * the wall as drawn: a wall labelled with its overall extent is a far better
+ * plan than a wall labelled with nothing, or with a zero.
+ */
+function innerFace(dim: PlanExtent, outward: Point): FaceExtent | null {
+  let best: FaceExtent | null = null;
+  for (const face of dim.faces ?? []) {
+    if (!best || dotp(face.normal, outward) < dotp(best.normal, outward)) {
+      best = face;
+    }
+  }
+  return best && dotp(best.normal, outward) < 0 ? clear(dim, best) : null;
+}
+
+/**
+ * The inner face cut back to what actually crosses it — the clear width proper.
+ *
+ * Applied here rather than in `wallExtent` because it belongs to the INNER face
+ * alone (see `PlanExtent.setback`), and which face that is is not known until
+ * the plan's middle has been. At a mitered corner the miter has already cut to
+ * the same place, so the clamp is a no-op there; it earns its keep only at a
+ * junction the wall runs straight through.
+ *
+ * Everything is measured along `base`, which is the wall's own line, so the
+ * face's anchors — already projected back onto it — stay comparable. A cut that
+ * would leave nothing is refused: a wall shorter than the walls crossing it has
+ * no clear width, and its drawn extent is a better answer than a zero.
+ */
+function clear(dim: PlanExtent, face: FaceExtent): FaceExtent {
+  const base = dim.base;
+  const cut = dim.setback;
+  if (!base || !cut) return face;
+  const dx = base.b.x - base.a.x;
+  const dy = base.b.y - base.a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) return face;
+  const ux = dx / len;
+  const uy = dy / len;
+  const at = (p: Point) => (p.x - base.a.x) * ux + (p.y - base.a.y) * uy;
+
+  const lo = Math.max(Math.min(at(face.a), at(face.b)), cut.start);
+  const hi = Math.min(Math.max(at(face.a), at(face.b)), len - cut.end);
+  if (hi - lo < 1e-9) return face;
+  return {
+    normal: face.normal,
+    a: { x: base.a.x + ux * lo, y: base.a.y + uy * lo },
+    b: { x: base.a.x + ux * hi, y: base.a.y + uy * hi },
+    length: hi - lo,
+  };
+}
+
+/**
  * Assign each dimension a side and a lane so that no two of them are drawn on
  * top of each other.
  *
@@ -190,10 +390,22 @@ function beats(item: Placed, other: Placed): boolean {
  * 1 instead of one illegible overlap. An opening is that same case against its
  * own host: it sits on the wall's line and inside its span, so it lands in the
  * lane beyond whatever the wall took.
+ *
+ * `mode` decides what each dimension measures AND which way it stands off, and
+ * the two are the same decision: an inside dimension is drawn inside. A clear
+ * width printed out beyond the outer face is a number floating over the wrong
+ * side of the wall it describes — you cannot lay a tape where it is drawn — so
+ * inside mode turns the stand-off inward, into the room the number belongs to.
+ *
+ * Which face is inner is settled from `outward` rather than from the drawn side,
+ * so it is one answer either way: the face pointing INTO the plan. Only the
+ * drawing of it flips. Lanes are still assigned from the baselines, so the same
+ * plan still lays out deterministically in both modes.
  */
 export function layOutDimensions(
   dims: readonly PlanExtent[],
   centre: Point,
+  mode: MeasureMode = 'outside',
 ): PlanDimension[] {
   const placed: Placed[] = [];
   for (const dim of dims) {
@@ -216,14 +428,30 @@ export function layOutDimensions(
     const normal = { x: -Math.sin(axis), y: Math.cos(axis) };
     const along = { x: Math.cos(axis), y: Math.sin(axis) };
 
-    // stand off on the side away from the middle of the plan, so dimensions
-    // ring the drawing instead of falling across the rooms
+    // which way is out of the plan — the one notion of "outside" everything
+    // below is decided from
     const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-    const outward = dotp({ x: mid.x - centre.x, y: mid.y - centre.y }, normal);
-    const side = outward < 0 ? { x: -normal.x, y: -normal.y } : { ...normal };
+    const away = dotp({ x: mid.x - centre.x, y: mid.y - centre.y }, normal);
+    const outward = away < 0 ? { x: -normal.x, y: -normal.y } : { ...normal };
+
+    // Inside mode re-measures against the inner face. The anchors and the
+    // length move together, from the same two points, because the drawn line
+    // and the printed number are one thing: a face's span with the extent's
+    // number against it would be a dimension lying about what it spans.
+    const inner = mode === 'inside' ? innerFace(dim, outward) : null;
+    // and it is drawn on that same side. Outside rings the drawing so the
+    // dimensions do not fall across the rooms; inside deliberately does fall
+    // across them, because that is where the width being quoted is.
+    const side =
+      mode === 'inside'
+        ? { x: -outward.x, y: -outward.y }
+        : { x: outward.x, y: outward.y };
+    const measured: PlanExtent = inner
+      ? { ...dim, a: inner.a, b: inner.b, length: inner.length }
+      : dim;
 
     placed.push({
-      dim: { ...dim, side, selected: dim.selected ?? false },
+      dim: { ...measured, side, selected: dim.selected ?? false },
       axis,
       offset: dotp(mid, normal),
       from: Math.min(dotp(from, along), dotp(to, along)),
@@ -321,11 +549,16 @@ function centreOf(dims: readonly { a: Point; b: Point }[]): Point {
  * hanging in space — which is exactly what a closed danger zone used to leave
  * behind. An opening is checked on its own account as well as its host's: it
  * can sit on a layer of its own.
+ *
+ * `mode` defaults to the overall extents, which is what the plan measured
+ * before there was a choice: a caller that has not heard of the setting must
+ * keep getting the drawing it always got.
  */
 export function planDimensions(
   doc: DrawingDocument,
   view: ViewDefinition,
   selection: ReadonlySet<string> = new Set(),
+  mode: MeasureMode = 'outside',
 ): PlanDimension[] {
   // plan-only; the 3D view definition carries no level
   if (view.kind !== 'plan') return [];
@@ -350,5 +583,35 @@ export function planDimensions(
   // the middle is the PLAN's, taken from the walls alone: cutting a window
   // must not tug the centre far enough to flip which side a wall's dimension
   // stands off on
-  return layOutDimensions([...walls, ...openings], centreOf(walls));
+  return layOutDimensions([...walls, ...openings], centreOf(walls), mode);
+}
+
+/**
+ * The number the plan is PRINTING against one wall right now.
+ *
+ * Not a shortcut for `wallExtent(wall).length` — it goes the long way round, on
+ * purpose. Which face inside mode measures is decided from the plan's centre,
+ * so it cannot be worked out from a wall on its own; and a dialog that offers
+ * to edit "the length" while showing a different number than the drawing does
+ * is worse than one that offers nothing. Running the whole layout and reading
+ * the answer off it makes the two the same computation rather than two
+ * computations that have to be kept in agreement.
+ *
+ * Null for a wall the plan labels with nothing at all — hidden, on another
+ * level, degenerate. A wall dropped as a TWIN is the interesting case: it draws
+ * no dimension of its own because another wall is printing the same number in
+ * the same place, so its drawn extent is the honest answer and it falls back to
+ * that rather than to nothing.
+ */
+export function labelledWallLength(
+  doc: DrawingDocument,
+  view: ViewDefinition,
+  wall: WallEntity,
+  mode: MeasureMode = 'outside',
+): number | null {
+  if (!isEntityVisible(doc, wall)) return null;
+  const drawn = planDimensions(doc, view, new Set(), mode).find(
+    (dim) => dim.kind === 'wall' && dim.entityId === wall.id,
+  );
+  return drawn ? drawn.length : (wallExtent(wall)?.length ?? null);
 }

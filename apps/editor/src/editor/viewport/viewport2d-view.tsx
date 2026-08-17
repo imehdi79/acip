@@ -65,7 +65,14 @@ export function Viewport2DView() {
         );
         // wall lengths and opening widths, always on — same canvas, drawn over
         // the finished scene
-        drawPlanDimensions(base, viewport, session.doc, planView(), selected);
+        drawPlanDimensions(
+          base,
+          viewport,
+          session.doc,
+          planView(),
+          selected,
+          ui.measureMode.get(),
+        );
       });
     };
     const redrawOverlay = () =>
@@ -125,6 +132,10 @@ export function Viewport2DView() {
       ui.underlay.subscribe(redrawBase),
       // dimensions are rendered in the active unit, so redraw when it changes
       lengthUnit.subscribe(redrawBase),
+      // and against the chosen face — inside/outside is read at draw time, so
+      // without this the toggle would sit there doing nothing until the next
+      // edit happened to redraw the canvas
+      ui.measureMode.subscribe(redrawBase),
       ui.fitTick.subscribe(() => {
         const w = container.clientWidth;
         const h = container.clientHeight;
