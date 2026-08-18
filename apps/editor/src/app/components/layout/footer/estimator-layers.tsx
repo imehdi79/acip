@@ -1,6 +1,8 @@
 import { Button, Tabs } from '@heroui/react';
 import { IconChevronDown, IconPlus, IconTrash } from '@tabler/icons-react';
+import type { Phase } from '@acip/editor-core';
 import type { FinishRow, StepSide } from './estimator-finishes';
+import { FinishFields, type FinishEdit } from './estimator-fields';
 
 /** one side of a shape, and what to call it on its tab */
 export interface SideDef {
@@ -92,11 +94,13 @@ export function formatQuantity(quantity: number, unit: string): string {
  * What a row's detail panel says — the facts, not a placeholder.
  *
  * This used to print prose that changed per layer, standing in for inputs that
- * did not exist. They still do not, but the NUMBERS do: the finish is a real
- * entity on a real face, and its area comes back with the openings already
- * subtracted. So the panel answers the two questions a row raises — how much
- * of it is there, and what will it be priced as — and phase two adds the
- * inputs that let those numbers be changed.
+ * did not exist. Both are real now: the finish is an entity on a real face,
+ * its area comes back with the openings already subtracted, and the fields
+ * under these facts change the band that area is measured over.
+ *
+ * The facts stay, above the controls, because they are what the controls are
+ * being set AGAINST — a band is chosen by looking at what the face currently
+ * measures, so reading it afterwards would be reading it too late.
  *
  * A pure function of the row so it can be asserted without a DOM.
  */
@@ -146,6 +150,8 @@ function LayerRow({
   open,
   onToggleDetail,
   onRemove,
+  onEdit,
+  onPhase,
 }: {
   row: FinishRow;
   /** its place in the build-up, printed first */
@@ -153,6 +159,8 @@ function LayerRow({
   open: boolean;
   onToggleDetail: () => void;
   onRemove: () => void;
+  onEdit: (patch: FinishEdit) => void;
+  onPhase: (phase: Phase) => void;
 }) {
   return (
     // a hairline between rows: now that a row carries a delete, where one row
@@ -196,14 +204,20 @@ function LayerRow({
         </button>
       </div>
       {open && (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 px-1 pb-2 pr-22 text-xs text-muted">
-          {finishFacts(row).map((fact) => (
-            <div key={fact.label} className="contents">
-              <dt className="text-right">{fact.label}</dt>
-              <dd className="tabular-nums">{fact.value}</dd>
-            </div>
-          ))}
-        </dl>
+        // the facts first and the controls under them: what this layer already
+        // measures is the thing the numbers below are being changed AGAINST,
+        // so reading it after setting a band would be reading it too late
+        <div className="px-1 pb-2 pr-11">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted">
+            {finishFacts(row).map((fact) => (
+              <div key={fact.label} className="contents">
+                <dt className="text-right">{fact.label}</dt>
+                <dd className="tabular-nums">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <FinishFields row={row} onEdit={onEdit} onPhase={onPhase} />
+        </div>
       )}
     </div>
   );
@@ -216,12 +230,16 @@ function SideLayers({
   side,
   onToggleDetail,
   onRemove,
+  onEdit,
+  onPhase,
 }: {
   rows: readonly FinishRow[];
   opened: ReadonlySet<string>;
   side: StepSide;
   onToggleDetail: (side: StepSide, finishId: string) => void;
   onRemove: (side: StepSide, finishId: string) => void;
+  onEdit: (finishId: string, patch: FinishEdit) => void;
+  onPhase: (finishId: string, phase: Phase) => void;
 }) {
   if (rows.length === 0) {
     // Empty is the STARTING state, not a failure: nothing is priced until
@@ -248,6 +266,8 @@ function SideLayers({
             open={opened.has(rowKey(side, row.id))}
             onToggleDetail={() => onToggleDetail(side, row.id)}
             onRemove={() => onRemove(side, row.id)}
+            onEdit={(patch) => onEdit(row.id, patch)}
+            onPhase={(phase) => onPhase(row.id, phase)}
           />
         </li>
       ))}
@@ -304,6 +324,8 @@ export function LayerList({
   onSideChange,
   onToggleDetail,
   onRemove,
+  onEdit,
+  onPhase,
   onAdd,
 }: {
   /** the `EstimatorStep.kind` being priced — decides how many sides it has */
@@ -327,6 +349,10 @@ export function LayerList({
   onSideChange: (side: StepSide) => void;
   onToggleDetail: (side: StepSide, finishId: string) => void;
   onRemove: (side: StepSide, finishId: string) => void;
+  /** a band, extent or thickness edit — straight through to FINISH.UPDATE */
+  onEdit: (finishId: string, patch: FinishEdit) => void;
+  /** build or strip out — PHASE.SET, which already owns that field */
+  onPhase: (finishId: string, phase: Phase) => void;
   onAdd: () => void;
 }) {
   if (blocked !== undefined) {
@@ -375,6 +401,8 @@ export function LayerList({
               side={one.id}
               onToggleDetail={onToggleDetail}
               onRemove={onRemove}
+              onEdit={onEdit}
+              onPhase={onPhase}
             />
           </Tabs.Panel>
         ))}

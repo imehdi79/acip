@@ -5,7 +5,7 @@ import type {
   MaterialUnit,
   Phase,
 } from '@acip/editor-core';
-import { WallEntity, layerQuantity } from '@acip/editor-core';
+import { FinishEntity, WallEntity, layerQuantity } from '@acip/editor-core';
 import { computeFinishTakeoff } from '@acip/estimator';
 import type { EstimatorStep } from './estimator-steps';
 import {
@@ -115,6 +115,25 @@ export type FinishSpot =
       readonly surface: SlabSurface;
     };
 
+/**
+ * The rectangle a finish covers on a wall face: `[t0·L, t1·L]` along the wall
+ * and `[sillHeight, topHeight]` up it.
+ *
+ * This is where the estimating judgement actually lives. "Tile to 1.2 m, paint
+ * above" is two finishes on one face distinguished by nothing but their bands,
+ * and until these were editable the sheet could only ever say "the whole
+ * face". `topHeight` is null when the band runs to the top of the wall and
+ * KEEPS doing so as the wall grows — a state no number can stand in for, which
+ * is why FINISH.UPDATE spells it with its own `fullHeight` flag.
+ */
+export interface FinishBand {
+  readonly sillHeight: number;
+  /** null = up to the top of the wall, and following it */
+  readonly topHeight: number | null;
+  readonly t0: number;
+  readonly t1: number;
+}
+
 /** one finish on one face, resolved into what the sheet shows */
 export interface FinishRow {
   readonly id: EntityId;
@@ -135,6 +154,16 @@ export interface FinishRow {
   readonly phase: Phase;
   /** true when the finish has no material — nothing to price it by */
   readonly unpriced: boolean;
+  /** its own build-up thickness (m); only an m³ material bills on it */
+  readonly thickness: number;
+  /**
+   * The band it covers, for a WALL-hosted finish.
+   *
+   * Null on a slab, where a finish IS the whole footprint: core rejects the
+   * band fields outright for one rather than ignoring them, so a null here is
+   * what stops the sheet offering an input whose save could only ever throw.
+   */
+  readonly band: FinishBand | null;
 }
 
 /**
@@ -181,6 +210,10 @@ function finishesAtAnchor(
     .map((relation) => relation.hostedId);
   if (onThisFace.length === 0) return [];
 
+  // a band belongs to a wall face and nowhere else; asked once for the host
+  // rather than per finish, since every row here shares it
+  const hostIsWall = doc.get(hostId) instanceof WallEntity;
+
   // indexed, then walked in RELATION order — the takeoff comes back in document
   // order, which is not the order the user added things in
   const takeoff = new Map(
@@ -192,6 +225,19 @@ function finishesAtAnchor(
     const finish = takeoff.get(id);
     if (!finish) continue; // hosted here but not a finish — an opening, say
     const layer = finish.layer;
+    // straight off the entity: the takeoff reports what a finish MEASURES, not
+    // the numbers it was measured from, and those are what an edit changes
+    const entity = doc.get(id);
+    const band =
+      hostIsWall && entity instanceof FinishEntity
+        ? {
+            sillHeight: entity.sillHeight,
+            topHeight: entity.topHeight,
+            t0: entity.t0,
+            t1: entity.t1,
+          }
+        : null;
+    const editable = { thickness: finish.thickness, band };
 
     // Demolition is the same area priced as a strip-out, never as tiles: you
     // do not count the tiles you are tearing off a wall. Straight from the
@@ -199,6 +245,7 @@ function finishesAtAnchor(
     if (finish.phase === 'demolish') {
       rows.push({
         id,
+        ...editable,
         materialId: layer?.materialId ?? null,
         name: layer ? `Demolish ${layer.name}` : 'Demolish finish',
         unit: 'm2',
@@ -216,6 +263,7 @@ function finishesAtAnchor(
     if (!layer) {
       rows.push({
         id,
+        ...editable,
         materialId: null,
         name: 'Finish (no material)',
         unit: 'm2',
@@ -236,6 +284,7 @@ function finishesAtAnchor(
     };
     rows.push({
       id,
+      ...editable,
       materialId: layer.materialId,
       name: layer.name,
       unit: layer.unit,

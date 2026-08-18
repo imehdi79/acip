@@ -426,3 +426,125 @@ describe('what the walk counts as a shape', () => {
     expect(after.some((s) => s.kind === 'finish')).toBe(false);
   });
 });
+
+/**
+ * Phase two: the band is editable, so the numbers behind a row can be made to
+ * describe what is actually being built. The round trip is the point — an edit
+ * dispatched the way the sheet dispatches it, read back through the reader the
+ * sheet reads through.
+ */
+describe('editing a band', () => {
+  /** a wall with one painted face, and that face's single row */
+  function painted() {
+    const { session, walls } = plan();
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: material(session, 'paint'),
+    });
+    const read = () => finishesOnFace(session.doc, walls[0], 'face+')[0];
+    return { session, walls, read };
+  }
+
+  it('carries the band the sheet edits, on a wall face', () => {
+    const row = painted().read();
+    // a fresh finish runs the whole face: floor to full height, end to end
+    expect(row.band).toEqual({
+      sillHeight: 0,
+      topHeight: null,
+      t0: 0,
+      t1: 1,
+    });
+  });
+
+  it('shrinks the area when the band shrinks', () => {
+    // the whole reason the band is editable: "tile to 1.2 m" is a different
+    // quantity from "tile the wall", and it was unsayable before
+    const { session, read } = painted();
+    const whole = read().area;
+    session.dispatch('FINISH.UPDATE', { id: read().id, topHeight: 1.2 });
+    const dado = read();
+    expect(dado.band?.topHeight).toBe(1.2);
+    expect(dado.area).toBeLessThan(whole);
+    // and the quantity follows the area, because it is derived from it
+    expect(dado.quantity).toBeCloseTo(dado.area, 9);
+  });
+
+  it('keeps the id and the place in the stack', () => {
+    // the defect that made erase-and-re-add unacceptable: editing layer 1
+    // would have moved it to the bottom
+    const { session, walls } = plan();
+    for (const code of ['plaster', 'paint']) {
+      session.dispatch('FINISH.ADD', {
+        wallId: walls[0],
+        side: 'face+',
+        materialId: material(session, code),
+      });
+    }
+    const before = finishesOnFace(session.doc, walls[0], 'face+');
+    session.dispatch('FINISH.UPDATE', { id: before[0].id, sillHeight: 0.1 });
+    const after = finishesOnFace(session.doc, walls[0], 'face+');
+    expect(after.map((r) => r.id)).toEqual(before.map((r) => r.id));
+    expect(after[0].band?.sillHeight).toBe(0.1);
+  });
+
+  it('sends the band back to the top of the wall', () => {
+    const { session, read } = painted();
+    session.dispatch('FINISH.UPDATE', { id: read().id, topHeight: 1.2 });
+    expect(read().band?.topHeight).toBe(1.2);
+    // the state no number can stand for, which is why it has its own flag
+    session.dispatch('FINISH.UPDATE', { id: read().id, fullHeight: true });
+    expect(read().band?.topHeight).toBeNull();
+  });
+
+  it('narrows the extent along the wall', () => {
+    const { session, read } = painted();
+    const whole = read().length;
+    session.dispatch('FINISH.UPDATE', { id: read().id, t0: 0.25, t1: 0.75 });
+    const half = read();
+    expect(half.band?.t0).toBe(0.25);
+    expect(half.length).toBeCloseTo(whole / 2, 6);
+  });
+
+  it('has no band to edit on a floor, and core refuses one', () => {
+    // a slab finish IS the whole footprint; the null is what stops the sheet
+    // offering an input whose save could only ever throw
+    const { session } = plan();
+    addRoomLayer(session, 'floor', 'screed');
+    const floor = finishesAt(
+      session.doc,
+      spotsFor(finishTargetFor(session.doc, roomStep(session))).floor!,
+    )[0];
+    expect(floor.band).toBeNull();
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id: floor.id, topHeight: 1.2 }),
+    ).toThrow();
+  });
+
+  it('moves a layer between building and stripping out', () => {
+    // PHASE.SET, not FINISH.UPDATE: core kept the phase out of the update
+    // command so one field would not have two writers
+    const { session, read } = painted();
+    expect(read().costCode).toBe('paint');
+    session.dispatch('PHASE.SET', { ids: [read().id], phase: 'demolish' });
+    const torn = read();
+    expect(torn.phase).toBe('demolish');
+    // priced as an area strip-out against its own code, at its own rate
+    expect(torn.costCode).toBe('demo-paint');
+    expect(torn.unit).toBe('m2');
+  });
+
+  it('still agrees with the bill after an edit', () => {
+    const { session, read } = painted();
+    session.dispatch('FINISH.UPDATE', {
+      id: read().id,
+      sillHeight: 0.1,
+      topHeight: 1.3,
+    });
+    const row = read();
+    const line = assembleBoq(session.doc).lines.find(
+      (l) => l.costCode === 'paint',
+    );
+    expect(row.quantity).toBeCloseTo(line?.quantity ?? -1, 6);
+  });
+});

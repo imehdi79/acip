@@ -10,6 +10,7 @@ import {
   rowKey,
   sidesFor,
 } from '@/app/components/layout/footer/estimator-layers';
+import { FinishFields } from '@/app/components/layout/footer/estimator-fields';
 import {
   LayerChoices,
   codeOf,
@@ -43,6 +44,10 @@ const row = (over: Partial<FinishRow> = {}): FinishRow => ({
   quantity: 12.4,
   phase: 'new',
   unpriced: false,
+  thickness: 0.01,
+  // a wall face by default, since that is the host with a band; the slab cases
+  // override it to null, which is what core's rejection of band fields means
+  band: { sillHeight: 0, topHeight: null, t0: 0, t1: 1 },
   ...over,
 });
 
@@ -90,6 +95,8 @@ function list({
       onSideChange={noop}
       onToggleDetail={noop}
       onRemove={noop}
+      onEdit={noop}
+      onPhase={noop}
       onAdd={noop}
     />,
   );
@@ -366,5 +373,78 @@ describe('how much of the plan the sheet may cover', () => {
   it('measures it in svh, which a keyboard cannot move', () => {
     expect(SHEET_MAX_HEIGHT.endsWith('svh')).toBe(true);
     expect(SHEET_MAX_HEIGHT).not.toMatch(/\d(vh|dvh)$/);
+  });
+});
+
+/**
+ * Which inputs a row offers is decided by the HOST and the material's UNIT,
+ * never by the layer's name — a slab finish has no band because core rejects
+ * one, and only an m³ material bills on thickness. That is the whole of the
+ * "each layer has different options" problem, and it is a small matrix rather
+ * than a form engine.
+ */
+describe('the fields behind a row', () => {
+  const fields = (row: FinishRow) =>
+    renderToStaticMarkup(
+      <FinishFields row={row} onEdit={noop} onPhase={noop} />,
+    );
+
+  const banded = (over: Partial<FinishRow> = {}) => row(over);
+
+  it('offers the band and the extent on a wall face', () => {
+    const html = fields(banded());
+    expect(html).toContain('From floor');
+    expect(html).toContain('Full height');
+    expect(html).toContain('Starts at');
+    expect(html).toContain('Ends at');
+  });
+
+  it('offers no band at all on a floor', () => {
+    // core rejects the band fields for a slab-hosted finish rather than
+    // ignoring them, so an input here could only ever throw on save
+    const html = fields(row({ band: null }));
+    expect(html).not.toContain('From floor');
+    expect(html).not.toContain('Starts at');
+  });
+
+  it('hides the top box while the band runs to the top of the wall', () => {
+    // with the switch on there is no top to edit, and a box showing one would
+    // be inventing a number the document does not hold
+    expect(fields(banded())).not.toContain('Up to');
+    expect(
+      fields(banded({ band: { sillHeight: 0, topHeight: 1.2, t0: 0, t1: 1 } })),
+    ).toContain('Up to');
+  });
+
+  it('offers thickness only where it reaches the bill', () => {
+    // only an m³ material bills on it; elsewhere the box would move a number
+    // nobody is charged for
+    expect(fields(banded({ unit: 'm3' }))).toContain('Thickness');
+    expect(fields(banded({ unit: 'm2' }))).not.toContain('Thickness');
+    expect(fields(banded({ unit: 'count' }))).not.toContain('Thickness');
+  });
+
+  it('shows the extent as a percentage of the wall', () => {
+    // core stores 0..1 baseline parameters, which is right for geometry and
+    // unreadable on a phone
+    const html = fields(
+      banded({ band: { sillHeight: 0, topHeight: null, t0: 0.25, t1: 0.75 } }),
+    );
+    expect(html).toContain('value="25"');
+    expect(html).toContain('value="75"');
+  });
+
+  it('always offers build or strip out, whatever the host', () => {
+    for (const r of [banded(), row({ band: null })]) {
+      const html = fields(r);
+      expect(html).toContain('Build');
+      expect(html).toContain('Strip out');
+    }
+  });
+
+  it('shows which of the two the layer is on', () => {
+    expect(fields(banded({ phase: 'demolish' }))).toContain(
+      'aria-checked="true"',
+    );
   });
 });

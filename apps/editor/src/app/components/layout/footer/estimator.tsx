@@ -347,6 +347,25 @@ function ShapeWizard({ close }: { close: () => void }) {
               // row that no longer exists
               setOpened((rows) => without(rows, rowKey(at, finishId)));
             }}
+            /**
+             * One dispatch per committed field, which is one undo entry per
+             * edit — the fields commit on blur rather than per keystroke for
+             * exactly that reason.
+             *
+             * The patch is passed through untouched: FINISH.UPDATE honours
+             * only the keys it is given, so sending the one that changed is
+             * both the smallest correct edit and the one that cannot be
+             * rejected over a field the user never touched.
+             */
+            onEdit={(finishId, patch) => {
+              session.dispatch('FINISH.UPDATE', { id: finishId, ...patch });
+            }}
+            // PHASE.SET, not FINISH.UPDATE: core deliberately kept the phase
+            // out of the update command so one field would not have two
+            // writers to keep in step
+            onPhase={(finishId, phase) => {
+              session.dispatch('PHASE.SET', { ids: [finishId], phase });
+            }}
             onAdd={() => setAdding(true)}
           />
         ) : (
