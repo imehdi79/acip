@@ -1,37 +1,50 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Button, Checkbox, Label, Modal } from '@heroui/react';
+import { useEffect, useMemo, useState } from 'react';
+import { Button, Modal } from '@heroui/react';
 import {
   IconArrowsMaximize,
   IconCalculator,
-  IconChevronDown,
   IconFocusCentered,
 } from '@tabler/icons-react';
 import type { BBox } from '@acip/editor-core';
 import { useSession } from '@/editor/session-context';
 import { useRuntime } from '@/editor/runtime';
 import type { FitBounds } from '@/editor/ui-state';
-import {
-  buildFor,
-  loadBuilds,
-  loadPrices,
-  pricesFor,
-  type BuildBook,
-  type BuildItem,
-  type PriceBook,
-} from '@/data/prices';
+import type { LayerOption } from '@/data/layers';
 import { estimatorSteps } from './estimator-steps';
+import { LayerList, rowKey, sidesFor } from './estimator-layers';
+import { AddLayersSheet } from './estimator-add-layers';
 
 /**
  * The share of the plan left CLEAR by the sheet at the bottom.
  *
- * A step now carries a build item with a picker under it and a capped list of
- * rates, so the sheet lands around 350 px of a ~740 px phone — call it half.
- * It used to be one line and a counter at 0.6; the number came down when the
- * sheet grew, because the whole point of the framing is that the shape being
- * priced stays above it. The rest is slack for a long room name, the footer the
- * sheet sits over, and the phone's own bottom inset.
+ * A step carries a row of side tabs and a list of layers under them, so the
+ * sheet lands around half of a ~740 px phone. It used to be one line and a
+ * counter at 0.6; the number came down when the sheet grew, because the whole
+ * point of the framing is that the shape being priced stays above it.
  */
-const CLEAR_FRACTION = 0.5;
+export const CLEAR_FRACTION = 0.5;
+
+/**
+ * The tallest the sheet may ever be — the other half of `CLEAR_FRACTION`.
+ *
+ * This is not decoration, it is the framing contract made ENFORCEABLE. Every
+ * camera box `framing()` builds assumes the sheet covers exactly
+ * `1 - CLEAR_FRACTION` of the screen; nothing used to hold it to that. The
+ * dialog's own rule is `max-h-full`, which is 100% of a container sized by
+ * `--visual-viewport-height` — a value react-aria recomputes from the visual
+ * viewport, so it moves when a keyboard opens. The add sheet stacked on top has
+ * a search field in it, which is exactly how a keyboard gets opened over this
+ * sheet, and the estimator came back from it able to grow to the full screen —
+ * at which point the framing above it is describing a layout that no longer
+ * exists.
+ *
+ * So the cap is stated in `svh` — the SMALL viewport height, which is fixed to
+ * the largest browser chrome and does not move with a keyboard or a URL bar —
+ * and applied as an inline style, which no layer, class or variant can lose to.
+ * Derived from the constant rather than written as `50svh`, so the framing math
+ * and the sheet cannot drift apart.
+ */
+export const SHEET_MAX_HEIGHT = `${(1 - CLEAR_FRACTION) * 100}svh`;
 
 /**
  * Nothing is framed tighter than this, in meters. A 0.9 m door fitted on its
@@ -69,240 +82,53 @@ function framing(bounds: BBox): FitBounds {
   };
 }
 
-/**
- * One tickable line of the estimate — a rate, or the build item above them.
- *
- * Shared rather than written twice, because the build item is not a special
- * kind of row: it is the same tick, the same chevron and the same detail, with
- * a picker under it instead of a rate against it. Anything that changes about
- * how a line behaves changes for all of them at once.
- *
- * Two gestures, two targets: the tick says "this one is in", the chevron alone
- * opens the prose. One tap doing both would make the detail impossible to
- * refuse — every tick on a thirty-shape walk would spend sheet height on words
- * nobody asked for, and those pixels come straight off the drawing. Two targets
- * in one 44 px row is a real cost on a phone, and it is paid by making them
- * wildly unequal: the tick takes all the width the chevron does not, and the
- * chevron is a 44 px square pinned to the trailing edge, under the thumb.
- */
-function ItemRow({
-  label,
-  number,
-  trailing,
-  detail,
-  checked,
-  open,
-  onCheck,
-  onToggleDetail,
-  children,
-}: {
-  label: string;
-  /** its place in the list, printed before the tick; the build item has none */
-  number?: number;
-  /** the rate, for a rate row */
-  trailing?: ReactNode;
-  detail?: string;
-  checked: boolean;
-  open: boolean;
-  onCheck: (checked: boolean) => void;
-  onToggleDetail: () => void;
-  /** anything the row owns below its own line — the build item's picker */
-  children?: ReactNode;
-}) {
-  return (
-    // a hairline between rows: now that a row is a target, where one ends and
-    // the next begins is the difference between ticking Plaster and Paint
-    <div className="border-b border-separator last:border-0">
-      <div className="flex items-center gap-2">
-        {number !== undefined && (
-          // tabular, so 9. and 10. put their ticks in the same column
-          <span className="w-4 shrink-0 text-right text-xs text-muted tabular-nums">
-            {number}.
-          </span>
-        )}
-        <Checkbox
-          isSelected={checked}
-          onChange={onCheck}
-          className="min-w-0 flex-1 py-2.5"
-        >
-          <Checkbox.Content className="min-w-0 gap-2">
-            <Checkbox.Control>
-              <Checkbox.Indicator />
-            </Checkbox.Control>
-            <Label className="min-w-0 flex-1 truncate">{label}</Label>
-            {trailing}
-          </Checkbox.Content>
-        </Checkbox>
-        <button
-          type="button"
-          aria-expanded={open}
-          // the icon carries no text, and a bare "expand" would come out as a
-          // row of identical buttons to anyone not looking at it
-          aria-label={`Details for ${label}`}
-          onClick={onToggleDetail}
-          className="grid size-11 shrink-0 place-items-center text-muted"
-        >
-          <IconChevronDown
-            className={`transition-transform ${open ? 'rotate-180' : ''}`}
-            size={16}
-          />
-        </button>
-      </div>
-      {open && (
-        // A line with no prose is a normal answer too, the same way a kind with
-        // no rates is: the book is a seam onto a server that may hold numbers
-        // and nothing else. Saying so beats opening a row onto a blank strip,
-        // which reads as a bug in the sheet.
-        <p className="px-1 pb-2 pr-11 text-xs text-muted">
-          {detail ?? 'No note on this one yet.'}
-        </p>
-      )}
-      {children}
-    </div>
-  );
+/** what one shape in the walk has been said to be built up from */
+interface ShapeLayers {
+  /** the side showing now — a side id from `sidesFor` */
+  readonly side: string;
+  /** the layers on each side, in the order they go on, keyed by side id */
+  readonly lists: Readonly<Record<string, readonly LayerOption[]>>;
+  /** the rows whose detail is showing, keyed by `rowKey` */
+  readonly opened: ReadonlySet<string>;
 }
 
 /**
- * What the shape is BUILT FROM — the estimate's first line, and the only one
- * that is a choice rather than a tick.
+ * A shape nobody has said anything about yet — which is every shape, until it
+ * is. Shared rather than built per read so that "has this one been touched"
+ * stays a question about the map's keys and not about deep equality, and so
+ * that arriving at a shape does not itself write an entry for it.
  *
- * It stands OUTSIDE the rate list on purpose. Brick or block is not another
- * item to add up; it decides what "Blockwork, 48.00 / m²" even means, so a
- * numbered place among the rates would read as one more line of the same kind.
- * Above them, unnumbered, it reads as what it is: the thing they hang off.
- *
- * The picker is a native <select>, alone among the controls in this app. On a
- * phone that is the OS wheel — one thumb, no popover to place over a sheet that
- * is already parked over the drawing — and the sheet cannot afford a second
- * layer above itself.
+ * Side `a` is the one showing, and it is the only side a one-sided shape has;
+ * `sidesFor` names both of them starting there, so this is the first tab in
+ * either case.
  */
-export function Build({
-  item,
-  checked,
-  open,
-  option,
-  onCheck,
-  onToggleDetail,
-  onPick,
-}: {
-  /** null while the book is coming, or for a kind nobody has described */
-  item: BuildItem | null;
-  checked: boolean;
-  open: boolean;
-  /** the chosen option id, or '' for none yet */
-  option: string;
-  onCheck: (checked: boolean) => void;
-  onToggleDetail: () => void;
-  onPick: (optionId: string) => void;
-}) {
-  if (!item) return null;
-  return (
-    <ItemRow
-      label={item.label}
-      detail={item.detail}
-      checked={checked}
-      open={open}
-      onCheck={onCheck}
-      onToggleDetail={onToggleDetail}
-    >
-      <select
-        aria-label={item.label}
-        value={option}
-        onChange={(e) => onPick(e.target.value)}
-        className="mb-2 w-full rounded-sm border border-separator bg-surface px-2 py-2 text-sm"
-      >
-        {/* an explicit empty choice, because nothing chosen is the honest
-            starting state: defaulting to the first option would have the sheet
-            claim the user said "brick" when they have said nothing at all */}
-        <option value="">Choose…</option>
-        {item.options.map((choice) => (
-          <option key={choice.id} value={choice.id}>
-            {choice.label}
-          </option>
-        ))}
-      </select>
-    </ItemRow>
-  );
+const NO_LAYERS: ShapeLayers = { side: 'a', lists: {}, opened: new Set() };
+
+/** the same set without one key, or the same set when it never had it */
+function without(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
+  if (!set.has(key)) return set;
+  const next = new Set(set);
+  next.delete(key);
+  return next;
 }
 
 /**
- * The rates for the shape under the walk, as a numbered list of tick-boxes.
+ * What to call the side being added to, or null for a shape with only one.
  *
- * A list, and nothing more: no quantities, no arithmetic, no totals. What a
- * 4.65 m wall costs needs the takeoff as well as the rate, and putting a number
- * on the screen before that arithmetic exists would be inventing one. A rate
- * can be TICKED and it can be OPENED, and neither does any sums.
- *
- * Ticks rather than one pick, because an estimate is not a choice between the
- * rates: a wall is blockwork AND plaster AND paint. The numbers are there so
- * the sheet can be read back to somebody — "we have got 1 and 3" — which a
- * column of anonymous ticks cannot be.
- *
- * A kind with no rates is a normal answer — the walk covers stairs and slabs
- * too — so it says so rather than showing an empty box.
- *
- * Fully controlled: what is ticked and what is open are ShapeWizard's state,
- * not this list's. That is what makes "does the tick survive Next" a decision
- * taken once, in the open, rather than a side effect of what React happens to
- * remount — and it is what lets a test render this list at any state at all
- * with no dialog, no session and no DOM to tap in. Exported for that reason,
- * the same reason ShapeWizard is split out of Estimator.
+ * Null rather than "Layers": the add sheet uses it to say WHICH side it is
+ * about, and on a room there is no which — a heading answering a question the
+ * user was never asked reads as a distinction they have missed.
  */
-export function Rates({
-  book,
-  kind,
-  checked,
-  opened,
-  onCheck,
-  onToggleDetail,
-}: {
-  book: PriceBook | null;
-  kind: string;
-  /** the rate ids the user has ticked */
-  checked: ReadonlySet<string>;
-  /** the rate ids whose detail line is showing */
-  opened: ReadonlySet<string>;
-  onCheck: (id: string, checked: boolean) => void;
-  onToggleDetail: (id: string) => void;
-}) {
-  if (!book) return <p className="text-xs text-muted">Loading rates…</p>;
-  const rates = pricesFor(book, kind);
-  if (rates.length === 0) {
-    return <p className="text-xs text-muted">No rates for this yet.</p>;
-  }
-  return (
-    // capped and scrollable: the sheet sits over the plan it is describing, and
-    // a long list would push the drawing off the screen. Every open detail is
-    // another line, so the detail sits INSIDE the row, inside this scroller.
-    // Open all three and the list scrolls; the sheet does not gain a pixel and
-    // the plan does not move.
-    <ol className="max-h-32 overflow-y-auto text-left text-sm">
-      {rates.map((rate, at) => (
-        <li key={rate.id}>
-          <ItemRow
-            label={rate.label}
-            number={at + 1}
-            detail={rate.detail}
-            checked={checked.has(rate.id)}
-            open={opened.has(rate.id)}
-            onCheck={(on) => onCheck(rate.id, on)}
-            onToggleDetail={() => onToggleDetail(rate.id)}
-            trailing={
-              <span className="shrink-0 text-muted tabular-nums">
-                {rate.rate.toFixed(2)} / {rate.unit}
-              </span>
-            }
-          />
-        </li>
-      ))}
-    </ol>
-  );
+function sideLabel(kind: string, side: string): string | null {
+  const sides = sidesFor(kind);
+  if (sides.length === 1) return null;
+  return sides.find((one) => one.id === side)?.label ?? null;
 }
 
 /**
  * The wizard: one shape at a time, first to last, so nothing in the plan is
- * priced by accident or missed. Only the name for now — the step is the frame
- * that the quantities and the rate for each shape go into next.
+ * priced by accident or missed. Each step names a shape and holds what it is
+ * built up from — the frame the quantities and the rates go into next.
  *
  * Its own component, rendered inside the dialog rather than beside the trigger
  * button: the list is derived from the whole document (rooms alone re-run the
@@ -337,67 +163,33 @@ function ShapeWizard({ close }: { close: () => void }) {
    * the selection either way.
    */
   const [wholePlan, setWholePlan] = useState(false);
-  /** the books, once they arrive; null while they are still coming */
-  const [prices, setPrices] = useState<PriceBook | null>(null);
-  const [builds, setBuilds] = useState<BuildBook | null>(null);
   /**
-   * What is ticked, what is open, and what each build item is set to.
+   * Every shape's build-up, keyed by the step's own id.
    *
-   * All three live HERE, above `index`, so all three SURVIVE Next and Back. The
-   * wizard remounts nothing between steps, so that is also what React would do
-   * on its own — it is written down because it is the answer, not because it is
-   * the default. Thirty walls in a row are almost always the same blockwork,
-   * and making the user say so thirty times is thirty taps to state one fact.
+   * PER SHAPE, not per kind. A wall's build-up is a fact about that wall — the
+   * one facing the street is rendered and the one in the hall is not — so the
+   * walk must not arrive at W8 already claiming it is built like W7. It lives
+   * HERE, above `index`, so it survives Next and Back: the answer given on W7
+   * is still there when the walk comes back to it, which is what makes Back
+   * worth pressing at all.
    *
-   * Carrying it is safe because every id is namespaced by kind (`wall.block`,
-   * `room.screed`, `wall.built`): cross from the walls into the rooms and
-   * nothing in the new list matches, so it simply arrives with nothing ticked
-   * rather than quietly pricing a floor as blockwork.
-   *
-   * Ticks and open rows are SETS, not single values. For the ticks that is the
-   * point — a wall is blockwork and plaster and paint. For the open rows it is
-   * because an accordion exists to stop a list growing without bound and the
-   * cap on the list already does that; with that reason gone, the only question
-   * left is whether closing one row to open another ever helps, and comparing
-   * what two rates cover is precisely why anyone opens them.
+   * Keyed by `step.id`, which is the entity id, or the space key for a room —
+   * stable for as long as the sheet is open, because the plan cannot change
+   * underneath it (see `steps` above).
    */
-  const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
-  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
-  const [builtFrom, setBuiltFrom] = useState<Readonly<Record<string, string>>>(
+  const [byShape, setByShape] = useState<Readonly<Record<string, ShapeLayers>>>(
     {},
   );
-
-  // Fetched once per opening, not once per step: the books cover every kind,
-  // and asking again on Next would be a request per tap. The flag is not
-  // ceremony — this sheet can be closed before a promise settles, and setting
-  // state on a wizard that is gone is a warning at best.
-  useEffect(() => {
-    let live = true;
-    void loadPrices().then((book) => {
-      if (live) setPrices(book);
-    });
-    void loadBuilds().then((book) => {
-      if (live) setBuilds(book);
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
-
-  /** flip one id in a set of ids, for the ticks and for the open rows alike */
-  const toggle = (
-    set: ReadonlySet<string>,
-    id: string,
-    on = !set.has(id),
-  ): ReadonlySet<string> => {
-    const next = new Set(set);
-    if (on) next.add(id);
-    else next.delete(id);
-    return next;
-  };
+  /** whether the fullscreen add sheet is up over the wizard */
+  const [adding, setAdding] = useState(false);
 
   const step = steps[index];
   const last = index >= steps.length - 1;
+  const shape = (step && byShape[step.id]) ?? NO_LAYERS;
+
+  /** rewrite one shape's build-up, leaving every other shape alone */
+  const editShape = (id: string, change: (was: ShapeLayers) => ShapeLayers) =>
+    setByShape((all) => ({ ...all, [id]: change(all[id] ?? NO_LAYERS) }));
 
   // The walk BORROWS the selection to highlight with, and gives it back.
   //
@@ -457,38 +249,39 @@ function ShapeWizard({ close }: { close: () => void }) {
       </Modal.Header>
       <Modal.Body className="flex flex-col gap-1 text-left">
         {step ? (
-          <>
-            {/* first, and outside the list: what it is made of decides what the
-                rates under it mean */}
-            <Build
-              item={builds ? buildFor(builds, step.kind) : null}
-              checked={checked.has(`${step.kind}.built`)}
-              open={opened.has(`${step.kind}.built`)}
-              option={builtFrom[`${step.kind}.built`] ?? ''}
-              onCheck={(on) =>
-                setChecked((ids) => toggle(ids, `${step.kind}.built`, on))
-              }
-              onToggleDetail={() =>
-                setOpened((rows) => toggle(rows, `${step.kind}.built`))
-              }
-              // choosing what it is built from is saying it is part of the
-              // estimate, so the tick follows the choice rather than making the
-              // user say the same thing twice
-              onPick={(optionId) => {
-                const id = `${step.kind}.built`;
-                setBuiltFrom((at) => ({ ...at, [id]: optionId }));
-                setChecked((ids) => toggle(ids, id, optionId !== ''));
-              }}
-            />
-            <Rates
-              book={prices}
-              kind={step.kind}
-              checked={checked}
-              opened={opened}
-              onCheck={(id, on) => setChecked((ids) => toggle(ids, id, on))}
-              onToggleDetail={(id) => setOpened((rows) => toggle(rows, id))}
-            />
-          </>
+          <LayerList
+            kind={step.kind}
+            side={shape.side}
+            lists={shape.lists}
+            opened={shape.opened}
+            onSideChange={(side) =>
+              editShape(step.id, (was) => ({ ...was, side }))
+            }
+            onToggleDetail={(side, layerId) =>
+              editShape(step.id, (was) => {
+                const key = rowKey(side, layerId);
+                const rows = new Set(was.opened);
+                if (!rows.delete(key)) rows.add(key);
+                return { ...was, opened: rows };
+              })
+            }
+            onRemove={(side, layerId) =>
+              editShape(step.id, (was) => ({
+                ...was,
+                lists: {
+                  ...was.lists,
+                  [side]: (was.lists[side] ?? []).filter(
+                    (layer) => layer.id !== layerId,
+                  ),
+                },
+                // and take its detail row with it, or the set keeps a key for a
+                // row that no longer exists — which comes back open the day the
+                // same layer is added again
+                opened: without(was.opened, rowKey(side, layerId)),
+              }))
+            }
+            onAdd={() => setAdding(true)}
+          />
         ) : (
           <p className="text-sm text-muted">
             Nothing to price on this level yet.
@@ -544,6 +337,33 @@ function ShapeWizard({ close }: { close: () => void }) {
           </div>
         )}
       </Modal.Footer>
+      {step && (
+        // Over the wizard, not beside it: the add sheet is full screen, so
+        // while it is up there is no Next to press and the shape it saves onto
+        // cannot change under it. Closed, it renders nothing at all.
+        <AddLayersSheet
+          kind={step.kind}
+          sideLabel={sideLabel(step.kind, shape.side)}
+          isOpen={adding}
+          alreadyIn={
+            new Set((shape.lists[shape.side] ?? []).map((layer) => layer.id))
+          }
+          onOpenChange={setAdding}
+          // appended, not merged in catalogue order: the list is a build-up and
+          // its numbers are the order things go on, so a layer added later goes
+          // on later. The sheet already refuses what is on the side, so nothing
+          // here can arrive twice.
+          onSave={(layers) =>
+            editShape(step.id, (was) => ({
+              ...was,
+              lists: {
+                ...was.lists,
+                [was.side]: [...(was.lists[was.side] ?? []), ...layers],
+              },
+            }))
+          }
+        />
+      )}
     </>
   );
 }
@@ -586,7 +406,8 @@ export function Estimator({
       <Modal.Backdrop variant="transparent" className="bg-transparent!">
         {/* bottom, so the plan above it stays clear — see framing() */}
         <Modal.Container placement="bottom">
-          <Modal.Dialog>
+          {/* the cap that keeps the plan visible whatever the sheet holds */}
+          <Modal.Dialog style={{ maxHeight: SHEET_MAX_HEIGHT }}>
             {({ close }: { close: () => void }) => (
               <ShapeWizard close={close} />
             )}
