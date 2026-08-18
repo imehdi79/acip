@@ -1,8 +1,7 @@
 import { Button, Tabs } from '@heroui/react';
 import { IconChevronDown, IconPlus, IconTrash } from '@tabler/icons-react';
-import type { Phase } from '@acip/editor-core';
 import type { FinishRow, StepSide } from './estimator-finishes';
-import { FinishFields, type FinishEdit } from './estimator-fields';
+import { FinishFields } from './estimator-fields';
 
 /** one side of a shape, and what to call it on its tab */
 export interface SideDef {
@@ -151,7 +150,7 @@ function LayerRow({
   onToggleDetail,
   onRemove,
   onEdit,
-  onPhase,
+  onDeduct,
 }: {
   row: FinishRow;
   /** its place in the build-up, printed first */
@@ -159,8 +158,8 @@ function LayerRow({
   open: boolean;
   onToggleDetail: () => void;
   onRemove: () => void;
-  onEdit: (patch: FinishEdit) => void;
-  onPhase: (phase: Phase) => void;
+  onEdit: (patch: Record<string, number>) => void;
+  onDeduct: (deductOpenings: boolean) => void;
 }) {
   return (
     // a hairline between rows: now that a row carries a delete, where one row
@@ -216,7 +215,7 @@ function LayerRow({
               </div>
             ))}
           </dl>
-          <FinishFields row={row} onEdit={onEdit} onPhase={onPhase} />
+          <FinishFields row={row} onEdit={onEdit} onDeduct={onDeduct} />
         </div>
       )}
     </div>
@@ -231,15 +230,15 @@ function SideLayers({
   onToggleDetail,
   onRemove,
   onEdit,
-  onPhase,
+  onDeduct,
 }: {
   rows: readonly FinishRow[];
   opened: ReadonlySet<string>;
   side: StepSide;
   onToggleDetail: (side: StepSide, finishId: string) => void;
   onRemove: (side: StepSide, finishId: string) => void;
-  onEdit: (finishId: string, patch: FinishEdit) => void;
-  onPhase: (finishId: string, phase: Phase) => void;
+  onEdit: (finishId: string, patch: Record<string, number>) => void;
+  onDeduct: (finishId: string, deductOpenings: boolean) => void;
 }) {
   if (rows.length === 0) {
     // Empty is the STARTING state, not a failure: nothing is priced until
@@ -267,7 +266,7 @@ function SideLayers({
             onToggleDetail={() => onToggleDetail(side, row.id)}
             onRemove={() => onRemove(side, row.id)}
             onEdit={(patch) => onEdit(row.id, patch)}
-            onPhase={(phase) => onPhase(row.id, phase)}
+            onDeduct={(on) => onDeduct(row.id, on)}
           />
         </li>
       ))}
@@ -325,7 +324,7 @@ export function LayerList({
   onToggleDetail,
   onRemove,
   onEdit,
-  onPhase,
+  onDeduct,
   onAdd,
 }: {
   /** the `EstimatorStep.kind` being priced — decides how many sides it has */
@@ -349,10 +348,10 @@ export function LayerList({
   onSideChange: (side: StepSide) => void;
   onToggleDetail: (side: StepSide, finishId: string) => void;
   onRemove: (side: StepSide, finishId: string) => void;
-  /** a band, extent or thickness edit — straight through to FINISH.UPDATE */
-  onEdit: (finishId: string, patch: FinishEdit) => void;
-  /** build or strip out — PHASE.SET, which already owns that field */
-  onPhase: (finishId: string, phase: Phase) => void;
+  /** a width or height edit, already in FINISH.UPDATE's own vocabulary */
+  onEdit: (finishId: string, patch: Record<string, number>) => void;
+  /** whether the openings crossing this layer come out of its area */
+  onDeduct: (finishId: string, deductOpenings: boolean) => void;
   onAdd: () => void;
 }) {
   if (blocked !== undefined) {
@@ -402,7 +401,7 @@ export function LayerList({
               onToggleDetail={onToggleDetail}
               onRemove={onRemove}
               onEdit={onEdit}
-              onPhase={onPhase}
+              onDeduct={onDeduct}
             />
           </Tabs.Panel>
         ))}

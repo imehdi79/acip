@@ -5,7 +5,13 @@ import type {
   MaterialUnit,
   Phase,
 } from '@acip/editor-core';
-import { FinishEntity, WallEntity, layerQuantity } from '@acip/editor-core';
+import {
+  FinishEntity,
+  SlabEntity,
+  WallEntity,
+  bboxFromPoints,
+  layerQuantity,
+} from '@acip/editor-core';
 import { computeFinishTakeoff } from '@acip/estimator';
 import type { EstimatorStep } from './estimator-steps';
 import {
@@ -116,22 +122,65 @@ export type FinishSpot =
     };
 
 /**
- * The rectangle a finish covers on a wall face: `[t0·L, t1·L]` along the wall
- * and `[sillHeight, topHeight]` up it.
+ * The rectangle a finish covers, in METRES, however its host stores it.
  *
- * This is where the estimating judgement actually lives. "Tile to 1.2 m, paint
- * above" is two finishes on one face distinguished by nothing but their bands,
- * and until these were editable the sheet could only ever say "the whole
- * face". `topHeight` is null when the band runs to the top of the wall and
- * KEEPS doing so as the wall grows — a state no number can stand in for, which
- * is why FINISH.UPDATE spells it with its own `fullHeight` flag.
+ * This is where the estimating judgement actually lives: "tile to 1.2 m, paint
+ * above" is two finishes on one face distinguished by nothing but their
+ * extents. It is stated as a width and a height because that is what an
+ * estimator measures and what a tape reads — the document's own vocabulary is
+ * two different things underneath and neither is a number anyone says out
+ * loud. A wall band is `[t0, t1]` along the wall and `[sill, top]` up it,
+ * anchored so it follows the wall; a floor is an unanchored rectangle on the
+ * plan. `coverPatch` is the only place either is written, so the sheet never
+ * has to know which it is looking at.
+ *
+ * The rest of the fields are what that translation needs, kept here rather
+ * than in the component so the arithmetic is testable without a DOM.
  */
-export interface FinishBand {
-  readonly sillHeight: number;
-  /** null = up to the top of the wall, and following it */
-  readonly topHeight: number | null;
+export interface FinishCover {
+  /** metres along the wall, or across the plan for a floor */
+  readonly width: number;
+  /** metres up the wall, or across the plan for a floor */
+  readonly height: number;
+  readonly host: 'wall' | 'slab';
+  /** wall only: where the band starts, which the width is measured FROM */
   readonly t0: number;
-  readonly t1: number;
+  /** wall only: the foot of the band, which the height is measured FROM */
+  readonly sillHeight: number;
+  /** wall only: the wall's own length, to turn a width in metres back into t1 */
+  readonly hostLength: number;
+}
+
+/**
+ * What to send FINISH.UPDATE to make the cover this wide, or this tall.
+ *
+ * The one place the sheet's metres become the document's own extent, and the
+ * reason the component knows nothing about `t1` or `coverHeight`. Width and
+ * height are anchored at the START of the band, not centred: an estimator
+ * typing 1.2 m over a dado means "1.2 m up from where it begins", and moving
+ * the foot of a band the user did not touch would be an edit they did not ask
+ * for.
+ *
+ * A slab needs BOTH halves whatever changed, because core refuses half a
+ * rectangle — one dimension alone cannot say what area is covered.
+ */
+export function coverPatch(
+  cover: FinishCover,
+  next: { readonly width?: number; readonly height?: number },
+): Record<string, number> {
+  const width = next.width ?? cover.width;
+  const height = next.height ?? cover.height;
+  if (cover.host === 'slab') {
+    return { coverWidth: width, coverHeight: height };
+  }
+  const patch: Record<string, number> = {};
+  if (next.width !== undefined && cover.hostLength > 0) {
+    patch['t1'] = cover.t0 + width / cover.hostLength;
+  }
+  if (next.height !== undefined) {
+    patch['topHeight'] = cover.sillHeight + height;
+  }
+  return patch;
 }
 
 /** one finish on one face, resolved into what the sheet shows */
@@ -157,13 +206,20 @@ export interface FinishRow {
   /** its own build-up thickness (m); only an m³ material bills on it */
   readonly thickness: number;
   /**
-   * The band it covers, for a WALL-hosted finish.
+   * The rectangle it covers, in metres, ready to be typed over.
    *
-   * Null on a slab, where a finish IS the whole footprint: core rejects the
-   * band fields outright for one rather than ignoring them, so a null here is
-   * what stops the sheet offering an input whose save could only ever throw.
+   * Null only when the host is neither a wall nor a slab, which nothing in the
+   * walk currently is — the sheet still guards, because a row with nowhere to
+   * write is better shown without inputs than with ones that throw on save.
    */
-  readonly band: FinishBand | null;
+  readonly cover: FinishCover | null;
+  /**
+   * Whether the openings crossing this layer come out of its area.
+   *
+   * A wall-face question only: a slab has no openings, and core rejects the
+   * flag for one rather than letting it be set where it could do nothing.
+   */
+  readonly deductOpenings: boolean;
 }
 
 /**
@@ -210,9 +266,19 @@ function finishesAtAnchor(
     .map((relation) => relation.hostedId);
   if (onThisFace.length === 0) return [];
 
-  // a band belongs to a wall face and nowhere else; asked once for the host
-  // rather than per finish, since every row here shares it
-  const hostIsWall = doc.get(hostId) instanceof WallEntity;
+  // asked once for the host rather than per finish, since every row on it
+  // shares the same answer and the same dimensions to measure against
+  const host = doc.get(hostId);
+  const hostIsWall = host instanceof WallEntity;
+  const hostLength = host instanceof WallEntity ? host.getLength() : 0;
+  const hostHeight = host instanceof WallEntity ? host.getHeight() : 0;
+  // a slab is an arbitrary polygon, so "how wide is the room" is its bounding
+  // box — right on the rectangular rooms that are nearly all of them, and the
+  // honest starting point for the rest, which the user then types over
+  const slabBox =
+    host instanceof SlabEntity
+      ? bboxFromPoints([...host.getFootprint()])
+      : null;
 
   // indexed, then walked in RELATION order — the takeoff comes back in document
   // order, which is not the order the user added things in
@@ -228,16 +294,38 @@ function finishesAtAnchor(
     // straight off the entity: the takeoff reports what a finish MEASURES, not
     // the numbers it was measured from, and those are what an edit changes
     const entity = doc.get(id);
-    const band =
-      hostIsWall && entity instanceof FinishEntity
-        ? {
-            sillHeight: entity.sillHeight,
-            topHeight: entity.topHeight,
-            t0: entity.t0,
-            t1: entity.t1,
-          }
-        : null;
-    const editable = { thickness: finish.thickness, band };
+    let cover: FinishCover | null = null;
+    if (entity instanceof FinishEntity) {
+      if (hostIsWall) {
+        cover = {
+          width: Math.max(0, (entity.t1 - entity.t0) * hostLength),
+          height: Math.max(
+            0,
+            (entity.topHeight ?? hostHeight) - entity.sillHeight,
+          ),
+          host: 'wall',
+          t0: entity.t0,
+          sillHeight: entity.sillHeight,
+          hostLength,
+        };
+      } else if (slabBox) {
+        cover = {
+          // what it was told to cover, or the room as drawn until it is told
+          width: entity.coverWidth ?? slabBox.maxX - slabBox.minX,
+          height: entity.coverHeight ?? slabBox.maxY - slabBox.minY,
+          host: 'slab',
+          t0: 0,
+          sillHeight: 0,
+          hostLength: 0,
+        };
+      }
+    }
+    const editable = {
+      thickness: finish.thickness,
+      cover,
+      deductOpenings:
+        entity instanceof FinishEntity ? entity.deductOpenings : true,
+    };
 
     // Demolition is the same area priced as a strip-out, never as tiles: you
     // do not count the tiles you are tearing off a wall. Straight from the

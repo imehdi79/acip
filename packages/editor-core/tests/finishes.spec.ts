@@ -598,3 +598,211 @@ describe('FINISH.AUTO — tile every room', () => {
     expect(session.doc.has(manual)).toBe(true);
   });
 });
+
+/**
+ * Two conventions genuinely coexist in one estimate: the blockwork behind a
+ * window may be measured solid while the paint over it is not. `solidWallRule`
+ * offers that choice to a whole bill; `deductOpenings` brings it down to the
+ * one layer it is actually an argument about.
+ */
+describe('FinishEntity — measured net or measured solid', () => {
+  function paintedWallWithWindow(): {
+    session: EditorSession;
+    finish: FinishEntity;
+  } {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const paint = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Paint',
+      unit: 'm2',
+      costCode: 'paint',
+    });
+    session.dispatch('WINDOW.ADD', { wallId, t: 0.5 });
+    const id = session.dispatch<EntityId>('FINISH.ADD', {
+      wallId,
+      side: 'face+',
+      materialId: paint,
+    });
+    return { session, finish: session.doc.get(id) as FinishEntity };
+  }
+
+  test('nets the openings out by default', () => {
+    // the measured-net convention, and the one every drawing saved before this
+    // field existed was priced under
+    const { finish } = paintedWallWithWindow();
+    expect(finish.deductOpenings).toBe(true);
+    expect(finish.getNetArea()).toBeLessThan(10 * 3);
+  });
+
+  test('prices the full face when the openings do not deduct', () => {
+    const { session, finish } = paintedWallWithWindow();
+    const net = finish.getNetArea();
+    session.dispatch('FINISH.UPDATE', {
+      id: finish.id,
+      deductOpenings: false,
+    });
+    expect(finish.getNetArea()).toBeCloseTo(10 * 3, 9);
+    expect(finish.getNetArea()).toBeGreaterThan(net);
+  });
+
+  test('undo puts the convention back', () => {
+    const { session, finish } = paintedWallWithWindow();
+    const net = finish.getNetArea();
+    session.dispatch('FINISH.UPDATE', {
+      id: finish.id,
+      deductOpenings: false,
+    });
+    session.undo();
+    expect(finish.deductOpenings).toBe(true);
+    expect(finish.getNetArea()).toBeCloseTo(net, 9);
+  });
+
+  test('survives a save and reopen', () => {
+    // a flag that does not persist would re-price the job the next morning
+    const { session, finish } = paintedWallWithWindow();
+    session.dispatch('FINISH.UPDATE', {
+      id: finish.id,
+      deductOpenings: false,
+    });
+    const restored = new FinishEntity();
+    restored.loadData(finish.saveData());
+    expect(restored.deductOpenings).toBe(false);
+  });
+
+  test('an older drawing with no flag is still measured net', () => {
+    // absent must not silently mean "solid" — that would re-price every job
+    // ever saved before the field existed
+    const finish = new FinishEntity();
+    finish.loadData({
+      id: finish.id,
+      type: 'finish',
+      layerId: finish.layerId,
+      version: 1,
+      props: {
+        materialId: null,
+        sillHeight: 0,
+        topHeight: null,
+        t0: 0,
+        t1: 1,
+        thickness: 0.01,
+      },
+    });
+    expect(finish.deductOpenings).toBe(true);
+  });
+
+  test('a slab has no openings to argue about', () => {
+    const session = new EditorSession();
+    drawRoom(session);
+    session.dispatch('SLAB.AUTO', {});
+    const slabId = session.doc.all().find((e) => e.type === 'slab')?.id;
+    const screed = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Screed',
+      unit: 'm2',
+      costCode: 'screed',
+    });
+    const id = session.dispatch<EntityId>('FLOORFINISH.ADD', {
+      slabId,
+      materialId: screed,
+    });
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, deductOpenings: false }),
+    ).toThrow();
+  });
+});
+
+/**
+ * A wall band is anchored to its wall and follows it. A slab footprint is an
+ * arbitrary polygon with nothing to anchor against, so a partial floor is
+ * stated the way an estimator measures one: a width and a height off the plan.
+ */
+describe('FinishEntity — a floor that is not the whole room', () => {
+  function floored(): { session: EditorSession; finish: FinishEntity } {
+    const session = new EditorSession();
+    drawRoom(session);
+    session.dispatch('SLAB.AUTO', {});
+    const slabId = session.doc.all().find((e) => e.type === 'slab')?.id;
+    const tile = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Floor tile',
+      unit: 'm2',
+      costCode: 'floor-tile',
+    });
+    const id = session.dispatch<EntityId>('FLOORFINISH.ADD', {
+      slabId,
+      materialId: tile,
+    });
+    return { session, finish: session.doc.get(id) as FinishEntity };
+  }
+
+  test('covers the whole footprint until told otherwise', () => {
+    const { finish } = floored();
+    expect(finish.coverWidth).toBeNull();
+    expect(finish.getNetArea()).toBeGreaterThan(0);
+  });
+
+  test('covers the rectangle it is given', () => {
+    const { session, finish } = floored();
+    const whole = finish.getNetArea();
+    session.dispatch('FINISH.UPDATE', {
+      id: finish.id,
+      coverWidth: 3,
+      coverHeight: 4,
+    });
+    expect(finish.getNetArea()).toBeCloseTo(12, 9);
+    expect(finish.getNetArea()).toBeLessThan(whole);
+    // and the run around what is covered, for an edge trim
+    expect(finish.getCoveredLength()).toBeCloseTo(14, 9);
+  });
+
+  test('goes back to the whole footprint', () => {
+    const { session, finish } = floored();
+    const whole = finish.getNetArea();
+    session.dispatch('FINISH.UPDATE', {
+      id: finish.id,
+      coverWidth: 3,
+      coverHeight: 4,
+    });
+    session.dispatch('FINISH.UPDATE', { id: finish.id, wholeSlab: true });
+    expect(finish.coverWidth).toBeNull();
+    expect(finish.getNetArea()).toBeCloseTo(whole, 9);
+  });
+
+  test('refuses half a rectangle', () => {
+    // one dimension alone cannot say what area is covered, and defaulting the
+    // other would invent a measurement the user never took
+    const { session, finish } = floored();
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id: finish.id, coverWidth: 3 }),
+    ).toThrow();
+  });
+
+  test('refuses a covered rectangle on a wall face', () => {
+    // a wall band is already a width and a height, and an anchored one; two
+    // ways to state one extent leaves nothing to say which the area came from
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const id = session.dispatch<EntityId>('FINISH.ADD', {
+      wallId,
+      side: 'face+',
+      materialId: tileMaterial(session),
+    });
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, coverWidth: 3, coverHeight: 4 }),
+    ).toThrow();
+  });
+
+  test('persists, and undoes', () => {
+    const { session, finish } = floored();
+    const whole = finish.getNetArea();
+    session.dispatch('FINISH.UPDATE', {
+      id: finish.id,
+      coverWidth: 2,
+      coverHeight: 2,
+    });
+    const restored = new FinishEntity();
+    restored.loadData(finish.saveData());
+    expect(restored.coverWidth).toBe(2);
+    expect(restored.coverHeight).toBe(2);
+    session.undo();
+    expect(finish.getNetArea()).toBeCloseTo(whole, 9);
+  });
+});

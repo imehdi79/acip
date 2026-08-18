@@ -36,6 +36,14 @@ limitation applies equally; a single fix for all hosted kinds is deferred.)
 
 ## Golden decision 2: the finished area is the band minus the openings
 
+...unless the layer says otherwise. `deductOpenings` (default true, so every
+drawing saved before it existed keeps its numbers) turns one layer over to the
+solid convention, in which the face is priced over its full extent and the
+doors and windows in it are billed as their own items. `solidWallRule` offers
+the same choice to a whole bill; the flag exists because the two conventions
+genuinely coexist in one estimate — the blockwork behind a window may be
+measured solid while the paint over it is not.
+
 The finish covers a rectangle on the face: along the wall `[t0·L, t1·L]`,
 vertically `[sillHeight, topHeight]` (topHeight `null` = full wall height,
 resolved on read so raising the wall grows the finish). `getNetArea()`
@@ -102,13 +110,22 @@ plan stays uncluttered, and splits the BOQ into Demolition + Rebuild subtotals.
   macro removes slab-hosted ones of the same surface, so they never collide.
   `MATERIAL.REMOVE` blocks while any finish references the material.
 - `FINISH.UPDATE {id, materialId?, sillHeight?, topHeight?, fullHeight?, t0?,
-  t1?, thickness?}` edits one finish in place — only the fields passed change,
+  t1?, thickness?, deductOpenings?, coverWidth?, coverHeight?, wholeSlab?}`
+  edits one finish in place — only the fields passed change,
   and the entity keeps its id and its position in the host's stack, so
   "tile to 1.2 m" → "tile to 1.5 m" is a value change, not an erase-and-re-add
   that renumbers the finish and breaks every reference to it. `topHeight` is
   nullable on the entity but the schema vocabulary has no nullable number, so
   the null state gets its own boolean: `fullHeight: true` clears `topHeight`
   and sends the band back to following the wall (passing both is rejected).
+  The extent fields are split by host and each half is REJECTED on the other:
+  a wall band is `sillHeight`/`topHeight`/`t0`/`t1`, anchored so it follows the
+  wall, while a floor or ceiling states an unanchored `coverWidth` ×
+  `coverHeight` taken off the plan (`wholeSlab: true` clears it, the same way
+  `fullHeight` clears `topHeight`; both halves of the rectangle must be given
+  together). Accepting both on one finish would be two ways to state one
+  extent, with nothing to say which the area came from.
+  `deductOpenings` is a wall-face concern and is rejected on a slab.
   `phase` is NOT settable here — `PHASE.SET` owns that field, and one field
   with two writers is one too many. Band and extent are rejected (not ignored)
   for a slab-hosted finish, which has neither; `materialId` and `thickness`
@@ -134,8 +151,12 @@ plan stays uncluttered, and splits the BOQ into Demolition + Rebuild subtotals.
   ceilings at an arbitrary height are not modeled.
 - **Rectangular wall band** — a wall finish is one axis-aligned band per face;
   sloped tops, cutouts beyond openings, and per-face patterns are not modeled.
-- **Slab finishes cover the whole footprint** — floor penetrations (a stair
-  shaft) are not subtracted.
+- **A partial floor is a rectangle, not a region** — `coverWidth` ×
+  `coverHeight` states the area an estimator measured; it is not anchored to
+  the slab, does not follow it, and is not clipped to it (a figure larger than
+  the drawn slab usually includes a threshold or a return on purpose). Floor
+  penetrations such as a stair shaft are still not subtracted, and a covered
+  rectangle is a quantity rather than a shape — nothing draws it.
 - **Single material per finish** — a plaster+paint build-up is two stacked
   finishes, not one layered finish.
 - **No 3D** — finishes don't render in the 3D view (no z-fighting risk, no

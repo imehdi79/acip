@@ -51,6 +51,40 @@ export class FinishEntity extends Entity implements IHosted {
   t1 = 1;
   /** nominal build-up thickness — only the m³ unit uses it */
   thickness = DEFAULT_THICKNESS;
+  /**
+   * Whether the openings crossing this band come OUT of its area.
+   *
+   * True is the measured-net convention and stays the default: plaster does
+   * not go where a window is. False is the solid ("توپر") convention, in which
+   * a face is priced over its full extent and doors and windows are billed as
+   * their own items instead — the same choice `solidWallRule` offers a whole
+   * bill, brought down to one layer, because the two conventions genuinely
+   * coexist in one estimate: the blockwork behind a window may be measured
+   * solid while the paint over it is not.
+   *
+   * Only a wall band has openings to argue about; on a slab it is inert.
+   */
+  deductOpenings = true;
+  /**
+   * The rectangle a SLAB-hosted finish covers, when it is not the whole
+   * footprint. Null (either of them) means the whole slab.
+   *
+   * A wall finish states its extent as `[t0, t1] × [sill, top]`, anchored to
+   * the host so it follows the wall when the wall moves. A slab footprint is
+   * an arbitrary polygon with no such parameters to anchor against, so a
+   * partial floor is given the only thing an estimator actually measures it
+   * by: a width and a height, in metres, taken off the plan.
+   *
+   * That makes it a TAKEOFF dimension rather than a region — it does not
+   * follow the slab, and it is not clipped to it. Both are deliberate. A
+   * screeded area of 3 × 4 is 12 m² whether or not the room was later
+   * stretched, and an estimator who types a figure larger than the drawn slab
+   * has usually included a threshold or a return on purpose; silently
+   * shrinking it to fit would be the drawing overruling a measurement the
+   * user took.
+   */
+  coverWidth: number | null = null;
+  coverHeight: number | null = null;
   /** `new` = build (supply+install); `demolish` = strip existing, priced to remove */
   phase: Phase = 'new';
   /** created by an AUTO macro — replaced on the next regeneration */
@@ -101,14 +135,27 @@ export class FinishEntity extends Entity implements IHosted {
     const host = this.host();
     if (host instanceof WallEntity)
       return Math.max(0, (this.t1 - this.t0) * host.getLength());
-    if (host instanceof SlabEntity) return host.getPerimeter();
+    if (host instanceof SlabEntity) {
+      const w = this.coverWidth;
+      const h = this.coverHeight;
+      // the run around what is actually covered, not around the whole slab:
+      // an edge trim to a 3 × 4 tiled area is 14 m of trim, not the room's
+      return w !== null && h !== null
+        ? 2 * (Math.max(0, w) + Math.max(0, h))
+        : host.getPerimeter();
+    }
     return 0;
   }
 
   /** finished area (m²): wall band minus openings, or the slab footprint */
   getNetArea(): number {
     const host = this.host();
-    if (host instanceof SlabEntity) return host.getArea();
+    if (host instanceof SlabEntity) {
+      const w = this.coverWidth;
+      const h = this.coverHeight;
+      if (w !== null && h !== null) return Math.max(0, w) * Math.max(0, h);
+      return host.getArea();
+    }
     if (!(host instanceof WallEntity)) return 0;
     const length = host.getLength();
     const along0 = this.t0 * length;
@@ -117,6 +164,9 @@ export class FinishEntity extends Entity implements IHosted {
     const bandLen = Math.max(0, along1 - along0);
     const bandHeight = Math.max(0, top - this.sillHeight);
     let area = bandLen * bandHeight;
+    // measured solid: the face is priced over its whole extent and the doors
+    // and windows in it are billed as their own items instead
+    if (!this.deductOpenings) return Math.max(0, area);
     for (const spec of host.getOpeningSpecs()) {
       const openLen0 = spec.t * length - spec.width / 2;
       const openLen1 = spec.t * length + spec.width / 2;
@@ -222,6 +272,9 @@ export class FinishEntity extends Entity implements IHosted {
     copy.thickness = this.thickness;
     copy.phase = this.phase;
     copy.auto = this.auto;
+    copy.deductOpenings = this.deductOpenings;
+    copy.coverWidth = this.coverWidth;
+    copy.coverHeight = this.coverHeight;
     return copy;
   }
 
@@ -235,6 +288,9 @@ export class FinishEntity extends Entity implements IHosted {
       thickness: this.thickness,
       phase: this.phase,
       auto: this.auto,
+      deductOpenings: this.deductOpenings,
+      coverWidth: this.coverWidth,
+      coverHeight: this.coverHeight,
     };
   }
 
@@ -260,6 +316,13 @@ export class FinishEntity extends Entity implements IHosted {
     this.thickness = thickness;
     this.phase = asPhase(props['phase']);
     this.auto = props['auto'] === true;
+    // absent means true: every drawing saved before this field existed was
+    // measured net, and a missing flag must not silently re-price it solid
+    this.deductOpenings = props['deductOpenings'] !== false;
+    this.coverWidth =
+      typeof props['coverWidth'] === 'number' ? props['coverWidth'] : null;
+    this.coverHeight =
+      typeof props['coverHeight'] === 'number' ? props['coverHeight'] : null;
   }
 }
 

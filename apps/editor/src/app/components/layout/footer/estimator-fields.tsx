@@ -1,35 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Label, Switch, ToggleButton, ToggleButtonGroup } from '@heroui/react';
-import type { Phase } from '@acip/editor-core';
-import type { FinishRow } from './estimator-finishes';
-
-/**
- * One edit to a finish, in FINISH.UPDATE's own vocabulary.
- *
- * Only the fields that actually changed travel, because that is exactly what
- * the command promises to honour: everything omitted keeps its current value.
- * A field nobody touched is therefore never sent, and cannot be blamed for a
- * cross-field rejection it had nothing to do with.
- */
-export interface FinishEdit {
-  sillHeight?: number;
-  topHeight?: number;
-  /** clears topHeight — the only way to say "back to the top of the wall" */
-  fullHeight?: true;
-  t0?: number;
-  t1?: number;
-  thickness?: number;
-}
-
-/**
- * When the band stops running to the top of the wall, it has to stop
- * SOMEWHERE, and the wall's own height is not a number this row knows.
- *
- * A metre above the sill: high enough to be a band the user can see on the
- * plan and then drag to what they meant, rather than a zero-height finish that
- * prices as nothing and reads as a bug.
- */
-const DEFAULT_BAND_HEIGHT = 1;
+import { Label, Switch } from '@heroui/react';
+import { coverPatch, type FinishRow } from './estimator-finishes';
 
 /**
  * A number the user types, committed when they leave the field.
@@ -102,21 +73,25 @@ function NumberInput({
 }
 
 /**
- * The inputs behind a row's chevron — what this layer covers, and whether it
- * is being built or torn out.
+ * The inputs behind a row's chevron.
  *
- * Which inputs appear is decided by two things and never by the layer's name:
- * the HOST (a wall face carries a band; a slab finish is its whole footprint,
- * and core rejects the band fields for one outright rather than ignoring them)
- * and the material's UNIT (only an m³ material bills on thickness, so offering
- * that box elsewhere would be a control over a number nobody is charged for).
- * Two hosts and four units is a small matrix, not a bespoke form per layer —
- * which is why there is no schema engine here and does not need to be one.
+ * Deliberately three controls and no more. Everything a finish carries can be
+ * edited elsewhere in the app, and a second set of boxes for the sill, the
+ * extent, the thickness and the phase made this panel a duplicate of that —
+ * one more place for the same value to be wrong in, on the screen with the
+ * least room to show it. What survives is what an estimator actually measures
+ * standing in the room: how wide, how tall, and whether the openings come out.
  *
- * The extent is shown as a PERCENTAGE along the wall. Core stores `t0`/`t1` as
- * 0..1 baseline parameters, which is right for geometry and unreadable on a
- * phone: "0.35" is a number an estimator has to decode, "35 %" is one they can
- * check against the drawing sitting behind the sheet.
+ * WIDTH and HEIGHT are metres on both hosts, which is the point of stating
+ * them this way: the document holds a wall band as parameters along a baseline
+ * and a floor as an unanchored rectangle, and neither is a number anyone says
+ * out loud. `coverPatch` turns what is typed back into whichever the host
+ * keeps, so nothing here knows which it is looking at.
+ *
+ * The opening toggle appears on a WALL FACE only. A slab has no openings to
+ * argue about, and core rejects the flag for one rather than letting it be set
+ * where it could never do anything — so a floor showing that switch would be
+ * offering a save that throws.
  *
  * Fully controlled and free of the session, so a test can render it at any
  * state and read back exactly what it offers.
@@ -124,94 +99,41 @@ function NumberInput({
 export function FinishFields({
   row,
   onEdit,
-  onPhase,
+  onDeduct,
 }: {
   row: FinishRow;
-  onEdit: (patch: FinishEdit) => void;
-  onPhase: (phase: Phase) => void;
+  onEdit: (patch: Record<string, number>) => void;
+  onDeduct: (deductOpenings: boolean) => void;
 }) {
-  const band = row.band;
+  const cover = row.cover;
+  if (!cover) return null;
 
   return (
     <div className="flex flex-col gap-1 pt-1 text-xs">
-      {band && (
-        <>
-          <NumberInput
-            label="From floor"
-            value={band.sillHeight}
-            suffix="m"
-            onCommit={(sillHeight) => onEdit({ sillHeight })}
+      <NumberInput
+        label="Width"
+        value={cover.width}
+        suffix="m"
+        onCommit={(width) => onEdit(coverPatch(cover, { width }))}
+      />
+      <NumberInput
+        label="Height"
+        value={cover.height}
+        suffix="m"
+        onCommit={(height) => onEdit(coverPatch(cover, { height }))}
+      />
+      {cover.host === 'wall' && (
+        // Net or solid. Not a preference: they are two measurement
+        // conventions, and under the solid one the doors and windows are
+        // billed as their own items rather than being folded into the face.
+        <div className="flex items-center justify-between gap-2 py-1">
+          <Label>Take out doors and windows</Label>
+          <Switch
+            isSelected={row.deductOpenings}
+            onChange={(on) => onDeduct(on)}
           />
-          {/* the null state gets a switch of its own, because no number can
-              stand for "up to the top of the wall, and still up to the top
-              once the wall grows" */}
-          <div className="flex items-center justify-between gap-2 py-1">
-            <Label>Full height</Label>
-            <Switch
-              isSelected={band.topHeight === null}
-              onChange={(on) =>
-                onEdit(
-                  on
-                    ? { fullHeight: true }
-                    : { topHeight: band.sillHeight + DEFAULT_BAND_HEIGHT },
-                )
-              }
-            />
-          </div>
-          {/* only when there is a top to edit: with the switch on, the band
-              has no top of its own and a box showing one would be inventing a
-              number the document does not hold */}
-          {band.topHeight !== null && (
-            <NumberInput
-              label="Up to"
-              value={band.topHeight}
-              suffix="m"
-              onCommit={(topHeight) => onEdit({ topHeight })}
-            />
-          )}
-          <NumberInput
-            label="Starts at"
-            value={Math.round(band.t0 * 100)}
-            suffix="%"
-            onCommit={(pct) => onEdit({ t0: pct / 100 })}
-          />
-          <NumberInput
-            label="Ends at"
-            value={Math.round(band.t1 * 100)}
-            suffix="%"
-            onCommit={(pct) => onEdit({ t1: pct / 100 })}
-          />
-        </>
+        </div>
       )}
-      {/* only an m³ material bills on it: against paint or tile this box would
-          move a number that never reaches the bill */}
-      {row.unit === 'm3' && (
-        <NumberInput
-          label="Thickness"
-          value={row.thickness}
-          suffix="m"
-          onCommit={(thickness) => onEdit({ thickness })}
-        />
-      )}
-      {/* Build or strip out. Two named buttons rather than a switch, because
-          neither one is "off" — they are two answers to what is happening to
-          this layer, and a strip-out is priced against its own demo- code at
-          its own rate. */}
-      <div className="flex items-center justify-between gap-2 py-1">
-        <Label>Work</Label>
-        <ToggleButtonGroup
-          size="sm"
-          selectionMode="single"
-          disallowEmptySelection
-          selectedKeys={[row.phase]}
-          onSelectionChange={(keys) =>
-            onPhase(keys.has('demolish') ? 'demolish' : 'new')
-          }
-        >
-          <ToggleButton id="new">Build</ToggleButton>
-          <ToggleButton id="demolish">Strip out</ToggleButton>
-        </ToggleButtonGroup>
-      </div>
     </div>
   );
 }

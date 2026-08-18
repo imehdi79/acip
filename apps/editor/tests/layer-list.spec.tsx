@@ -11,6 +11,7 @@ import {
   sidesFor,
 } from '@/app/components/layout/footer/estimator-layers';
 import { FinishFields } from '@/app/components/layout/footer/estimator-fields';
+import { coverPatch } from '@/app/components/layout/footer/estimator-finishes';
 import {
   LayerChoices,
   codeOf,
@@ -45,9 +46,17 @@ const row = (over: Partial<FinishRow> = {}): FinishRow => ({
   phase: 'new',
   unpriced: false,
   thickness: 0.01,
-  // a wall face by default, since that is the host with a band; the slab cases
-  // override it to null, which is what core's rejection of band fields means
-  band: { sillHeight: 0, topHeight: null, t0: 0, t1: 1 },
+  deductOpenings: true,
+  // a wall face by default, since that is the host that argues about openings;
+  // the floor cases override host to 'slab'
+  cover: {
+    width: 6,
+    height: 3,
+    host: 'wall',
+    t0: 0,
+    sillHeight: 0,
+    hostLength: 6,
+  },
   ...over,
 });
 
@@ -96,7 +105,7 @@ function list({
       onToggleDetail={noop}
       onRemove={noop}
       onEdit={noop}
-      onPhase={noop}
+      onDeduct={noop}
       onAdd={noop}
     />,
   );
@@ -377,74 +386,123 @@ describe('how much of the plan the sheet may cover', () => {
 });
 
 /**
- * Which inputs a row offers is decided by the HOST and the material's UNIT,
- * never by the layer's name — a slab finish has no band because core rejects
- * one, and only an m³ material bills on thickness. That is the whole of the
- * "each layer has different options" problem, and it is a small matrix rather
- * than a form engine.
+ * Three controls and no more. Everything a finish carries can be edited
+ * elsewhere in the app, so a second set of boxes here was a duplicate on the
+ * screen with the least room for one. What survives is what an estimator
+ * measures standing in the room.
  */
 describe('the fields behind a row', () => {
-  const fields = (row: FinishRow) =>
+  const fields = (r: FinishRow) =>
     renderToStaticMarkup(
-      <FinishFields row={row} onEdit={noop} onPhase={noop} />,
+      <FinishFields row={r} onEdit={noop} onDeduct={noop} />,
     );
 
-  const banded = (over: Partial<FinishRow> = {}) => row(over);
+  const floorRow = (over: Partial<FinishRow> = {}) =>
+    row({
+      cover: {
+        width: 6,
+        height: 4,
+        host: 'slab',
+        t0: 0,
+        sillHeight: 0,
+        hostLength: 0,
+      },
+      ...over,
+    });
 
-  it('offers the band and the extent on a wall face', () => {
-    const html = fields(banded());
-    expect(html).toContain('From floor');
-    expect(html).toContain('Full height');
-    expect(html).toContain('Starts at');
-    expect(html).toContain('Ends at');
+  it('offers a width and a height, in metres, on a wall face', () => {
+    const html = fields(row());
+    expect(html).toContain('Width');
+    expect(html).toContain('Height');
+    expect(html).toContain('value="6"');
+    expect(html).toContain('value="3"');
   });
 
-  it('offers no band at all on a floor', () => {
-    // core rejects the band fields for a slab-hosted finish rather than
-    // ignoring them, so an input here could only ever throw on save
-    const html = fields(row({ band: null }));
-    expect(html).not.toContain('From floor');
-    expect(html).not.toContain('Starts at');
+  it('offers the same two on a floor', () => {
+    // the document holds a floor as an unanchored rectangle and a wall as
+    // parameters along a baseline; the sheet says width and height for both
+    const html = fields(floorRow());
+    expect(html).toContain('Width');
+    expect(html).toContain('Height');
   });
 
-  it('hides the top box while the band runs to the top of the wall', () => {
-    // with the switch on there is no top to edit, and a box showing one would
-    // be inventing a number the document does not hold
-    expect(fields(banded())).not.toContain('Up to');
-    expect(
-      fields(banded({ band: { sillHeight: 0, topHeight: 1.2, t0: 0, t1: 1 } })),
-    ).toContain('Up to');
+  it('offers the opening toggle on a wall face only', () => {
+    // a slab has no openings, and core rejects the flag for one — a floor
+    // showing that switch would be offering a save that throws
+    expect(fields(row())).toContain('Take out doors and windows');
+    expect(fields(floorRow())).not.toContain('Take out doors and windows');
   });
 
-  it('offers thickness only where it reaches the bill', () => {
-    // only an m³ material bills on it; elsewhere the box would move a number
-    // nobody is charged for
-    expect(fields(banded({ unit: 'm3' }))).toContain('Thickness');
-    expect(fields(banded({ unit: 'm2' }))).not.toContain('Thickness');
-    expect(fields(banded({ unit: 'count' }))).not.toContain('Thickness');
-  });
-
-  it('shows the extent as a percentage of the wall', () => {
-    // core stores 0..1 baseline parameters, which is right for geometry and
-    // unreadable on a phone
-    const html = fields(
-      banded({ band: { sillHeight: 0, topHeight: null, t0: 0.25, t1: 0.75 } }),
+  it('shows which way the openings are being measured', () => {
+    expect(fields(row({ deductOpenings: true }))).toContain(
+      'data-selected="true"',
     );
-    expect(html).toContain('value="25"');
-    expect(html).toContain('value="75"');
+    expect(fields(row({ deductOpenings: false }))).not.toContain(
+      'data-selected="true"',
+    );
   });
 
-  it('always offers build or strip out, whatever the host', () => {
-    for (const r of [banded(), row({ band: null })]) {
-      const html = fields(r);
-      expect(html).toContain('Build');
-      expect(html).toContain('Strip out');
+  it('offers nothing at all where there is nowhere to write', () => {
+    expect(fields(row({ cover: null }))).toBe('');
+  });
+
+  it('no longer duplicates what the rest of the app already edits', () => {
+    // the sill, the extent, the thickness and the phase all moved out: one
+    // more place for the same value to be wrong in is worse than a trip
+    const html = fields(row());
+    for (const gone of [
+      'From floor',
+      'Starts at',
+      'Ends at',
+      'Thickness',
+      'Strip out',
+    ]) {
+      expect(html).not.toContain(gone);
     }
   });
+});
 
-  it('shows which of the two the layer is on', () => {
-    expect(fields(banded({ phase: 'demolish' }))).toContain(
-      'aria-checked="true"',
-    );
+/**
+ * The sheet's metres have to become whichever extent the host actually keeps.
+ * That arithmetic lives in `coverPatch`, away from the component, so it can be
+ * checked without a DOM.
+ */
+describe('turning a width and a height into an edit', () => {
+  const wall = {
+    width: 6,
+    height: 3,
+    host: 'wall' as const,
+    t0: 0,
+    sillHeight: 0,
+    hostLength: 6,
+  };
+
+  it('turns a wall width into a baseline parameter', () => {
+    // 3 m of a 6 m wall, measured from where the band starts
+    expect(coverPatch(wall, { width: 3 })).toEqual({ t1: 0.5 });
+  });
+
+  it('measures the height up from the sill, not from the floor', () => {
+    const raised = { ...wall, sillHeight: 0.5 };
+    expect(coverPatch(raised, { height: 1 })).toEqual({ topHeight: 1.5 });
+  });
+
+  it('sends only what changed on a wall', () => {
+    // FINISH.UPDATE honours only the keys it is given, so a height edit must
+    // not also restate a width the user never touched
+    expect(coverPatch(wall, { height: 1.2 })).toEqual({ topHeight: 1.2 });
+  });
+
+  it('sends both halves on a floor, because core refuses half a rectangle', () => {
+    const slab = { ...wall, host: 'slab' as const };
+    expect(coverPatch(slab, { height: 2 })).toEqual({
+      coverWidth: 6,
+      coverHeight: 2,
+    });
+  });
+
+  it('leaves a zero-length wall alone rather than dividing by it', () => {
+    const degenerate = { ...wall, hostLength: 0 };
+    expect(coverPatch(degenerate, { width: 3 })).toEqual({});
   });
 });

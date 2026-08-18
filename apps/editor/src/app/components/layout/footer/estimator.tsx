@@ -21,6 +21,7 @@ import {
   type StepSide,
 } from './estimator-finishes';
 import { AddLayersSheet } from './estimator-add-layers';
+import { ReviewSheet, reviewSteps } from './estimator-review';
 
 /**
  * The share of the plan left CLEAR by the sheet at the bottom.
@@ -207,6 +208,16 @@ function ShapeWizard({ close }: { close: () => void }) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   /** whether the fullscreen add sheet is up over the wizard */
   const [adding, setAdding] = useState(false);
+  /**
+   * Whether the walk has run off its end into the summary.
+   *
+   * Not derived from `index`, and deliberately: walking to the last shape is
+   * not the same as being finished with it, so the summary opens when Next is
+   * pressed ON the last step rather than the moment it is reached. Back closes
+   * this and leaves the index exactly where it was, so the way out is the way
+   * in reversed.
+   */
+  const [reviewing, setReviewing] = useState(false);
 
   const step = steps[index];
   const last = index >= steps.length - 1;
@@ -352,19 +363,20 @@ function ShapeWizard({ close }: { close: () => void }) {
              * edit — the fields commit on blur rather than per keystroke for
              * exactly that reason.
              *
-             * The patch is passed through untouched: FINISH.UPDATE honours
-             * only the keys it is given, so sending the one that changed is
-             * both the smallest correct edit and the one that cannot be
-             * rejected over a field the user never touched.
+             * The patch is passed through untouched: `coverPatch` already
+             * spoke FINISH.UPDATE's vocabulary, and the command honours only
+             * the keys it is given — so what travels is the smallest correct
+             * edit, and one that cannot be rejected over a field the user
+             * never touched.
              */
             onEdit={(finishId, patch) => {
               session.dispatch('FINISH.UPDATE', { id: finishId, ...patch });
             }}
-            // PHASE.SET, not FINISH.UPDATE: core deliberately kept the phase
-            // out of the update command so one field would not have two
-            // writers to keep in step
-            onPhase={(finishId, phase) => {
-              session.dispatch('PHASE.SET', { ids: [finishId], phase });
+            onDeduct={(finishId, deductOpenings) => {
+              session.dispatch('FINISH.UPDATE', {
+                id: finishId,
+                deductOpenings,
+              });
             }}
             onAdd={() => setAdding(true)}
           />
@@ -409,20 +421,39 @@ function ShapeWizard({ close }: { close: () => void }) {
             >
               Back
             </Button>
-            {/* the end of the walk is the absence of a next step, not a dead
-                button that says there is one */}
-            {!last && (
-              <Button
-                onPress={() =>
-                  setIndex((at) => Math.min(steps.length - 1, at + 1))
-                }
-              >
-                Next
-              </Button>
-            )}
+            {/* Next never disappears now: on the last shape it walks off the
+                end into the summary, which is a step in the same sense the
+                shapes are. A button that vanished used to be how the walk
+                said "that was the last one" — the summary says it better, and
+                says what was left bare while it does. */}
+            <Button
+              onPress={() => {
+                if (last) setReviewing(true);
+                else setIndex((at) => Math.min(steps.length - 1, at + 1));
+              }}
+            >
+              {last ? 'Finish' : 'Next'}
+            </Button>
           </div>
         )}
       </Modal.Footer>
+      {/* the end of the walk. Read through the document like everything else
+          here, so it cannot disagree with the rows the walk just showed. */}
+      <ReviewSheet
+        steps={reviewSteps(session.doc, steps)}
+        isOpen={reviewing}
+        onOpenChange={setReviewing}
+        onBack={() => setReviewing(false)}
+        // Submit closes the whole estimator: the build-up is already in the
+        // drawing, written layer by layer as it was entered, so there is
+        // nothing here left to save. What this button will eventually do —
+        // publish a priced bill — needs rates, which this app has not loaded
+        // yet; until then it says the walk is over and means only that.
+        onSubmit={() => {
+          setReviewing(false);
+          close();
+        }}
+      />
       {step && target !== null && target.kind !== 'none' && (
         // Over the wizard, not beside it: the add sheet is full screen, so
         // while it is up there is no Next to press and the surface it writes

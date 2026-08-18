@@ -150,6 +150,11 @@ export interface UpdateFinishParams {
   t0?: number;
   t1?: number;
   thickness?: number;
+  deductOpenings?: boolean;
+  coverWidth?: number;
+  coverHeight?: number;
+  /** clears coverWidth/coverHeight — back to the whole slab footprint */
+  wholeSlab?: boolean;
 }
 
 /**
@@ -239,6 +244,33 @@ export const UpdateFinishCommand: Command<UpdateFinishParams, void> = {
       if (raw['t1'] !== undefined) params.t1 = asBaselineParam(raw['t1'], 't1');
       if (raw['thickness'] !== undefined)
         params.thickness = asPositive(raw['thickness'], 'thickness');
+      if (raw['deductOpenings'] !== undefined) {
+        if (typeof raw['deductOpenings'] !== 'boolean') {
+          throw new ValidationError('deductOpenings must be boolean');
+        }
+        params.deductOpenings = raw['deductOpenings'];
+      }
+      if (raw['coverWidth'] !== undefined)
+        params.coverWidth = asPositive(raw['coverWidth'], 'coverWidth');
+      if (raw['coverHeight'] !== undefined)
+        params.coverHeight = asPositive(raw['coverHeight'], 'coverHeight');
+      if (raw['wholeSlab'] !== undefined) {
+        if (typeof raw['wholeSlab'] !== 'boolean') {
+          throw new ValidationError('wholeSlab must be boolean');
+        }
+        // like `fullHeight: false`, `wholeSlab: false` is not the opposite of
+        // anything — the opposite of the whole slab is a rectangle, and that
+        // is coverWidth/coverHeight
+        if (raw['wholeSlab']) params.wholeSlab = true;
+      }
+      if (
+        params.wholeSlab &&
+        (params.coverWidth !== undefined || params.coverHeight !== undefined)
+      ) {
+        throw new ValidationError(
+          'pass coverWidth/coverHeight or wholeSlab, not both — wholeSlab clears them',
+        );
+      }
       if (
         params.materialId === undefined &&
         params.sillHeight === undefined &&
@@ -246,10 +278,15 @@ export const UpdateFinishCommand: Command<UpdateFinishParams, void> = {
         params.fullHeight === undefined &&
         params.t0 === undefined &&
         params.t1 === undefined &&
-        params.thickness === undefined
+        params.thickness === undefined &&
+        params.deductOpenings === undefined &&
+        params.coverWidth === undefined &&
+        params.coverHeight === undefined &&
+        params.wholeSlab === undefined
       ) {
         throw new ValidationError(
-          'provide materialId, sillHeight, topHeight, fullHeight, t0, t1, and/or thickness',
+          'provide materialId, sillHeight, topHeight, fullHeight, t0, t1, thickness, ' +
+            'deductOpenings, coverWidth, coverHeight, and/or wholeSlab',
         );
       }
       return params;
@@ -273,6 +310,22 @@ export const UpdateFinishCommand: Command<UpdateFinishParams, void> = {
           t1: S.number('new band end along the wall, 0..1, above t0'),
           thickness: S.number(
             'new build-up thickness in meters, greater than 0 (only m³ uses it)',
+          ),
+          deductOpenings: S.boolean(
+            'true (default) = measured net, openings come out of the area; ' +
+              'false = measured solid, the face is priced over its full extent and ' +
+              'the doors and windows in it are billed as their own items. Wall faces only.',
+          ),
+          coverWidth: S.number(
+            'width in meters of the rectangle a FLOOR or CEILING finish covers; ' +
+              'pair with coverHeight, or use wholeSlab to cover the whole footprint',
+          ),
+          coverHeight: S.number(
+            'height in meters of that rectangle, measured on the plan',
+          ),
+          wholeSlab: S.boolean(
+            'true = clear coverWidth/coverHeight so the finish covers the whole slab ' +
+              'again; the only way to undo a covered rectangle, and not combinable with one',
           ),
         },
         ['id'],
@@ -305,7 +358,48 @@ export const UpdateFinishCommand: Command<UpdateFinishParams, void> = {
       throw new ValidationError(
         `finish ${params.id} is hosted on a slab: sillHeight, topHeight, ` +
           'fullHeight, t0 and t1 describe a wall band and do not apply to a ' +
-          'floor or ceiling finish, which covers the whole footprint',
+          'floor or ceiling finish — use coverWidth/coverHeight',
+      );
+    }
+
+    // The mirror image, and refused for the mirror reason. A wall band is
+    // already a width and a height, anchored to the wall so it follows it; a
+    // covered rectangle is an unanchored takeoff figure. Accepting both on one
+    // finish would be two ways to say its extent, with nothing to decide which
+    // one the area came from.
+    const coverGiven =
+      params.coverWidth !== undefined ||
+      params.coverHeight !== undefined ||
+      params.wholeSlab !== undefined;
+    if (host instanceof WallEntity && coverGiven) {
+      throw new ValidationError(
+        `finish ${params.id} is hosted on a wall face: coverWidth, ` +
+          'coverHeight and wholeSlab describe a floor or ceiling area — a ' +
+          'wall band is set with sillHeight, topHeight, t0 and t1',
+      );
+    }
+    // only a wall face has openings to argue about; on a slab the flag would
+    // be a setting the caller could never see the effect of
+    if (host instanceof SlabEntity && params.deductOpenings !== undefined) {
+      throw new ValidationError(
+        `finish ${params.id} is hosted on a slab: deductOpenings applies to ` +
+          'the openings crossing a wall band, and a slab has none',
+      );
+    }
+
+    // Both halves of the rectangle or neither: one alone cannot say what area
+    // is covered, and defaulting the missing one would invent a dimension the
+    // user did not measure.
+    const coverWidth = params.wholeSlab
+      ? null
+      : (params.coverWidth ?? finish.coverWidth);
+    const coverHeight = params.wholeSlab
+      ? null
+      : (params.coverHeight ?? finish.coverHeight);
+    if ((coverWidth === null) !== (coverHeight === null)) {
+      throw new ValidationError(
+        'coverWidth and coverHeight go together — pass both to cover a ' +
+          'rectangle, or wholeSlab to cover the whole footprint',
       );
     }
 
@@ -335,10 +429,14 @@ export const UpdateFinishCommand: Command<UpdateFinishParams, void> = {
     ctx.tx.update(finish, (f) => {
       if (params.materialId !== undefined) f.materialId = params.materialId;
       if (params.thickness !== undefined) f.thickness = params.thickness;
+      if (params.deductOpenings !== undefined)
+        f.deductOpenings = params.deductOpenings;
       f.sillHeight = sillHeight;
       f.topHeight = topHeight;
       f.t0 = t0;
       f.t1 = t1;
+      f.coverWidth = coverWidth;
+      f.coverHeight = coverHeight;
     });
   },
 };
