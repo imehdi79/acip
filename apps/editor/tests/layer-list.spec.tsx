@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { LayerOption } from '@/data/layers';
+import type { EntityId, Material, MaterialId } from '@acip/editor-core';
+import type { FinishRow } from '@/app/components/layout/footer/estimator-finishes';
 import {
   LayerList,
-  layerDetail,
+  finishFacts,
+  formatQuantity,
   rowKey,
+  sideToFace,
   sidesFor,
 } from '@/app/components/layout/footer/estimator-layers';
 import {
   LayerChoices,
+  codeOf,
+  materialNote,
   matchesQuery,
 } from '@/app/components/layout/footer/estimator-add-layers';
 import {
@@ -17,51 +22,71 @@ import {
 } from '@/app/components/layout/footer/estimator';
 
 /**
- * The estimator's list is the only part of the sheet the user builds, and most
- * of what it does is invisible to a test that only reads text: removing a layer
- * presses an icon, opening one turns a chevron. So what is asserted here is the
- * ACCESSIBLE state — the labels on the icon-only buttons, and `aria-expanded` —
- * which is both what a screen reader gets and the only thing static markup can
- * carry.
+ * The list is a view onto the document now, so what it renders is handed in as
+ * resolved rows rather than fetched. Everything here is the PRESENTATION: what
+ * a row says, which side it lands on, and what the sheet does for a shape that
+ * cannot carry a build-up at all. Whether those rows are the right rows is
+ * `estimator-finishes.spec.ts`, against a real drawing.
  *
- * <LayerList/> and <LayerChoices/> are controlled precisely so this file can
- * exist: there is no DOM to tap in, so the states are handed in as props and
- * the markup read back.
+ * <LayerList/> and <LayerChoices/> are controlled precisely so this can exist:
+ * there is no DOM to tap in, so the states are props and the markup is read.
  */
 
-/** layers of its own rather than the shipped ones, so assertions do not move */
-const PLASTER: LayerOption = {
-  id: 'wall.plaster',
-  label: 'Plaster, two coats',
-  description: 'Scratch and finish coat to this face.',
-};
-const PAINT: LayerOption = {
-  id: 'wall.paint',
-  label: 'Paint',
-  description: 'Primer and topcoats over the finished face.',
-};
-const SCREED: LayerOption = {
-  id: 'room.screed',
-  label: 'Floor screed',
-  description: 'Levelling screed over the slab.',
-};
+const row = (over: Partial<FinishRow> = {}): FinishRow => ({
+  id: 'f1' as EntityId,
+  materialId: 'm1',
+  name: 'Plaster',
+  unit: 'm2',
+  costCode: 'plaster',
+  area: 12.4,
+  length: 6,
+  quantity: 12.4,
+  phase: 'new',
+  unpriced: false,
+  ...over,
+});
+
+const PLASTER = row();
+const PAINT = row({
+  id: 'f2' as EntityId,
+  materialId: 'm2',
+  name: 'Paint',
+  costCode: 'paint',
+});
+const TILE = row({
+  id: 'f3' as EntityId,
+  materialId: 'm3',
+  name: 'Wall tile',
+  costCode: 'wall-tile',
+  unit: 'count',
+  quantity: 137.8,
+});
+
+const material = (over: Partial<Material> = {}): Material => ({
+  id: 'm1' as MaterialId,
+  name: 'Plaster',
+  unit: 'm3',
+  costCode: 'plaster',
+  ...over,
+});
 
 const NOTHING = new Set<string>();
 const noop = () => undefined;
 
-/** the list as the wizard renders it, at whatever state is asked for */
 function list({
   kind = 'wall',
   side = 'a',
-  lists = {} as Readonly<Record<string, readonly LayerOption[]>>,
+  rows = {} as Readonly<Record<string, readonly FinishRow[]>>,
   opened = NOTHING as ReadonlySet<string>,
+  blocked = undefined as string | undefined,
 } = {}) {
   return renderToStaticMarkup(
     <LayerList
       kind={kind}
       side={side}
-      lists={lists}
+      rows={rows}
       opened={opened}
+      blocked={blocked}
       onSideChange={noop}
       onToggleDetail={noop}
       onRemove={noop}
@@ -72,174 +97,259 @@ function list({
 
 describe('which sides a shape has', () => {
   it('gives a room one list and no second side to hide behind a tab', () => {
-    // a room is a volume, not a face: there is no second copy of its floor
     expect(sidesFor('room')).toHaveLength(1);
   });
 
   it('gives everything else two', () => {
-    // a wall is plastered both faces, a door painted differently each side —
-    // and a kind nobody has thought about yet gets two rather than losing one
     for (const kind of ['wall', 'door', 'window', 'slab', 'not-a-thing']) {
       expect(sidesFor(kind)).toHaveLength(2);
     }
   });
 
-  it('starts both of them at the same side id', () => {
-    // what lets a shape's state name its open side before anyone has looked at
-    // which kind it is
-    expect(sidesFor('room')[0].id).toBe('a');
-    expect(sidesFor('wall')[0].id).toBe('a');
+  it('maps the two tabs onto the two faces the document knows', () => {
+    // the sheet says Side A/Side B because it cannot know which face points
+    // outdoors; what it WRITES has to be core's own word or FINISH.ADD refuses
+    expect(sideToFace('a')).toBe('face+');
+    expect(sideToFace('b')).toBe('face-');
+    expect(sideToFace(sidesFor('room')[0].id)).toBe('face+');
   });
 });
 
 describe('the layer list', () => {
   it('is empty to start with, and says what to do about it', () => {
-    // Empty is the STARTING state, not a failure. The sheet used to arrive
-    // holding a book of rates nobody had said were true of this shape; if this
-    // ever fails, it is claiming a build-up the user has not stated.
     const html = list();
     expect(html).toContain('Nothing here yet');
     expect(html).not.toContain('<ol');
-    expect(html).not.toContain('aria-expanded');
   });
 
-  it('is empty on a room too, with no tabs over it', () => {
-    const html = list({ kind: 'room' });
-    expect(html).toContain('Nothing here yet');
-    // a tab bar with one tab in it is a control that cannot be used, spending
-    // a row of a phone's screen to say nothing
-    expect(html).not.toContain('Side A');
-    expect(html).not.toContain('Side B');
-  });
-
-  it('gives a two-sided shape a tab each', () => {
+  it('gives a two-sided shape a tab each, full width and evenly split', () => {
     const html = list();
     expect(html).toContain('Side A');
     expect(html).toContain('Side B');
-  });
-
-  it('gives the tab bar the whole width, split evenly', () => {
-    // a two-option segmented control that does not span the sheet reads as two
-    // words floating over it, and gives each option less than half a phone to
-    // be tapped in. `w-full` beats the track's own `w-max`; `flex-1` is what
-    // makes the two halves equal rather than as wide as their words
-    const html = list();
     expect(html).toContain('w-full');
     expect(html.match(/flex-1/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
   it('puts a track behind the tabs and a pill on the live one', () => {
-    // without ListContainer HeroUI falls back to a bare list with no track, and
-    // without the Indicator the selected tab is a colour change and nothing
-    // else — between them they are the difference between a segmented control
-    // and two words
     const html = list();
     expect(html).toContain('tabs__list-container');
     expect(html).toContain('tabs__indicator');
   });
 
   it('offers the add row whether there are tabs or not', () => {
-    // the one way anything gets onto an empty list, so it must survive both
-    // shapes of the panel. A labelled full-width row, not an icon in a field
-    // of empty space — the control that is useless to miss is the one that
-    // gets the whole width
     expect(list()).toContain('Add layers');
     expect(list({ kind: 'room' })).toContain('Add layers');
   });
 
-  it('numbers the layers in the order they go on', () => {
-    // the numbers are a PRIORITY, not a decoration: render under skim under
-    // paint is a wall, and the reverse is not
-    const html = list({ lists: { a: [PLASTER, PAINT] } });
+  it('numbers the layers in the order they went on', () => {
+    const html = list({ rows: { a: [PLASTER, PAINT] } });
     expect(html).toContain('>1.<');
     expect(html).toContain('>2.<');
-    // an ordered list, so the numbering is the document's and not a decoration
     expect(html).toContain('<ol');
-    const first = html.indexOf('Plaster, two coats');
-    expect(first).toBeGreaterThan(-1);
-    expect(first).toBeLessThan(html.indexOf('>Paint<'));
+    expect(html.indexOf('Plaster')).toBeLessThan(html.indexOf('>Paint<'));
+  });
+
+  it('puts the quantity on the row, not only behind the chevron', () => {
+    // it is the answer the sheet exists to give; opening every row to find it
+    // would be a tap per layer
+    const html = list({ rows: { a: [TILE] } });
+    expect(html).toContain('137.80 units');
   });
 
   it('gives every layer a remove and an expander, closed to start with', () => {
-    const html = list({ lists: { a: [PLASTER, PAINT] } });
-    // one expander per layer, and all shut: opening a row costs sheet height,
-    // and the sheet must never arrive having spent it on the user's behalf
+    const html = list({ rows: { a: [PLASTER, PAINT] } });
     expect(html.match(/aria-expanded="false"/g)).toHaveLength(2);
     expect(html).not.toContain('aria-expanded="true"');
-    // the icons carry no text, so each names the layer it belongs to
-    expect(html).toContain('aria-label="Remove Plaster, two coats"');
-    expect(html).toContain('aria-label="Details for Plaster, two coats"');
+    expect(html).toContain('aria-label="Remove Plaster"');
+    expect(html).toContain('aria-label="Details for Plaster"');
   });
 
-  it('keeps the detail out of the markup until the row is opened', () => {
-    const shut = list({ lists: { a: [PLASTER, PAINT] } });
-    expect(shut).not.toContain('Scratch and finish coat');
+  it('keeps the facts out of the markup until the row is opened', () => {
+    const shut = list({ rows: { a: [PLASTER] } });
+    expect(shut).not.toContain('net of openings');
 
     const open = list({
-      lists: { a: [PLASTER, PAINT] },
+      rows: { a: [PLASTER] },
       opened: new Set([rowKey('a', PLASTER.id)]),
     });
-    expect(open).toContain(layerDetail(PLASTER));
+    expect(open).toContain('12.40 m² net of openings');
+    expect(open).toContain('plaster');
     expect(open).toContain('aria-expanded="true"');
-    // exactly the one that was opened — the row's own state, not the list's
-    expect(open).not.toContain('Primer and topcoats');
-  });
-
-  it('says something different for every layer it opens', () => {
-    // the detail is a placeholder for inputs that differ per layer, so the one
-    // thing it must already do is CHANGE — a fixed string here would be a
-    // panel that says nothing about the row it belongs to
-    expect(layerDetail(PLASTER)).not.toBe(layerDetail(PAINT));
-    expect(layerDetail(PLASTER)).toContain('Plaster, two coats');
-    expect(layerDetail(SCREED)).toContain('Floor screed');
-  });
-
-  it('opens a row on the side it was opened on, not on both', () => {
-    // plaster is usually on BOTH faces of a wall, so keying an open row by the
-    // layer alone would tie the two rows together and open them as one
-    const both = { a: [PLASTER], b: [PLASTER] };
-    const onA = list({
-      lists: both,
-      side: 'a',
-      opened: new Set(['a.wall.plaster']),
-    });
-    expect(onA).toContain('aria-expanded="true"');
-
-    // the same shape, the same layer, showing side A — with only B's row open
-    const onB = list({
-      lists: both,
-      side: 'a',
-      opened: new Set(['b.wall.plaster']),
-    });
-    expect(onB).not.toContain('aria-expanded="true"');
   });
 
   it('shows the side that is selected, and not the other one', () => {
     const sides = { a: [PLASTER], b: [PAINT] };
-    expect(list({ lists: sides, side: 'a' })).not.toContain('>Paint<');
-    expect(list({ lists: sides, side: 'b' })).toContain('>Paint<');
+    expect(list({ rows: sides, side: 'a' })).not.toContain('>Paint<');
+    expect(list({ rows: sides, side: 'b' })).toContain('>Paint<');
+  });
+
+  it('opens a row on the side it was opened on, not on both', () => {
+    const both = { a: [PLASTER], b: [PLASTER] };
+    expect(
+      list({ rows: both, side: 'a', opened: new Set(['a.f1']) }),
+    ).toContain('aria-expanded="true"');
+    expect(
+      list({ rows: both, side: 'a', opened: new Set(['b.f1']) }),
+    ).not.toContain('aria-expanded="true"');
   });
 
   it('keeps one scroller, not a list scrolling inside a sheet', () => {
-    // the list used to carry its own cap and scroller. With the sheet itself
-    // capped (SHEET_MAX_HEIGHT) that second surface bought nothing and cost
-    // real confusion under a thumb: a drag that reached the end of the inner
-    // list stopped dead instead of moving the sheet
     const html = list({
-      lists: { a: [PLASTER, PAINT] },
+      rows: { a: [PLASTER, PAINT] },
       opened: new Set([rowKey('a', PLASTER.id), rowKey('a', PAINT.id)]),
     });
     expect(html).not.toContain('overflow-y-auto');
     expect(html).not.toContain('max-h-40');
+  });
+
+  it('says why a shape cannot carry a build-up, and offers nothing', () => {
+    // core hosts a finish on a wall face and nowhere else, so most of the walk
+    // has nowhere to put one. An Add button here would have nothing to
+    // dispatch — and the sheet used to let the user fill a list that was never
+    // going anywhere
+    const html = list({
+      kind: 'window',
+      blocked:
+        'A finish sits on a wall face, so a window cannot carry one yet.',
+    });
+    expect(html).toContain('cannot carry one yet');
+    expect(html).not.toContain('Add layers');
+    expect(html).not.toContain('Side A');
+  });
+});
+
+describe('what a row says when it is opened', () => {
+  it('names the area as net of openings', () => {
+    const facts = finishFacts(PLASTER);
+    expect(facts[0].value).toContain('net of openings');
+  });
+
+  it('gives a length material its length, and spares everything else', () => {
+    // a trim is measured along the wall and nothing else; for an area material
+    // the length line would just be a second way of saying the same thing
+    const trim = row({ unit: 'm', quantity: 6 });
+    expect(finishFacts(trim).some((f) => f.label === 'Length')).toBe(true);
+    expect(finishFacts(PLASTER).some((f) => f.label === 'Length')).toBe(false);
+  });
+
+  it('always carries the cost code, which is what a rate is found by', () => {
+    expect(finishFacts(TILE).some((f) => f.value === 'wall-tile')).toBe(true);
+  });
+
+  it('says so when there is no material to price it by', () => {
+    const bare = row({ materialId: null, unpriced: true });
+    expect(finishFacts(bare).some((f) => f.label === 'Note')).toBe(true);
+  });
+
+  it('writes a quantity in the unit the material is priced in', () => {
+    expect(formatQuantity(12.4, 'm2')).toBe('12.40 m²');
+    expect(formatQuantity(0.36, 'm3')).toBe('0.36 m³');
+    expect(formatQuantity(6, 'm')).toBe('6.00 m');
+    expect(formatQuantity(137.8, 'count')).toBe('137.80 units');
+  });
+});
+
+describe('searching the catalogue', () => {
+  it('answers everything for an empty search', () => {
+    expect(matchesQuery(material(), '')).toBe(true);
+    expect(matchesQuery(material(), '   ')).toBe(true);
+  });
+
+  it('matches the name however it was capitalised', () => {
+    expect(matchesQuery(material({ name: 'Paint' }), 'paint')).toBe(true);
+    expect(matchesQuery(material({ name: 'Paint' }), 'PAINT')).toBe(true);
+  });
+
+  it('matches the cost code too', () => {
+    // the code is what an estimator who has seen the rate table knows it by
+    const tile = material({ name: 'Wall tile', costCode: 'wall-tile' });
+    expect(matchesQuery(tile, 'wall-tile')).toBe(true);
+    expect(matchesQuery(tile, 'floor')).toBe(false);
+  });
+
+  it('falls back to the name when a material carries no code', () => {
+    // the takeoff falls back the same way, so the sheet must not show a code
+    // the bill will never use
+    const bare = material({ name: 'Odd stuff', costCode: undefined });
+    expect(codeOf(bare)).toBe('Odd stuff');
+    expect(matchesQuery(bare, 'odd')).toBe(true);
+  });
+});
+
+describe('the add sheet', () => {
+  const MATERIALS = [
+    material(),
+    material({
+      id: 'm2' as MaterialId,
+      name: 'Paint',
+      unit: 'm2',
+      costCode: 'paint',
+    }),
+  ];
+
+  const choices = ({
+    materials = MATERIALS as readonly Material[],
+    query = '',
+    picked = NOTHING as ReadonlySet<string>,
+    alreadyIn = NOTHING as ReadonlySet<string>,
+  } = {}) =>
+    renderToStaticMarkup(
+      <LayerChoices
+        materials={materials}
+        query={query}
+        picked={picked}
+        alreadyIn={alreadyIn}
+        onPick={noop}
+      />,
+    );
+
+  it('says so when the drawing has no materials at all', () => {
+    expect(choices({ materials: [] })).toContain('no materials yet');
+  });
+
+  it('tells each row what it will be measured and priced by', () => {
+    // the unit is the whole shape of the quantity: the same face is 12 m², or
+    // 0.36 m³, or 138 tiles, depending only on this
+    const html = choices();
+    expect(html).toContain('by volume (m³)');
+    expect(html).toContain('by area (m²)');
+    expect(html).toContain('plaster');
+  });
+
+  it('carries the tile size for a count material', () => {
+    // "138 tiles" is a different answer at 0.09 m² each than at 0.36
+    const tile = material({ unit: 'count', coverage: 0.09 });
+    expect(materialNote(tile)).toContain('0.09 m² each');
+  });
+
+  it('narrows to what was typed, and says when that is nothing', () => {
+    const html = choices({ query: 'paint' });
+    expect(html).toContain('>Paint<');
+    expect(html).not.toContain('>Plaster<');
+    expect(choices({ query: 'zzz' })).toContain('Nothing matches');
+  });
+
+  it('ticks more than one at a time', () => {
+    const html = choices({ picked: new Set(['m1', 'm2']) });
+    expect(html.match(/checked=""/g)).toHaveLength(2);
+  });
+
+  it('ticks nothing until the user does', () => {
+    expect(choices()).not.toContain('checked=""');
+  });
+
+  it('shows what is already on the face as ticked and dead', () => {
+    const html = choices({ alreadyIn: new Set(['m1']) });
+    expect(html).toContain('Already on this side.');
+    expect(html.match(/checked=""/g)).toHaveLength(1);
+    expect(html).toContain('disabled=""');
   });
 });
 
 /**
  * The sheet is parked over the shape it is naming, and every camera box
  * `framing()` builds assumes it covers exactly `1 - CLEAR_FRACTION` of the
- * screen. Nothing used to hold it to that — the dialog's own rule is
- * `max-h-full` against a container sized by `--visual-viewport-height`, which
- * moves when a keyboard opens over it.
+ * screen. Nothing used to hold it to that.
  */
 describe('how much of the plan the sheet may cover', () => {
   it('leaves exactly the share the camera frames the shape into', () => {
@@ -248,96 +358,7 @@ describe('how much of the plan the sheet may cover', () => {
   });
 
   it('measures it in svh, which a keyboard cannot move', () => {
-    // the add sheet stacks a search field over this one, which is exactly how
-    // a keyboard gets opened over the estimator. `vh` and the viewport-derived
-    // custom property both move when it does; `svh` is pinned to the largest
-    // browser chrome and does not
     expect(SHEET_MAX_HEIGHT.endsWith('svh')).toBe(true);
     expect(SHEET_MAX_HEIGHT).not.toMatch(/\d(vh|dvh)$/);
-  });
-});
-
-describe('searching the catalogue', () => {
-  it('answers everything for an empty search', () => {
-    expect(matchesQuery(PLASTER, '')).toBe(true);
-    expect(matchesQuery(PLASTER, '   ')).toBe(true);
-  });
-
-  it('matches the name however it was capitalised', () => {
-    // a phone keyboard capitalises the first letter of a field on its own, and
-    // nobody meant to search for `Paint` and not `paint`
-    expect(matchesQuery(PAINT, 'paint')).toBe(true);
-    expect(matchesQuery(PAINT, 'PAINT')).toBe(true);
-    expect(matchesQuery(PAINT, ' Pain ')).toBe(true);
-  });
-
-  it('matches the description too', () => {
-    // half of what separates two layers lives in the prose: type "face" and
-    // the plaster that says "to this face" is a better answer than anything
-    // with the word in its name
-    expect(matchesQuery(PLASTER, 'face')).toBe(true);
-    expect(matchesQuery(PAINT, 'face')).toBe(true);
-    expect(matchesQuery(SCREED, 'face')).toBe(false);
-  });
-});
-
-describe('the add sheet', () => {
-  const choices = ({
-    layers = [PLASTER, PAINT] as readonly LayerOption[] | null,
-    query = '',
-    picked = NOTHING as ReadonlySet<string>,
-    alreadyIn = NOTHING as ReadonlySet<string>,
-  } = {}) =>
-    renderToStaticMarkup(
-      <LayerChoices
-        layers={layers}
-        query={query}
-        picked={picked}
-        alreadyIn={alreadyIn}
-        onPick={noop}
-      />,
-    );
-
-  it('says the catalogue is still coming rather than that there is nothing', () => {
-    expect(choices({ layers: null })).toContain('Loading layers');
-  });
-
-  it('says so for a kind nobody has described', () => {
-    // the walk covers shapes nobody has written a build-up for; having none is
-    // an answer, not a blank sheet to stare at
-    expect(choices({ layers: [] })).toContain('No layers for this yet.');
-  });
-
-  it('gives every row the prose that separates it from the next', () => {
-    const html = choices();
-    expect(html).toContain('Scratch and finish coat to this face.');
-    expect(html).toContain('Primer and topcoats over the finished face.');
-  });
-
-  it('narrows to what was typed, and says when that is nothing', () => {
-    const html = choices({ query: 'paint' });
-    expect(html).toContain('>Paint<');
-    expect(html).not.toContain('Plaster, two coats');
-    expect(choices({ query: 'zzz' })).toContain('Nothing matches');
-  });
-
-  it('ticks more than one at a time', () => {
-    // the reason these are ticks and not a single pick: a wall face is render
-    // AND skim AND paint, and the sheet exists to add a build-up in one visit
-    const html = choices({ picked: new Set([PLASTER.id, PAINT.id]) });
-    expect(html.match(/checked=""/g)).toHaveLength(2);
-  });
-
-  it('ticks nothing until the user does', () => {
-    expect(choices()).not.toContain('checked=""');
-  });
-
-  it('shows what is already on the side as ticked and dead', () => {
-    // hiding it would answer "why is plaster not in this list" with silence,
-    // and the sheet would look like a shorter catalogue on every later visit
-    const html = choices({ alreadyIn: new Set([PLASTER.id]) });
-    expect(html).toContain('Already on this side.');
-    expect(html.match(/checked=""/g)).toHaveLength(1);
-    expect(html).toContain('disabled=""');
   });
 });

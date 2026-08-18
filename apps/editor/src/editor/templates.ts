@@ -1,4 +1,5 @@
 import type { EditorSession, Point } from '@acip/editor-core';
+import { seedMaterials } from '@/data/materials';
 
 /**
  * Starter plans offered by the project selector. The ids double as the
@@ -62,6 +63,11 @@ export function generatePlan(
   template: PlanTemplateId,
 ): void {
   session.newDocument();
+
+  // before the walls, because a fresh document's material library is empty and
+  // the estimator prices a wall face by picking one — a plan with no materials
+  // opens the add sheet onto nothing at all
+  seedMaterials(session);
 
   for (const { a, b } of TEMPLATE_WALLS[template]) {
     session.dispatch('WALL.ADD', { a, b });

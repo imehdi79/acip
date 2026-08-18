@@ -1,6 +1,6 @@
 import { Button, Tabs } from '@heroui/react';
 import { IconChevronDown, IconPlus, IconTrash } from '@tabler/icons-react';
-import type { LayerOption } from '@/data/layers';
+import type { FinishRow } from './estimator-finishes';
 
 /** one side of a shape, and what to call it on its tab */
 export interface SideDef {
@@ -16,7 +16,8 @@ export interface SideDef {
  * partition has two insides — so those words would be a label that is
  * sometimes simply wrong. A and B name the two sides without claiming anything
  * about the world, and the plan behind the sheet says which is which, because
- * the shape being priced is lit up on it.
+ * the shape being priced is lit up on it. What gets WRITTEN to the document is
+ * core's own `face+`/`face-`; the two vocabularies meet in `sideToFace`.
  */
 const BOTH: readonly SideDef[] = [
   { id: 'a', label: 'Side A' },
@@ -36,51 +37,90 @@ const SINGLE: readonly SideDef[] = [{ id: 'a', label: 'Layers' }];
  *
  * Everything the walk turns up is two-sided except a room: a wall is plastered
  * on both faces and may be tiled on one, a door is painted differently each
- * side, a window has a sill inside and a cill outside. So the rule is stated as
- * the exception it is, and a kind nobody has thought about yet gets two sides
- * rather than silently losing one.
+ * side, a window has a board inside and a cill outside. So the rule is stated
+ * as the exception it is.
  */
 export function sidesFor(kind: string): readonly SideDef[] {
   return kind === 'room' ? SINGLE : BOTH;
 }
 
-/**
- * How one layer on one side is keyed — for what is open, and for nothing else.
- *
- * A layer can be on BOTH sides of the same wall (plaster usually is), so the
- * layer id alone would tie the two rows together and open them as one. Shared
- * by the list and by whoever owns the open set, so the two cannot drift into
- * keying the same row differently.
- */
-export function rowKey(side: string, layerId: string): string {
-  return `${side}.${layerId}`;
+/** the tab id the sheet uses → the face the document stores it against */
+export function sideToFace(side: string): 'face+' | 'face-' {
+  return side === 'b' ? 'face-' : 'face+';
 }
 
 /**
- * What a layer's detail panel says.
+ * How one row on one side is keyed — for what is open, and for nothing else.
  *
- * A PLACEHOLDER, and the seam the real thing arrives at. What belongs here is
- * inputs — a thickness for a plaster, a number of coats for a paint, a tile
- * size — and they differ per layer, which is exactly why this is a function of
- * the layer rather than a block of markup in the row. When the inputs land,
- * this is the only thing that changes and the row does not.
- *
- * It prints the layer's own description because that prose is otherwise only
- * visible in the add sheet: once a layer is on the list, the row is a name and
- * a number, and "what did I mean by Skim" has nowhere else to be answered.
+ * The finish's own entity id is already unique across the whole drawing, so
+ * the side is not strictly needed. It is in the key anyway because the open
+ * set outlives a step and a bare entity id would say nothing about which face
+ * it was opened on, which is exactly the sort of thing that reads fine until
+ * two faces carry the same build-up.
  */
-export function layerDetail(layer: LayerOption): string {
-  return `${layer.description} Inputs for ${layer.label} land here.`;
+export function rowKey(side: string, finishId: string): string {
+  return `${side}.${finishId}`;
+}
+
+/** how a quantity is written, per the unit the material is priced in */
+const UNIT_LABEL: Record<string, string> = {
+  m: 'm',
+  m2: 'm²',
+  m3: 'm³',
+  count: 'units',
+};
+
+/** two decimals, because that is what the bill of quantities will carry */
+export function formatQuantity(quantity: number, unit: string): string {
+  return `${quantity.toFixed(2)} ${UNIT_LABEL[unit] ?? unit}`;
+}
+
+/**
+ * What a row's detail panel says — the facts, not a placeholder.
+ *
+ * This used to print prose that changed per layer, standing in for inputs that
+ * did not exist. They still do not, but the NUMBERS do: the finish is a real
+ * entity on a real face, and its area comes back with the openings already
+ * subtracted. So the panel answers the two questions a row raises — how much
+ * of it is there, and what will it be priced as — and phase two adds the
+ * inputs that let those numbers be changed.
+ *
+ * A pure function of the row so it can be asserted without a DOM.
+ */
+export function finishFacts(
+  row: FinishRow,
+): readonly { readonly label: string; readonly value: string }[] {
+  const facts = [
+    // net, and it says so: a wall with a window in it is the single most
+    // common place an estimate goes wrong by the area of the window
+    { label: 'Area', value: `${row.area.toFixed(2)} m² net of openings` },
+  ];
+  // only worth a line when it is not just the area again — a length material
+  // (a trim, a skirting) is measured along the wall and nothing else
+  if (row.unit === 'm') {
+    facts.push({ label: 'Length', value: `${row.length.toFixed(2)} m` });
+  }
+  facts.push({
+    label: 'Quantity',
+    value: formatQuantity(row.quantity, row.unit),
+  });
+  facts.push({ label: 'Cost code', value: row.costCode });
+  if (row.unpriced) {
+    facts.push({
+      label: 'Note',
+      value: 'No material on this one, so it prices as bare area.',
+    });
+  }
+  return facts;
 }
 
 /**
  * One layer on the list: its place in the build-up, its name, and the two
  * things that can be done to it.
  *
- * The number is a PRIORITY, not a decoration — layers go on in an order, and
- * render under skim under paint is a wall while the reverse is not. It is also
- * what makes the sheet sayable out loud: "take 2 off Side A" is a sentence a
- * column of anonymous rows cannot support.
+ * The number is the order it went ON, which is what the document knows: a
+ * finish carries no rank of its own, so the row counts creation order and
+ * claims nothing more.
  *
  * Two icon-only targets in one 44 px row, and no third: the name is text, not
  * a button. A row that opened on any tap would put the destructive control
@@ -88,13 +128,13 @@ export function layerDetail(layer: LayerOption): string {
  * gets deleted by a thumb aiming at a chevron.
  */
 function LayerRow({
-  layer,
+  row,
   number,
   open,
   onToggleDetail,
   onRemove,
 }: {
-  layer: LayerOption;
+  row: FinishRow;
   /** its place in the build-up, printed first */
   number: number;
   open: boolean;
@@ -111,13 +151,19 @@ function LayerRow({
           {number}.
         </span>
         <span className="min-w-0 flex-1 truncate py-2.5 text-sm">
-          {layer.label}
+          {row.name}
+        </span>
+        {/* the quantity on the row itself, because it is the answer the sheet
+            exists to give and opening every row to find it would be a tap per
+            layer. The detail below breaks it down. */}
+        <span className="shrink-0 text-xs text-muted tabular-nums">
+          {formatQuantity(row.quantity, row.unit)}
         </span>
         {/* the icons carry no text, and a bare "remove" would come out as a
             column of identical buttons to anyone not looking at it */}
         <button
           type="button"
-          aria-label={`Remove ${layer.label}`}
+          aria-label={`Remove ${row.name}`}
           onClick={onRemove}
           className="grid size-11 shrink-0 place-items-center text-muted"
         >
@@ -126,7 +172,7 @@ function LayerRow({
         <button
           type="button"
           aria-expanded={open}
-          aria-label={`Details for ${layer.label}`}
+          aria-label={`Details for ${row.name}`}
           onClick={onToggleDetail}
           className="grid size-11 shrink-0 place-items-center text-muted"
         >
@@ -137,12 +183,14 @@ function LayerRow({
         </button>
       </div>
       {open && (
-        // inside the row, inside the scroller below: opening a detail must
-        // lengthen the LIST and not the sheet, because the sheet is parked over
-        // the shape it is describing
-        <p className="px-1 pb-2 pr-22 text-xs text-muted">
-          {layerDetail(layer)}
-        </p>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 px-1 pb-2 pr-22 text-xs text-muted">
+          {finishFacts(row).map((fact) => (
+            <div key={fact.label} className="contents">
+              <dt className="text-right">{fact.label}</dt>
+              <dd className="tabular-nums">{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
       )}
     </div>
   );
@@ -150,23 +198,23 @@ function LayerRow({
 
 /** the layers on one side, or the reason there are none */
 function SideLayers({
-  layers,
+  rows,
   opened,
   side,
   onToggleDetail,
   onRemove,
 }: {
-  layers: readonly LayerOption[];
+  rows: readonly FinishRow[];
   opened: ReadonlySet<string>;
   side: string;
-  onToggleDetail: (side: string, layerId: string) => void;
-  onRemove: (side: string, layerId: string) => void;
+  onToggleDetail: (side: string, finishId: string) => void;
+  onRemove: (side: string, finishId: string) => void;
 }) {
-  if (layers.length === 0) {
+  if (rows.length === 0) {
     // Empty is the STARTING state, not a failure: nothing is priced until
-    // somebody says what this is built up from. So it says what to do rather
-    // than reporting an absence — and the add row directly under it is the
-    // thing it is pointing at.
+    // somebody says what this face is built up from. So it says what to do
+    // rather than reporting an absence — and the add row directly under it is
+    // the thing it is pointing at.
     return (
       <p className="py-3 text-xs text-muted">
         Nothing here yet. Add the layers this is built up from.
@@ -174,20 +222,19 @@ function SideLayers({
     );
   }
   return (
-    // No cap and no scroller of its OWN any more. The sheet's height is now
-    // capped at the dialog (see SHEET_MAX_HEIGHT), so the one scroller is the
-    // modal body: a second one nested inside it meant two scrollable surfaces
-    // under one thumb, where a drag that reached the end of the inner list did
-    // nothing instead of moving the sheet.
+    // No cap and no scroller of its OWN. The sheet's height is capped at the
+    // dialog (SHEET_MAX_HEIGHT), so the one scroller is the modal body: a
+    // second one nested inside it meant two scrollable surfaces under one
+    // thumb, where a drag that reached the end of the inner list did nothing.
     <ol className="text-left">
-      {layers.map((layer, at) => (
-        <li key={layer.id}>
+      {rows.map((row, at) => (
+        <li key={row.id}>
           <LayerRow
-            layer={layer}
+            row={row}
             number={at + 1}
-            open={opened.has(rowKey(side, layer.id))}
-            onToggleDetail={() => onToggleDetail(side, layer.id)}
-            onRemove={() => onRemove(side, layer.id)}
+            open={opened.has(rowKey(side, row.id))}
+            onToggleDetail={() => onToggleDetail(side, row.id)}
+            onRemove={() => onRemove(side, row.id)}
           />
         </li>
       ))}
@@ -202,13 +249,7 @@ function SideLayers({
  * tabs. Two things fall out of that. The tab bar gets the whole width, which is
  * what a two-option segmented control needs to be readable and to give each
  * option half a phone to be tapped in; and the one control that is useless to
- * miss stops being a 32 px square in a field of empty space. It reads as the
- * list continuing — which is exactly what pressing it does.
- *
- * It sits OUTSIDE the tab panels, because it acts on whichever side is showing
- * and one button that follows the tabs is the honest shape of that. It is also
- * the reason the empty state can be a single line: what to do about it is the
- * row directly underneath.
+ * miss stops being a 32 px square in a field of empty space.
  */
 function AddRow({ onAdd }: { onAdd: () => void }) {
   return (
@@ -228,25 +269,25 @@ function AddRow({ onAdd }: { onAdd: () => void }) {
 }
 
 /**
- * What the shape under the walk is built up from, side by side.
+ * What the shape under the walk is built up from, face by face.
  *
- * It starts EMPTY and stays empty until the user says otherwise. This used to
- * be a book of rates arriving pre-listed with tick-boxes against them, which
- * put a list of things on screen that nobody had said were true of this shape;
- * a build-up that has not been stated is not a list of unticked rows, it is
- * nothing at all.
+ * Every row is a FINISH in the document — a real hosted entity on a real wall
+ * face, whose area comes back with the openings already subtracted and whose
+ * quantity is the one the bill of quantities will carry. It starts empty and
+ * stays empty until the user says otherwise, because a build-up that has not
+ * been stated is not a list of unticked rows, it is nothing at all.
  *
  * Fully controlled: which side is showing, what is on each side and what is
- * open are all the wizard's state, not this list's. That is what makes "does
- * the build-up survive Next" a decision taken once, in the open, rather than a
- * side effect of what React happens to remount — and it is what lets a test
- * render this at any state with no dialog, no session and no DOM to tap in.
+ * open are the wizard's, not this list's — and what is on each side is READ
+ * from the document rather than held anywhere. That is what lets a test render
+ * this at any state with no session, no dialog and no DOM to tap in.
  */
 export function LayerList({
   kind,
   side,
-  lists,
+  rows,
   opened,
+  blocked,
   onSideChange,
   onToggleDetail,
   onRemove,
@@ -256,15 +297,29 @@ export function LayerList({
   kind: string;
   /** the side showing now */
   side: string;
-  /** what is on each side, keyed by side id */
-  lists: Readonly<Record<string, readonly LayerOption[]>>;
+  /** the finishes on each side, keyed by side id */
+  rows: Readonly<Record<string, readonly FinishRow[]>>;
   /** the rows whose detail is showing, keyed by `rowKey` */
   opened: ReadonlySet<string>;
+  /**
+   * Why this shape cannot carry a build-up, when it cannot.
+   *
+   * Core hosts a finish on a wall face or a slab and nowhere else, so most of
+   * what the walk turns up has nowhere to put one. Saying which and why beats
+   * offering an Add button with nothing to dispatch — and it beats the old
+   * behaviour, which was to let the user fill a list that was never going
+   * anywhere.
+   */
+  blocked?: string;
   onSideChange: (side: string) => void;
-  onToggleDetail: (side: string, layerId: string) => void;
-  onRemove: (side: string, layerId: string) => void;
+  onToggleDetail: (side: string, finishId: string) => void;
+  onRemove: (side: string, finishId: string) => void;
   onAdd: () => void;
 }) {
+  if (blocked !== undefined) {
+    return <p className="py-3 text-xs text-muted">{blocked}</p>;
+  }
+
   const sides = sidesFor(kind);
 
   // One side: no tab bar at all, just the list and the row that fills it.
@@ -273,7 +328,7 @@ export function LayerList({
     return (
       <div className="flex flex-col">
         <SideLayers
-          layers={lists[only.id] ?? []}
+          rows={rows[only.id] ?? []}
           opened={opened}
           side={only.id}
           onToggleDetail={onToggleDetail}
@@ -317,7 +372,7 @@ export function LayerList({
           // half a phone tall it is a quarter of the list's height spent on air
           <Tabs.Panel key={one.id} id={one.id} className="mt-2 p-0">
             <SideLayers
-              layers={lists[one.id] ?? []}
+              rows={rows[one.id] ?? []}
               opened={opened}
               side={one.id}
               onToggleDetail={onToggleDetail}

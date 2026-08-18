@@ -7,6 +7,7 @@ import type {
   SpaceInfo,
 } from '@acip/editor-core';
 import {
+  FinishEntity,
   HostedOpeningEntity,
   SpaceTagEntity,
   WallEntity,
@@ -52,7 +53,6 @@ const MARK_PREFIX: Record<string, string> = {
   slab: 'SL',
   roof: 'RF',
   stair: 'ST',
-  finish: 'FN',
 };
 
 /** `curtain-wall` → `Curtain wall` */
@@ -120,9 +120,15 @@ function byMark(a: Entity, b: Entity): number {
  * actually see on the plan.
  *
  * Nothing here enumerates entity types: membership is "whatever is in the
- * document on this level", so a new type shows up without a change here. The
- * one exclusion is the space tag, which stores a room's NAME and draws no
- * linework — it is not a shape, and it already appears as its room's name.
+ * document on this level", so a new type shows up without a change here. Two
+ * exclusions, both for the same reason — they are not shapes to be priced:
+ *
+ * - the SPACE TAG stores a room's NAME and draws no linework; it already
+ *   appears as its room's name.
+ * - a FINISH is a layer of some wall face's build-up, which the estimator now
+ *   writes itself. Left in, every plaster the user added would come back as
+ *   its own step on the next walk, asking them to build up a build-up — and
+ *   the walk would grow by a step every time they priced a face.
  */
 export function estimatorSteps(
   doc: DrawingDocument,
@@ -134,6 +140,7 @@ export function estimatorSteps(
 
   for (const entity of entitiesInView(doc, { kind: 'plan', levelId })) {
     if (entity instanceof SpaceTagEntity) continue;
+    if (entity instanceof FinishEntity) continue; // a build-up layer, not a shape
     if (!isEntityVisible(doc, entity)) continue; // a hidden layer hides it everywhere
     if (entity instanceof WallEntity) walls.push(entity);
     // by base class, so a future kind of opening sorts with the openings

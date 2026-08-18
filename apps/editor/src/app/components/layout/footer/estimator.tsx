@@ -5,13 +5,22 @@ import {
   IconCalculator,
   IconFocusCentered,
 } from '@tabler/icons-react';
-import type { BBox } from '@acip/editor-core';
+import type {
+  BBox,
+  DrawingDocument,
+  EntityId,
+  Material,
+} from '@acip/editor-core';
 import { useSession } from '@/editor/session-context';
 import { useRuntime } from '@/editor/runtime';
 import type { FitBounds } from '@/editor/ui-state';
-import type { LayerOption } from '@/data/layers';
-import { estimatorSteps } from './estimator-steps';
-import { LayerList, rowKey, sidesFor } from './estimator-layers';
+import { estimatorSteps, type EstimatorStep } from './estimator-steps';
+import { LayerList, rowKey, sideToFace, sidesFor } from './estimator-layers';
+import {
+  finishTargetFor,
+  finishesOnFace,
+  type FinishRow,
+} from './estimator-finishes';
 import { AddLayersSheet } from './estimator-add-layers';
 
 /**
@@ -82,27 +91,31 @@ function framing(bounds: BBox): FitBounds {
   };
 }
 
-/** what one shape in the walk has been said to be built up from */
-interface ShapeLayers {
-  /** the side showing now — a side id from `sidesFor` */
-  readonly side: string;
-  /** the layers on each side, in the order they go on, keyed by side id */
-  readonly lists: Readonly<Record<string, readonly LayerOption[]>>;
-  /** the rows whose detail is showing, keyed by `rowKey` */
-  readonly opened: ReadonlySet<string>;
+/**
+ * Which side of each shape is showing, keyed by the step's id.
+ *
+ * This is all the per-shape state the wizard still holds. What each side is
+ * BUILT UP FROM used to live here too; it lives in the document now, as finish
+ * entities on real wall faces, so it persists, undoes and feeds the bill of
+ * quantities instead of dying when the sheet closes.
+ *
+ * Which tab is open is not that: it is where the user is looking, which no
+ * drawing should carry. Per shape rather than one value because walking from a
+ * wall whose Side B you were reading to the next wall should not silently move
+ * you to a face you never chose.
+ */
+type OpenSides = Readonly<Record<string, string>>;
+
+/** everything the sheet reads out of the drawing for the step it is on */
+interface DocView {
+  /** the finishes on each face, keyed by side id */
+  readonly rows: Readonly<Record<string, readonly FinishRow[]>>;
+  /** the drawing's own catalogue — what a face can be built up from */
+  readonly materials: readonly Material[];
 }
 
-/**
- * A shape nobody has said anything about yet — which is every shape, until it
- * is. Shared rather than built per read so that "has this one been touched"
- * stays a question about the map's keys and not about deep equality, and so
- * that arriving at a shape does not itself write an entry for it.
- *
- * Side `a` is the one showing, and it is the only side a one-sided shape has;
- * `sidesFor` names both of them starting there, so this is the first tab in
- * either case.
- */
-const NO_LAYERS: ShapeLayers = { side: 'a', lists: {}, opened: new Set() };
+/** nothing read yet, and what a step with nowhere to host a finish shows */
+const NOTHING_READ: DocView = { rows: {}, materials: [] };
 
 /** the same set without one key, or the same set when it never had it */
 function without(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
@@ -110,6 +123,31 @@ function without(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
   const next = new Set(set);
   next.delete(key);
   return next;
+}
+
+/**
+ * Read one step's build-up out of the document.
+ *
+ * BOTH faces, not just the one showing: the tabs render both panels, and the
+ * add sheet has to know what is already on the live one so it can refuse to
+ * apply the same material twice.
+ *
+ * A free function over the document, so what the sheet shows for a given
+ * drawing can be asserted without React, a dialog or a DOM — the same reason
+ * `estimatorSteps` is one.
+ */
+function readDoc(
+  doc: DrawingDocument,
+  step: EstimatorStep | undefined,
+  wallId: EntityId | null,
+): DocView {
+  const materials = doc.materials.list();
+  if (!step || wallId === null) return { rows: {}, materials };
+  const rows: Record<string, readonly FinishRow[]> = {};
+  for (const one of sidesFor(step.kind)) {
+    rows[one.id] = finishesOnFace(doc, wallId, sideToFace(one.id));
+  }
+  return { rows, materials };
 }
 
 /**
@@ -139,10 +177,12 @@ function ShapeWizard({ close }: { close: () => void }) {
   const session = useSession();
   const { ui } = useRuntime();
   const levelId = ui.activeLevelId.get();
-  // Taken once per opening. A see-through backdrop is still a backdrop: it is
-  // a fixed, full-screen element above the canvas, so the plan can be read but
-  // not touched while the sheet is up and the drawing cannot change underfoot.
-  // The camera can therefore trust an index into this list.
+  // Taken once per opening, and deliberately NOT re-taken when the drawing
+  // changes. The sheet writes to the document now, and a finish is an entity;
+  // recomputing here would let the walk grow a step under the user's thumb
+  // between one tap and the next. The backdrop stops anything else editing the
+  // plan, so the only changes are this sheet's own — and none of them add a
+  // shape to price. The camera can therefore still trust an index into it.
   const steps = useMemo(
     () => estimatorSteps(session.doc, levelId),
     [session, levelId],
@@ -163,33 +203,40 @@ function ShapeWizard({ close }: { close: () => void }) {
    * the selection either way.
    */
   const [wholePlan, setWholePlan] = useState(false);
-  /**
-   * Every shape's build-up, keyed by the step's own id.
-   *
-   * PER SHAPE, not per kind. A wall's build-up is a fact about that wall — the
-   * one facing the street is rendered and the one in the hall is not — so the
-   * walk must not arrive at W8 already claiming it is built like W7. It lives
-   * HERE, above `index`, so it survives Next and Back: the answer given on W7
-   * is still there when the walk comes back to it, which is what makes Back
-   * worth pressing at all.
-   *
-   * Keyed by `step.id`, which is the entity id, or the space key for a room —
-   * stable for as long as the sheet is open, because the plan cannot change
-   * underneath it (see `steps` above).
-   */
-  const [byShape, setByShape] = useState<Readonly<Record<string, ShapeLayers>>>(
-    {},
-  );
+  /** which face of each shape is showing, keyed by the step's own id */
+  const [openSides, setOpenSides] = useState<OpenSides>({});
+  /** the rows whose detail is showing, keyed by `rowKey` */
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   /** whether the fullscreen add sheet is up over the wizard */
   const [adding, setAdding] = useState(false);
 
   const step = steps[index];
   const last = index >= steps.length - 1;
-  const shape = (step && byShape[step.id]) ?? NO_LAYERS;
+  const side = (step && openSides[step.id]) ?? 'a';
 
-  /** rewrite one shape's build-up, leaving every other shape alone */
-  const editShape = (id: string, change: (was: ShapeLayers) => ShapeLayers) =>
-    setByShape((all) => ({ ...all, [id]: change(all[id] ?? NO_LAYERS) }));
+  /** where this step's build-up can be written, or why it cannot be */
+  const target = step ? finishTargetFor(session.doc, step) : null;
+  // pulled out as a plain id so the effect below turns on a string rather than
+  // on an object rebuilt every render
+  const wallId = target?.kind === 'wall' ? target.wallId : null;
+
+  /**
+   * What the document says, re-read on every committed transaction.
+   *
+   * The sheet WRITES now — adding a layer dispatches FINISH.ADD — so what it
+   * shows has to follow what it did. Held as a SNAPSHOT rather than derived
+   * during render because the document is not a React store: it announces
+   * changes on an event, and this is the same subscribe-and-snapshot the rest
+   * of the footer uses (see useFooterContext). Nothing here is a second copy
+   * of the truth — it is re-read from the document every time, never edited.
+   */
+  const [view, setView] = useState<DocView>(NOTHING_READ);
+
+  useEffect(() => {
+    const sync = () => setView(readDoc(session.doc, step, wallId));
+    sync(); // the step changed, or we just mounted
+    return session.doc.events.on('change', sync);
+  }, [session, step, wallId]);
 
   // The walk BORROWS the selection to highlight with, and gives it back.
   //
@@ -251,35 +298,32 @@ function ShapeWizard({ close }: { close: () => void }) {
         {step ? (
           <LayerList
             kind={step.kind}
-            side={shape.side}
-            lists={shape.lists}
-            opened={shape.opened}
-            onSideChange={(side) =>
-              editShape(step.id, (was) => ({ ...was, side }))
+            side={side}
+            rows={view.rows}
+            opened={opened}
+            // `undefined` for a wall, the reason for anything else — a finish
+            // sits on a wall face, and most of the walk is not one
+            blocked={target?.kind === 'none' ? target.reason : undefined}
+            onSideChange={(next) =>
+              setOpenSides((all) => ({ ...all, [step.id]: next }))
             }
-            onToggleDetail={(side, layerId) =>
-              editShape(step.id, (was) => {
-                const key = rowKey(side, layerId);
-                const rows = new Set(was.opened);
-                if (!rows.delete(key)) rows.add(key);
-                return { ...was, opened: rows };
+            onToggleDetail={(at, finishId) =>
+              setOpened((rows) => {
+                const next = new Set(rows);
+                const key = rowKey(at, finishId);
+                if (!next.delete(key)) next.add(key);
+                return next;
               })
             }
-            onRemove={(side, layerId) =>
-              editShape(step.id, (was) => ({
-                ...was,
-                lists: {
-                  ...was.lists,
-                  [side]: (was.lists[side] ?? []).filter(
-                    (layer) => layer.id !== layerId,
-                  ),
-                },
-                // and take its detail row with it, or the set keeps a key for a
-                // row that no longer exists — which comes back open the day the
-                // same layer is added again
-                opened: without(was.opened, rowKey(side, layerId)),
-              }))
-            }
+            onRemove={(at, finishId) => {
+              // the document is the list, so removing a row is erasing the
+              // entity — which is undoable, unlike everything this sheet used
+              // to do
+              session.dispatch('ENTITY.ERASE', { ids: [finishId] });
+              // and take its detail row with it, or the set keeps a key for a
+              // row that no longer exists
+              setOpened((rows) => without(rows, rowKey(at, finishId)));
+            }}
             onAdd={() => setAdding(true)}
           />
         ) : (
@@ -337,31 +381,37 @@ function ShapeWizard({ close }: { close: () => void }) {
           </div>
         )}
       </Modal.Footer>
-      {step && (
+      {step && wallId !== null && (
         // Over the wizard, not beside it: the add sheet is full screen, so
-        // while it is up there is no Next to press and the shape it saves onto
+        // while it is up there is no Next to press and the face it writes onto
         // cannot change under it. Closed, it renders nothing at all.
         <AddLayersSheet
-          kind={step.kind}
-          sideLabel={sideLabel(step.kind, shape.side)}
+          materials={view.materials}
+          sideLabel={sideLabel(step.kind, side)}
           isOpen={adding}
+          // what this FACE already carries, so the sheet can show it ticked and
+          // dead rather than letting the same material be applied twice
           alreadyIn={
-            new Set((shape.lists[shape.side] ?? []).map((layer) => layer.id))
+            new Set(
+              (view.rows[side] ?? [])
+                .map((row) => row.materialId)
+                .filter((id): id is string => id !== null),
+            )
           }
           onOpenChange={setAdding}
-          // appended, not merged in catalogue order: the list is a build-up and
-          // its numbers are the order things go on, so a layer added later goes
-          // on later. The sheet already refuses what is on the side, so nothing
-          // here can arrive twice.
-          onSave={(layers) =>
-            editShape(step.id, (was) => ({
-              ...was,
-              lists: {
-                ...was.lists,
-                [was.side]: [...(was.lists[was.side] ?? []), ...layers],
-              },
-            }))
-          }
+          // One dispatch per material, in catalogue order, because the list is
+          // a build-up and its numbers are the order things went on. Each one
+          // is a FINISH.ADD on this wall face: it survives the sheet closing,
+          // it undoes, and the bill of quantities can already price it.
+          onSave={(materialIds) => {
+            for (const materialId of materialIds) {
+              session.dispatch('FINISH.ADD', {
+                wallId,
+                side: sideToFace(side),
+                materialId,
+              });
+            }
+          }}
         />
       )}
     </>
