@@ -101,6 +101,20 @@ plan stays uncluttered, and splits the BOQ into Demolition + Rebuild subtotals.
   its own kind — the wall macro removes wall-hosted auto finishes, the floor
   macro removes slab-hosted ones of the same surface, so they never collide.
   `MATERIAL.REMOVE` blocks while any finish references the material.
+- `FINISH.UPDATE {id, materialId?, sillHeight?, topHeight?, fullHeight?, t0?,
+  t1?, thickness?}` edits one finish in place — only the fields passed change,
+  and the entity keeps its id and its position in the host's stack, so
+  "tile to 1.2 m" → "tile to 1.5 m" is a value change, not an erase-and-re-add
+  that renumbers the finish and breaks every reference to it. `topHeight` is
+  nullable on the entity but the schema vocabulary has no nullable number, so
+  the null state gets its own boolean: `fullHeight: true` clears `topHeight`
+  and sends the band back to following the wall (passing both is rejected).
+  `phase` is NOT settable here — `PHASE.SET` owns that field, and one field
+  with two writers is one too many. Band and extent are rejected (not ignored)
+  for a slab-hosted finish, which has neither; `materialId` and `thickness`
+  still apply there. Cross-field rules (`t0 < t1`, `topHeight > sillHeight`)
+  are checked against the MERGED result, so a partial edit cannot walk the
+  band into an invalid state one field at a time.
 - **Quantities** — per-finish net area + unit-aware material rollup;
   `finishArea` total and a `finishes` list; the LLM digest gains `finishArea`.
 - **Estimator** — `computeFinishTakeoff` → BOQ lines through `layerQuantity`;
@@ -126,11 +140,15 @@ plan stays uncluttered, and splits the BOQ into Demolition + Rebuild subtotals.
   finishes, not one layered finish.
 - **No 3D** — finishes don't render in the 3D view (no z-fighting risk, no
   textures).
-- **No grips** — edit by re-issuing the command or deleting.
+- **No grips** — the band and extent are editable by number through
+  `FINISH.UPDATE` (in place, id preserved), but not by dragging the band edge
+  in the canvas. Re-hosting is still delete-and-re-add: `FINISH.UPDATE` cannot
+  move a finish to the other face or onto a different wall, because the host
+  and the anchor live on the relation, not on the entity.
 
 ## Deferred
 
 Finishes on bare room polygons (no slab); boundary-with-holes finish regions
 (non-rectangular, penetrations); suspended ceilings; layered finishes; 3D
-finish surfaces; finish grips; per-room finish schedules in the estimator
-output.
+finish surfaces; finish grips; re-hosting a finish (face/host swap) without
+delete-and-re-add; per-room finish schedules in the estimator output.

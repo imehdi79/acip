@@ -9,6 +9,7 @@ import type {
 import {
   FinishEntity,
   HostedOpeningEntity,
+  SlabEntity,
   SpaceTagEntity,
   WallEntity,
   bboxFromPoints,
@@ -17,6 +18,7 @@ import {
   isEntityVisible,
 } from '@acip/editor-core';
 import { visibleSpaceName } from '@/editor/spaces';
+import type { RoomFootprint } from './estimator-slabs';
 
 /** One shape to walk past — an entity, or a room derived from the walls. */
 export interface EstimatorStep {
@@ -39,6 +41,18 @@ export interface EstimatorStep {
    * boundary walls — the same thing a tap inside a room selects.
    */
   readonly entityIds: readonly EntityId[];
+  /**
+   * A room's own polygon, on a room step and nowhere else.
+   *
+   * Carried for the same reason `bounds` is: "what does this step point at" is
+   * decided once, here, where a document is all it takes to check it. The
+   * estimator prices a room through the slab beneath it, and finding that slab
+   * — or laying one — needs the room's net boundary and a point inside it.
+   * Both fall out of detection for free at this moment and cost a whole plan
+   * arrangement to recover later, so they travel with the step rather than
+   * being rediscovered by matching the step's id back to a space.
+   */
+  readonly room?: RoomFootprint;
 }
 
 /**
@@ -120,8 +134,8 @@ function byMark(a: Entity, b: Entity): number {
  * actually see on the plan.
  *
  * Nothing here enumerates entity types: membership is "whatever is in the
- * document on this level", so a new type shows up without a change here. Two
- * exclusions, both for the same reason — they are not shapes to be priced:
+ * document on this level", so a new type shows up without a change here. Three
+ * exclusions, all for the same reason — they are not shapes to be priced:
  *
  * - the SPACE TAG stores a room's NAME and draws no linework; it already
  *   appears as its room's name.
@@ -129,6 +143,13 @@ function byMark(a: Entity, b: Entity): number {
  *   writes itself. Left in, every plaster the user added would come back as
  *   its own step on the next walk, asking them to build up a build-up — and
  *   the walk would grow by a step every time they priced a face.
+ * - a SLAB is the thing a ROOM is priced THROUGH: its top is that room's floor
+ *   and its underside that room's ceiling, so it already appears in the walk,
+ *   as the room standing on it. Left in, the same screed would be asked for
+ *   twice — once under "Room — Kitchen" and once under "Slab SL1" — and the
+ *   second of those names a shape nobody drew, since the estimator lays these
+ *   slabs itself the moment a room's floor is first built up. The user asked
+ *   for rooms, not for the concrete under them.
  */
 export function estimatorSteps(
   doc: DrawingDocument,
@@ -141,6 +162,7 @@ export function estimatorSteps(
   for (const entity of entitiesInView(doc, { kind: 'plan', levelId })) {
     if (entity instanceof SpaceTagEntity) continue;
     if (entity instanceof FinishEntity) continue; // a build-up layer, not a shape
+    if (entity instanceof SlabEntity) continue; // priced as the room above it
     if (!isEntityVisible(doc, entity)) continue; // a hidden layer hides it everywhere
     if (entity instanceof WallEntity) walls.push(entity);
     // by base class, so a future kind of opening sorts with the openings
@@ -162,6 +184,15 @@ export function estimatorSteps(
         // a room is derived and has no id to select, so it lights up the way a
         // tap inside one does: through the walls that bound it
         entityIds: space.boundaryWallIds,
+        // the NET boundary, not the gross one used for the camera box: a slab
+        // under a room runs to the inner wall faces, because that is the floor
+        // that gets screeded and tiled. The gross loop would price the walls'
+        // own footprint as floor area in every room of the plan.
+        room: {
+          boundary: space.boundary,
+          inside: space.labelPoint,
+          levelId: space.levelId,
+        },
       };
     },
   );

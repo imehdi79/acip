@@ -5,8 +5,12 @@ import { assembleBoq } from '@acip/estimator';
 import { STARTER_MATERIALS, seedMaterials } from '@/data/materials';
 import {
   anchorForSide,
+  anchorForSurface,
   finishTargetFor,
+  finishesAt,
   finishesOnFace,
+  spotsFor,
+  spotsToWrite,
 } from '@/app/components/layout/footer/estimator-finishes';
 import { estimatorSteps } from '@/app/components/layout/footer/estimator-steps';
 
@@ -213,6 +217,143 @@ describe('reading the finishes on a face', () => {
   });
 });
 
+/**
+ * A session's dispatch as a plain function.
+ *
+ * `session.dispatch` handed over bare arrives with no `this` and throws on the
+ * command bus — the same trap the sheet itself has to avoid, which is exactly
+ * why the tests dispatch the way the sheet does.
+ */
+function dispatcher(session: EditorSession) {
+  return <R>(name: string, params: unknown): R =>
+    session.dispatch<R>(name, params);
+}
+
+/** the walk's room step, which four walls always enclose */
+function roomStep(session: EditorSession) {
+  const room = estimatorSteps(session.doc, null).find((s) => s.kind === 'room');
+  if (!room) throw new Error('the four walls enclosed no room');
+  return room;
+}
+
+/** how many slabs the drawing carries, to catch one being laid or lost */
+function slabCount(session: EditorSession): number {
+  return [...session.doc.all()].filter((e) => e.type === 'slab').length;
+}
+
+/** lay a floor or ceiling layer on a room the way the sheet's Save does */
+function addRoomLayer(
+  session: EditorSession,
+  side: 'floor' | 'ceiling',
+  costCode: string,
+): void {
+  const spots = spotsToWrite(
+    session.doc,
+    finishTargetFor(session.doc, roomStep(session)),
+    dispatcher(session),
+  );
+  const spot = spots[side];
+  if (!spot || spot.kind !== 'slab') throw new Error(`no ${side} to write to`);
+  session.dispatch('FLOORFINISH.ADD', {
+    slabId: spot.slabId,
+    surface: spot.surface,
+    materialId: material(session, costCode),
+  });
+}
+
+describe('pricing a room through its slab', () => {
+  it('puts a floor layer on the floor and not on the ceiling', () => {
+    // The round trip that keeps the anchor mapping honest. A slab's anchors
+    // are NOT the wall's: anchor 1 is a wall's face+ AND a slab's underside,
+    // so reading the wrong table lands a screed on a ceiling, silently.
+    const { session } = plan();
+    addRoomLayer(session, 'floor', 'screed');
+
+    const spots = spotsFor(finishTargetFor(session.doc, roomStep(session)));
+    const floor = spots.floor;
+    const ceiling = spots.ceiling;
+    if (!floor || !ceiling) throw new Error('the room has no surfaces');
+    expect(finishesAt(session.doc, floor).map((r) => r.costCode)).toEqual([
+      'screed',
+    ]);
+    expect(finishesAt(session.doc, ceiling)).toEqual([]);
+  });
+
+  it('keeps the floor and the ceiling apart', () => {
+    const { session } = plan();
+    addRoomLayer(session, 'floor', 'floor-tile');
+    addRoomLayer(session, 'ceiling', 'paint');
+
+    const spots = spotsFor(finishTargetFor(session.doc, roomStep(session)));
+    expect(
+      finishesAt(session.doc, spots.floor!).map((r) => r.costCode),
+    ).toEqual(['floor-tile']);
+    expect(
+      finishesAt(session.doc, spots.ceiling!).map((r) => r.costCode),
+    ).toEqual(['paint']);
+  });
+
+  /*
+   * The hazard the whole design is shaped around. SLAB.AUTO regenerates: it
+   * removes every slab it previously made and rebuilds them, and a removed
+   * slab takes its hosted finishes with it. So the obvious way to give a room
+   * a floor is also the one command that would wipe every build-up the user
+   * had entered. This proves the scheme actually used never does that.
+   */
+  it('never destroys a build-up by asking for a floor again', () => {
+    const { session } = plan();
+    addRoomLayer(session, 'floor', 'screed');
+    addRoomLayer(session, 'floor', 'floor-tile');
+
+    const before = finishesAt(
+      session.doc,
+      spotsFor(finishTargetFor(session.doc, roomStep(session))).floor!,
+    ).map((r) => r.costCode);
+    expect(before).toEqual(['screed', 'floor-tile']);
+
+    // ask again, repeatedly, exactly as reopening the sheet and saving would
+    for (let i = 0; i < 3; i += 1) {
+      spotsToWrite(
+        session.doc,
+        finishTargetFor(session.doc, roomStep(session)),
+        dispatcher(session),
+      );
+    }
+    expect(slabCount(session)).toBe(1);
+    expect(
+      finishesAt(
+        session.doc,
+        spotsFor(finishTargetFor(session.doc, roomStep(session))).floor!,
+      ).map((r) => r.costCode),
+    ).toEqual(before);
+  });
+
+  it('survives a SLAB.AUTO run from anywhere else', () => {
+    // the slab is laid hand-placed (auto = false) on purpose, and SLAB.AUTO
+    // never touches those — marking it auto would have looked more honest and
+    // handed the regenerate macro a licence to delete the user's work
+    const { session } = plan();
+    addRoomLayer(session, 'floor', 'screed');
+    session.dispatch('SLAB.AUTO', {});
+    expect(
+      finishesAt(
+        session.doc,
+        spotsFor(finishTargetFor(session.doc, roomStep(session))).floor!,
+      ).map((r) => r.costCode),
+    ).toEqual(['screed']);
+  });
+
+  it('walks the room, never the slab under it', () => {
+    // the same screed asked for twice — once under "Room — Kitchen" and once
+    // under "Slab SL1" — with the second naming a shape nobody drew
+    const { session } = plan();
+    addRoomLayer(session, 'floor', 'screed');
+    const kinds = estimatorSteps(session.doc, null).map((s) => s.kind);
+    expect(kinds).toContain('room');
+    expect(kinds).not.toContain('slab');
+  });
+});
+
 describe('where a step can put a build-up', () => {
   it('sends a wall step to its wall', () => {
     const { session, walls } = plan();
@@ -224,17 +365,31 @@ describe('where a step can put a build-up', () => {
     expect(walls).toContain(target.kind === 'wall' ? target.wallId : undefined);
   });
 
-  it('says why a room cannot take one yet', () => {
-    // core hosts a floor finish on the SLAB under the room, and making one is
-    // a change to the drawing nobody asked for by opening a sheet
+  it('sends a room to the slab under it, laying one only when asked', () => {
+    // Nothing is created by LOOKING. A slab is a real entity that draws in the
+    // plan, prices as concrete and lands in the undo stack, so walking past a
+    // room must not leave one behind — it appears when the user says what the
+    // floor is built up from.
     const { session } = plan();
-    const room = estimatorSteps(session.doc, null).find(
-      (s) => s.kind === 'room',
+    const room = roomStep(session);
+    expect(finishTargetFor(session.doc, room).kind).toBe('room');
+    expect(slabCount(session)).toBe(0);
+
+    const spots = spotsToWrite(
+      session.doc,
+      finishTargetFor(session.doc, room),
+      dispatcher(session),
     );
-    if (!room) throw new Error('the four walls enclosed no room');
-    const target = finishTargetFor(session.doc, room);
-    expect(target.kind).toBe('none');
-    expect(target.kind === 'none' && target.reason).toMatch(/slab/i);
+    expect(slabCount(session)).toBe(1);
+    expect(spots.floor?.kind).toBe('slab');
+    // and now that one is there, looking finds it rather than laying a second
+    expect(finishTargetFor(session.doc, room).kind).toBe('slab');
+    spotsToWrite(
+      session.doc,
+      finishTargetFor(session.doc, room),
+      session.dispatch,
+    );
+    expect(slabCount(session)).toBe(1);
   });
 
   it('says why an opening cannot take one', () => {

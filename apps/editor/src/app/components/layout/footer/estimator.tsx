@@ -5,21 +5,20 @@ import {
   IconCalculator,
   IconFocusCentered,
 } from '@tabler/icons-react';
-import type {
-  BBox,
-  DrawingDocument,
-  EntityId,
-  Material,
-} from '@acip/editor-core';
+import type { BBox, DrawingDocument, Material } from '@acip/editor-core';
 import { useSession } from '@/editor/session-context';
 import { useRuntime } from '@/editor/runtime';
 import type { FitBounds } from '@/editor/ui-state';
 import { estimatorSteps, type EstimatorStep } from './estimator-steps';
-import { LayerList, rowKey, sideToFace, sidesFor } from './estimator-layers';
+import { LayerList, defaultSide, rowKey, sidesFor } from './estimator-layers';
 import {
   finishTargetFor,
-  finishesOnFace,
+  finishesAt,
+  spotsFor,
+  spotsToWrite,
   type FinishRow,
+  type FinishTarget,
+  type StepSide,
 } from './estimator-finishes';
 import { AddLayersSheet } from './estimator-add-layers';
 
@@ -104,13 +103,13 @@ function framing(bounds: BBox): FitBounds {
  * wall whose Side B you were reading to the next wall should not silently move
  * you to a face you never chose.
  */
-type OpenSides = Readonly<Record<string, string>>;
+type OpenSides = Readonly<Record<string, StepSide>>;
 
 /** everything the sheet reads out of the drawing for the step it is on */
 interface DocView {
-  /** the finishes on each face, keyed by side id */
+  /** the finishes on each surface, keyed by side id */
   readonly rows: Readonly<Record<string, readonly FinishRow[]>>;
-  /** the drawing's own catalogue — what a face can be built up from */
+  /** the drawing's own catalogue — what a surface can be built up from */
   readonly materials: readonly Material[];
 }
 
@@ -128,9 +127,14 @@ function without(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
 /**
  * Read one step's build-up out of the document.
  *
- * BOTH faces, not just the one showing: the tabs render both panels, and the
- * add sheet has to know what is already on the live one so it can refuse to
- * apply the same material twice.
+ * BOTH surfaces, not just the one showing: the tabs render both panels, and
+ * the add sheet has to know what is already on the live one so it can refuse
+ * to apply the same material twice.
+ *
+ * It goes through `spotsFor`, which is the READ-ONLY half of the spot table —
+ * a room whose floor has never been laid yields no spots and therefore no
+ * rows, which is the honest answer. The half that would lay one is only
+ * reached from Save. Nothing is created by looking at a room.
  *
  * A free function over the document, so what the sheet shows for a given
  * drawing can be asserted without React, a dialog or a DOM — the same reason
@@ -139,28 +143,22 @@ function without(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
 function readDoc(
   doc: DrawingDocument,
   step: EstimatorStep | undefined,
-  wallId: EntityId | null,
+  target: FinishTarget | null,
 ): DocView {
   const materials = doc.materials.list();
-  if (!step || wallId === null) return { rows: {}, materials };
+  if (!step || !target) return { rows: {}, materials };
+  const spots = spotsFor(target);
   const rows: Record<string, readonly FinishRow[]> = {};
   for (const one of sidesFor(step.kind)) {
-    rows[one.id] = finishesOnFace(doc, wallId, sideToFace(one.id));
+    const spot = spots[one.id];
+    rows[one.id] = spot ? finishesAt(doc, spot) : [];
   }
   return { rows, materials };
 }
 
-/**
- * What to call the side being added to, or null for a shape with only one.
- *
- * Null rather than "Layers": the add sheet uses it to say WHICH side it is
- * about, and on a room there is no which — a heading answering a question the
- * user was never asked reads as a distinction they have missed.
- */
-function sideLabel(kind: string, side: string): string | null {
-  const sides = sidesFor(kind);
-  if (sides.length === 1) return null;
-  return sides.find((one) => one.id === side)?.label ?? null;
+/** what to call the surface being added to — "Side B", "Ceiling" */
+function sideLabel(kind: string, side: StepSide): string | null {
+  return sidesFor(kind).find((one) => one.id === side)?.label ?? null;
 }
 
 /**
@@ -212,13 +210,28 @@ function ShapeWizard({ close }: { close: () => void }) {
 
   const step = steps[index];
   const last = index >= steps.length - 1;
-  const side = (step && openSides[step.id]) ?? 'a';
+  // a wall opens on Side A and a room on its Floor, so the fallback asks the
+  // step's own kind rather than assuming a tab id that a room does not have
+  const side =
+    (step && openSides[step.id]) ?? (step ? defaultSide(step.kind) : 'a');
 
   /** where this step's build-up can be written, or why it cannot be */
   const target = step ? finishTargetFor(session.doc, step) : null;
-  // pulled out as a plain id so the effect below turns on a string rather than
-  // on an object rebuilt every render
-  const wallId = target?.kind === 'wall' ? target.wallId : null;
+  /**
+   * The target flattened to a string, so the read effect below turns on a
+   * VALUE rather than on an object rebuilt every render.
+   *
+   * It has to carry the host id and not just the kind: laying a slab under a
+   * room turns `room` into `slab`, and if the effect could not see that it
+   * would keep showing the empty floor the room had a moment ago.
+   */
+  const targetKey = target
+    ? target.kind === 'wall'
+      ? `wall:${target.wallId}`
+      : target.kind === 'slab'
+        ? `slab:${target.slabId}`
+        : target.kind
+    : 'none';
 
   /**
    * What the document says, re-read on every committed transaction.
@@ -233,10 +246,20 @@ function ShapeWizard({ close }: { close: () => void }) {
   const [view, setView] = useState<DocView>(NOTHING_READ);
 
   useEffect(() => {
-    const sync = () => setView(readDoc(session.doc, step, wallId));
-    sync(); // the step changed, or we just mounted
+    // resolved INSIDE the effect, against the document as it stands when the
+    // event fires: the target captured during render is a step behind by the
+    // time a slab has just been laid under this room
+    const sync = () =>
+      setView(
+        readDoc(
+          session.doc,
+          step,
+          step ? finishTargetFor(session.doc, step) : null,
+        ),
+      );
+    sync(); // the step changed, the target changed, or we just mounted
     return session.doc.events.on('change', sync);
-  }, [session, step, wallId]);
+  }, [session, step, targetKey]);
 
   // The walk BORROWS the selection to highlight with, and gives it back.
   //
@@ -381,16 +404,16 @@ function ShapeWizard({ close }: { close: () => void }) {
           </div>
         )}
       </Modal.Footer>
-      {step && wallId !== null && (
+      {step && target !== null && target.kind !== 'none' && (
         // Over the wizard, not beside it: the add sheet is full screen, so
-        // while it is up there is no Next to press and the face it writes onto
-        // cannot change under it. Closed, it renders nothing at all.
+        // while it is up there is no Next to press and the surface it writes
+        // onto cannot change under it. Closed, it renders nothing at all.
         <AddLayersSheet
           materials={view.materials}
           sideLabel={sideLabel(step.kind, side)}
           isOpen={adding}
-          // what this FACE already carries, so the sheet can show it ticked and
-          // dead rather than letting the same material be applied twice
+          // what this SURFACE already carries, so the sheet can show it ticked
+          // and dead rather than letting the same material be applied twice
           alreadyIn={
             new Set(
               (view.rows[side] ?? [])
@@ -399,17 +422,44 @@ function ShapeWizard({ close }: { close: () => void }) {
             )
           }
           onOpenChange={setAdding}
-          // One dispatch per material, in catalogue order, because the list is
-          // a build-up and its numbers are the order things went on. Each one
-          // is a FINISH.ADD on this wall face: it survives the sheet closing,
-          // it undoes, and the bill of quantities can already price it.
+          /**
+           * One dispatch per material, in catalogue order, because the list is
+           * a build-up and its numbers are the order things went on.
+           *
+           * `spotsToWrite` is the half of the table that may CHANGE the
+           * drawing: on a room whose floor has never been laid it lays the slab
+           * first, here, at the one moment a new slab is plainly a consequence
+           * of what the user just did rather than of what they looked at. It is
+           * resolved once for the whole save, so four materials on a bare floor
+           * lay one slab and not four.
+           *
+           * The spot then decides the command, and the type decides the spot:
+           * there is no branch here that could send a wall face to
+           * FLOORFINISH.ADD, because a wall spot has no slab id to send.
+           */
           onSave={(materialIds) => {
+            // wrapped, not passed as `session.dispatch`: a bare method
+            // reference arrives with no `this` and throws on the command bus
+            const spot = spotsToWrite(session.doc, target, (name, params) =>
+              session.dispatch(name, params),
+            )[side];
+            // a room too degenerate to floor: nothing was created trying, and
+            // there is nowhere to put a layer
+            if (!spot) return;
             for (const materialId of materialIds) {
-              session.dispatch('FINISH.ADD', {
-                wallId,
-                side: sideToFace(side),
-                materialId,
-              });
+              if (spot.kind === 'wall') {
+                session.dispatch('FINISH.ADD', {
+                  wallId: spot.wallId,
+                  side: spot.side,
+                  materialId,
+                });
+              } else {
+                session.dispatch('FLOORFINISH.ADD', {
+                  slabId: spot.slabId,
+                  surface: spot.surface,
+                  materialId,
+                });
+              }
             }
           }}
         />

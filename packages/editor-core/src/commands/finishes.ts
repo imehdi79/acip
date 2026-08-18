@@ -10,7 +10,7 @@ import type { Command } from './command.js';
 import { paramsSchema } from './command.js';
 import type { CommandRegistry } from './command-registry.js';
 import { S } from './schema.js';
-import { asId, asNumber } from './validate.js';
+import { asId, asNumber, asPositive } from './validate.js';
 
 type FaceSide = 'face+' | 'face-';
 
@@ -124,6 +124,222 @@ export const AddFinishCommand: Command<AddFinishParams, EntityId> = {
     ctx.tx.create(finish);
     ctx.tx.attach(wall.id, finish.id, anchorIndexForSide(params.side), {});
     return finish.id;
+  },
+};
+
+/**
+ * An along-wall baseline parameter. FINISH.ADD clamps a stray value into
+ * range; an update rejects it, because there the number is an edit of one the
+ * caller can already see — silently moving t1 from 1.4 to 1 would report
+ * success for a band the caller never asked for.
+ */
+function asBaselineParam(value: unknown, label: string): number {
+  const t = asNumber(value, label);
+  if (t < 0 || t > 1) {
+    throw new ValidationError(`${label} (${t}) must be between 0 and 1`);
+  }
+  return t;
+}
+
+export interface UpdateFinishParams {
+  id: EntityId;
+  materialId?: MaterialId;
+  sillHeight?: number;
+  topHeight?: number;
+  fullHeight?: boolean;
+  t0?: number;
+  t1?: number;
+  thickness?: number;
+}
+
+/**
+ * Edit a finish in place — the band, the extent, the material. Until this
+ * existed the only way to turn "tile to 1.2 m" into "tile to 1.5 m" was to
+ * erase the finish and re-add it, which mints a NEW entity id and drops the
+ * finish to the bottom of its host's stack every time: the selection is lost,
+ * the mark jumps, and anything holding the old id (a BOQ line already shown to
+ * the user, an agent's own notes) points at nothing — all for what reads as
+ * dragging one number. Updating keeps the identity and moves only the values;
+ * area, quantity and price re-derive on the next read exactly as they do when
+ * the host wall is stretched.
+ *
+ * Only the fields passed change. That one rule forces the decisions below.
+ *
+ * `topHeight` is `number | null` on the entity, where null means "run to the
+ * top of the wall, and keep doing so as the wall grows". Omission cannot say
+ * that — omission already means "unchanged" — and the schema vocabulary these
+ * commands publish as LLM tool definitions has no nullable number, so typing
+ * the field `number` while asking in prose for a `null` would be a schema that
+ * lies about what it accepts. The null state therefore gets its own boolean:
+ * `fullHeight: true` clears `topHeight`. Sending both is a contradiction and
+ * is rejected rather than silently ordered.
+ *
+ * `phase` is deliberately absent although it is a finish field: PHASE.SET
+ * already moves finishes and openings between build and demolish, in bulk and
+ * across entity kinds. Duplicating it here would leave one field with two
+ * writers to keep in step, and an agent offered two ways to do one thing picks
+ * the wrong one often enough to matter.
+ *
+ * A slab-hosted finish (a floor, a ceiling) is its host's whole footprint;
+ * FinishEntity never reads the band or the extent for one. Passing them is
+ * REJECTED rather than ignored, because the caller has stated an intent the
+ * model cannot honour, and a silent success teaches an agent that its 1.2 m
+ * dado on the kitchen floor worked. `materialId` and `thickness` do apply to a
+ * slab finish (thickness is the screed depth an m³ material bills on), so the
+ * command stays useful there — it refuses exactly the fields FLOORFINISH.ADD
+ * never offered in the first place.
+ */
+export const UpdateFinishCommand: Command<UpdateFinishParams, void> = {
+  name: 'FINISH.UPDATE',
+  description:
+    'Edit an existing finish in place: its material, its vertical band ' +
+    '[sillHeight, topHeight] and its extent along the wall [t0, t1]. Only the fields ' +
+    'you pass change; the rest keep their current values, and the entity keeps its id ' +
+    'and its place in the stack. Pass fullHeight:true (instead of topHeight) to send ' +
+    'the band back up to the full wall height. The build/demolish phase is set by ' +
+    'PHASE.SET, not here. Band and extent do not exist for a slab-hosted floor or ' +
+    'ceiling finish and are rejected for one.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const params: UpdateFinishParams = { id: asId(raw['id'], 'id') };
+      if (raw['materialId'] !== undefined) {
+        params.materialId = asId(
+          raw['materialId'],
+          'materialId',
+        ) as string as MaterialId;
+      }
+      if (raw['sillHeight'] !== undefined) {
+        const sillHeight = asNumber(raw['sillHeight'], 'sillHeight');
+        if (sillHeight < 0) {
+          throw new ValidationError(
+            `sillHeight (${sillHeight}) must be 0 or greater`,
+          );
+        }
+        params.sillHeight = sillHeight;
+      }
+      if (raw['topHeight'] !== undefined)
+        params.topHeight = asNumber(raw['topHeight'], 'topHeight');
+      if (raw['fullHeight'] !== undefined) {
+        if (typeof raw['fullHeight'] !== 'boolean') {
+          throw new ValidationError('fullHeight must be boolean');
+        }
+        // `fullHeight: false` is not the opposite of anything — the opposite of
+        // a full-height band is one with a top, and that top is `topHeight` —
+        // so it parses away to "no change" rather than to a second way of
+        // spelling a number
+        if (raw['fullHeight']) params.fullHeight = true;
+      }
+      if (params.fullHeight && params.topHeight !== undefined) {
+        throw new ValidationError(
+          'pass topHeight or fullHeight, not both — fullHeight clears topHeight',
+        );
+      }
+      if (raw['t0'] !== undefined) params.t0 = asBaselineParam(raw['t0'], 't0');
+      if (raw['t1'] !== undefined) params.t1 = asBaselineParam(raw['t1'], 't1');
+      if (raw['thickness'] !== undefined)
+        params.thickness = asPositive(raw['thickness'], 'thickness');
+      if (
+        params.materialId === undefined &&
+        params.sillHeight === undefined &&
+        params.topHeight === undefined &&
+        params.fullHeight === undefined &&
+        params.t0 === undefined &&
+        params.t1 === undefined &&
+        params.thickness === undefined
+      ) {
+        throw new ValidationError(
+          'provide materialId, sillHeight, topHeight, fullHeight, t0, t1, and/or thickness',
+        );
+      }
+      return params;
+    },
+    () =>
+      S.object(
+        {
+          id: S.id('id of the finish to edit'),
+          materialId: S.id('replacement material (its unit drives pricing)'),
+          sillHeight: S.number(
+            'new band bottom above the wall base in meters, 0 or greater',
+          ),
+          topHeight: S.number(
+            'new band top in meters, above sillHeight; use fullHeight to clear it',
+          ),
+          fullHeight: S.boolean(
+            'true = clear topHeight so the band runs to the top of the wall and ' +
+              'follows it; the only way to undo a topHeight, and not combinable with one',
+          ),
+          t0: S.number('new band start along the wall, 0..1, below t1'),
+          t1: S.number('new band end along the wall, 0..1, above t0'),
+          thickness: S.number(
+            'new build-up thickness in meters, greater than 0 (only m³ uses it)',
+          ),
+        },
+        ['id'],
+      ),
+  ),
+  execute(ctx, params) {
+    const finish = ctx.doc.get(params.id);
+    if (!(finish instanceof FinishEntity)) {
+      throw new ValidationError(`id ${params.id} does not reference a finish`);
+    }
+    if (
+      params.materialId !== undefined &&
+      !ctx.doc.materials.has(params.materialId)
+    ) {
+      throw new ValidationError(`material ${params.materialId} does not exist`);
+    }
+
+    // the band and the extent describe a wall face; on a slab the finish IS the
+    // footprint and never reads them, so refuse the fields instead of no-opping
+    // them and reporting a dado on the floor as done
+    const relation = ctx.doc.relations.relationOfHosted(finish.id);
+    const host = relation ? ctx.doc.get(relation.hostId) : null;
+    const bandGiven =
+      params.sillHeight !== undefined ||
+      params.topHeight !== undefined ||
+      params.fullHeight !== undefined ||
+      params.t0 !== undefined ||
+      params.t1 !== undefined;
+    if (host instanceof SlabEntity && bandGiven) {
+      throw new ValidationError(
+        `finish ${params.id} is hosted on a slab: sillHeight, topHeight, ` +
+          'fullHeight, t0 and t1 describe a wall band and do not apply to a ' +
+          'floor or ceiling finish, which covers the whole footprint',
+      );
+    }
+
+    // Cross-field rules are checked against the MERGED band, never against the
+    // params alone: in a partial update the other half of a pair is whatever is
+    // already on the entity, so raising sillHeight past a topHeight set an hour
+    // ago has to fail exactly as passing the two together would. Merging first
+    // also means the write below is a plain assignment — an omitted field
+    // resolves to its own current value, so "unchanged" needs no special case.
+    const t0 = params.t0 ?? finish.t0;
+    const t1 = params.t1 ?? finish.t1;
+    if (t0 >= t1) {
+      throw new ValidationError(`t0 (${t0}) must be less than t1 (${t1})`);
+    }
+    const sillHeight = params.sillHeight ?? finish.sillHeight;
+    const topHeight = params.fullHeight
+      ? null
+      : (params.topHeight ?? finish.topHeight);
+    if (topHeight !== null && topHeight <= sillHeight) {
+      throw new ValidationError(
+        `topHeight (${topHeight}) must be above sillHeight (${sillHeight})`,
+      );
+    }
+
+    // through the transaction: the snapshot it takes here is what undo replays,
+    // and the change it records is what marks quantities and the estimator dirty
+    ctx.tx.update(finish, (f) => {
+      if (params.materialId !== undefined) f.materialId = params.materialId;
+      if (params.thickness !== undefined) f.thickness = params.thickness;
+      f.sillHeight = sillHeight;
+      f.topHeight = topHeight;
+      f.t0 = t0;
+      f.t1 = t1;
+    });
   },
 };
 
@@ -418,6 +634,7 @@ export const AutoFloorFinishCommand: Command<
 
 export function registerFinishCommands(registry: CommandRegistry): void {
   registry.register(AddFinishCommand);
+  registry.register(UpdateFinishCommand);
   registry.register(AutoFinishCommand);
   registry.register(AddFloorFinishCommand);
   registry.register(AutoFloorFinishCommand);

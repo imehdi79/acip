@@ -53,12 +53,14 @@ export {
 } from './roofs.js';
 export type {
   AddFinishParams,
+  UpdateFinishParams,
   AutoFinishParams,
   AddFloorFinishParams,
   AutoFloorFinishParams,
 } from './finishes.js';
 export {
   AddFinishCommand,
+  UpdateFinishCommand,
   AutoFinishCommand,
   AddFloorFinishCommand,
   AutoFloorFinishCommand,

@@ -1,15 +1,15 @@
 import { Button, Tabs } from '@heroui/react';
 import { IconChevronDown, IconPlus, IconTrash } from '@tabler/icons-react';
-import type { FinishRow } from './estimator-finishes';
+import type { FinishRow, StepSide } from './estimator-finishes';
 
 /** one side of a shape, and what to call it on its tab */
 export interface SideDef {
-  readonly id: string;
+  readonly id: StepSide;
   readonly label: string;
 }
 
 /**
- * A shape with two faces, and a shape with one.
+ * The two faces of a wall.
  *
  * "Side A" and "Side B" rather than "Inside"/"Outside" on purpose: the
  * estimator has no idea which face of a given wall faces out — an internal
@@ -17,36 +17,49 @@ export interface SideDef {
  * sometimes simply wrong. A and B name the two sides without claiming anything
  * about the world, and the plan behind the sheet says which is which, because
  * the shape being priced is lit up on it. What gets WRITTEN to the document is
- * core's own `face+`/`face-`; the two vocabularies meet in `sideToFace`.
+ * core's own `face+`/`face-`, and `spotsFor` is the only place the two
+ * vocabularies are ever put side by side.
  */
-const BOTH: readonly SideDef[] = [
+const WALL_SIDES: readonly SideDef[] = [
   { id: 'a', label: 'Side A' },
   { id: 'b', label: 'Side B' },
 ];
 
 /**
- * A room has ONE list and no tabs. A room is a volume, not a face — its layers
- * are the floor and the ceiling build-up, and there is no second copy of them
- * to put behind a tab. A tab bar with one tab in it is a control that cannot be
- * used, spending a row of a phone's screen to say nothing.
+ * The two surfaces of a room — which are the two surfaces of the slab under it.
+ *
+ * A room used to get one tab-less list, on the reasoning that a room is a
+ * volume rather than a face and so has no second copy of its layers to hide
+ * behind a tab. That was wrong in the way that matters to a bill: a floor
+ * build-up and a ceiling build-up are different trades against different
+ * surfaces of the same slab, and one list forced them into a single stack the
+ * document then had to split again on the way out — or, worse, left the
+ * ceiling unreachable.
+ *
+ * Unlike a wall's A and B, these two words are never wrong about the world:
+ * which way is up is not something the estimator has to guess at.
  */
-const SINGLE: readonly SideDef[] = [{ id: 'a', label: 'Layers' }];
+const ROOM_SIDES: readonly SideDef[] = [
+  { id: 'floor', label: 'Floor' },
+  { id: 'ceiling', label: 'Ceiling' },
+];
 
 /**
- * Which sides a kind of shape has.
+ * Which sides a kind of shape shows.
  *
- * Everything the walk turns up is two-sided except a room: a wall is plastered
- * on both faces and may be tiled on one, a door is painted differently each
- * side, a window has a board inside and a cill outside. So the rule is stated
- * as the exception it is.
+ * Everything the walk turns up has exactly two, and the pair differs only in
+ * what they are called: a wall is plastered on both faces and may be tiled on
+ * one; a room is screeded underfoot and skimmed overhead. Kinds that can carry
+ * no build-up at all never reach here — the sheet blocks on `blocked` first —
+ * so this does not need a third answer.
  */
 export function sidesFor(kind: string): readonly SideDef[] {
-  return kind === 'room' ? SINGLE : BOTH;
+  return kind === 'room' ? ROOM_SIDES : WALL_SIDES;
 }
 
-/** the tab id the sheet uses → the face the document stores it against */
-export function sideToFace(side: string): 'face+' | 'face-' {
-  return side === 'b' ? 'face-' : 'face+';
+/** the tab a step opens on, which is the first one it has */
+export function defaultSide(kind: string): StepSide {
+  return sidesFor(kind)[0].id;
 }
 
 /**
@@ -58,7 +71,7 @@ export function sideToFace(side: string): 'face+' | 'face-' {
  * it was opened on, which is exactly the sort of thing that reads fine until
  * two faces carry the same build-up.
  */
-export function rowKey(side: string, finishId: string): string {
+export function rowKey(side: StepSide, finishId: string): string {
   return `${side}.${finishId}`;
 }
 
@@ -206,9 +219,9 @@ function SideLayers({
 }: {
   rows: readonly FinishRow[];
   opened: ReadonlySet<string>;
-  side: string;
-  onToggleDetail: (side: string, finishId: string) => void;
-  onRemove: (side: string, finishId: string) => void;
+  side: StepSide;
+  onToggleDetail: (side: StepSide, finishId: string) => void;
+  onRemove: (side: StepSide, finishId: string) => void;
 }) {
   if (rows.length === 0) {
     // Empty is the STARTING state, not a failure: nothing is priced until
@@ -296,7 +309,7 @@ export function LayerList({
   /** the `EstimatorStep.kind` being priced — decides how many sides it has */
   kind: string;
   /** the side showing now */
-  side: string;
+  side: StepSide;
   /** the finishes on each side, keyed by side id */
   rows: Readonly<Record<string, readonly FinishRow[]>>;
   /** the rows whose detail is showing, keyed by `rowKey` */
@@ -311,9 +324,9 @@ export function LayerList({
    * anywhere.
    */
   blocked?: string;
-  onSideChange: (side: string) => void;
-  onToggleDetail: (side: string, finishId: string) => void;
-  onRemove: (side: string, finishId: string) => void;
+  onSideChange: (side: StepSide) => void;
+  onToggleDetail: (side: StepSide, finishId: string) => void;
+  onRemove: (side: StepSide, finishId: string) => void;
   onAdd: () => void;
 }) {
   if (blocked !== undefined) {
@@ -322,28 +335,13 @@ export function LayerList({
 
   const sides = sidesFor(kind);
 
-  // One side: no tab bar at all, just the list and the row that fills it.
-  if (sides.length === 1) {
-    const only = sides[0];
-    return (
-      <div className="flex flex-col">
-        <SideLayers
-          rows={rows[only.id] ?? []}
-          opened={opened}
-          side={only.id}
-          onToggleDetail={onToggleDetail}
-          onRemove={onRemove}
-        />
-        <AddRow onAdd={onAdd} />
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col">
       <Tabs
         selectedKey={side}
-        onSelectionChange={(key) => onSideChange(String(key))}
+        // the keys are the SideDef ids rendered just below, so narrowing
+        // react-aria's widened Key back to StepSide cannot be wrong here
+        onSelectionChange={(key) => onSideChange(String(key) as StepSide)}
       >
         {/* ListContainer is not optional chrome: without it HeroUI's TabList
             falls back to a bare RAC list with no pill behind it, which is what

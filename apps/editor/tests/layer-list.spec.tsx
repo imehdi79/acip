@@ -4,10 +4,10 @@ import type { EntityId, Material, MaterialId } from '@acip/editor-core';
 import type { FinishRow } from '@/app/components/layout/footer/estimator-finishes';
 import {
   LayerList,
+  defaultSide,
   finishFacts,
   formatQuantity,
   rowKey,
-  sideToFace,
   sidesFor,
 } from '@/app/components/layout/footer/estimator-layers';
 import {
@@ -96,22 +96,28 @@ function list({
 }
 
 describe('which sides a shape has', () => {
-  it('gives a room one list and no second side to hide behind a tab', () => {
-    expect(sidesFor('room')).toHaveLength(1);
+  it('gives a room its floor and its ceiling', () => {
+    // a room used to get one tab-less list. That was wrong in the way that
+    // matters to a bill: a floor build-up and a ceiling build-up are different
+    // trades against different surfaces of the same slab, and one list left
+    // the ceiling unreachable
+    expect(sidesFor('room').map((s) => s.id)).toEqual(['floor', 'ceiling']);
   });
 
-  it('gives everything else two', () => {
-    for (const kind of ['wall', 'door', 'window', 'slab', 'not-a-thing']) {
-      expect(sidesFor(kind)).toHaveLength(2);
+  it('gives a wall its two faces', () => {
+    for (const kind of ['wall', 'door', 'window', 'not-a-thing']) {
+      expect(sidesFor(kind).map((s) => s.id)).toEqual(['a', 'b']);
     }
   });
 
-  it('maps the two tabs onto the two faces the document knows', () => {
-    // the sheet says Side A/Side B because it cannot know which face points
-    // outdoors; what it WRITES has to be core's own word or FINISH.ADD refuses
-    expect(sideToFace('a')).toBe('face+');
-    expect(sideToFace('b')).toBe('face-');
-    expect(sideToFace(sidesFor('room')[0].id)).toBe('face+');
+  it('opens each kind on a tab it actually has', () => {
+    // the fallback used to be a hard-coded 'a', which a room does not have —
+    // it would have selected a tab that was not in its own tab list
+    expect(defaultSide('wall')).toBe('a');
+    expect(defaultSide('room')).toBe('floor');
+    for (const kind of ['wall', 'room', 'window']) {
+      expect(sidesFor(kind).map((s) => s.id)).toContain(defaultSide(kind));
+    }
   });
 });
 

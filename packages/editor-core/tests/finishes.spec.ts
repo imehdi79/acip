@@ -146,6 +146,280 @@ describe('FinishEntity — a material on a wall face', () => {
   });
 });
 
+describe('FINISH.UPDATE — edit the band in place', () => {
+  test('every field updates; omitted fields keep their values; the id is stable', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const tile = tileMaterial(session);
+    const paint = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Paint',
+      unit: 'm2',
+      costCode: 'paint',
+    });
+    const id = session.dispatch<EntityId>('FINISH.ADD', {
+      wallId,
+      side: 'face+',
+      materialId: tile,
+    });
+    const finish = session.doc.get(id) as FinishEntity;
+
+    session.dispatch('FINISH.UPDATE', { id, topHeight: 1.2 });
+    expect(finish.topHeight).toBe(1.2);
+    // everything not passed is exactly as it was
+    expect(finish.materialId).toBe(tile);
+    expect(finish.sillHeight).toBe(0);
+    expect(finish.t0).toBe(0);
+    expect(finish.t1).toBe(1);
+    expect(finish.thickness).toBe(0.01);
+    expect(finish.phase).toBe('new');
+
+    session.dispatch('FINISH.UPDATE', {
+      id,
+      materialId: paint,
+      sillHeight: 0.1,
+      topHeight: 2.4,
+      t0: 0.25,
+      t1: 0.75,
+      thickness: 0.02,
+    });
+    expect(finish.materialId).toBe(paint);
+    expect(finish.sillHeight).toBe(0.1);
+    expect(finish.topHeight).toBe(2.4);
+    expect(finish.t0).toBe(0.25);
+    expect(finish.t1).toBe(0.75);
+    expect(finish.thickness).toBe(0.02);
+    // same entity throughout — no erase-and-re-add
+    expect(session.doc.get(id)).toBe(finish);
+  });
+
+  test('fullHeight clears topHeight so the band follows the wall again', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const id = session.dispatch<EntityId>('FINISH.ADD', {
+      wallId,
+      side: 'face+',
+      materialId: tileMaterial(session),
+      topHeight: 1.2,
+    });
+    const finish = session.doc.get(id) as FinishEntity;
+    expect(finish.getNetArea()).toBeCloseTo(12, 9);
+
+    session.dispatch('FINISH.UPDATE', { id, fullHeight: true });
+    expect(finish.topHeight).toBeNull();
+    expect(finish.getNetArea()).toBeCloseTo(30, 9); // 10 × 3
+    // and it keeps following: raise the wall, the finish grows with it
+    session.dispatch('WALL.SETPROPS', { ids: [wallId], height: 4 });
+    expect(finish.getNetArea()).toBeCloseTo(40, 9);
+  });
+
+  test('narrowing the band to a dado re-measures around a window', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const id = session.dispatch<EntityId>('FINISH.ADD', {
+      wallId,
+      side: 'face+',
+      materialId: tileMaterial(session),
+    });
+    // window spans 0.9 → 2.1 vertically, 1 m wide
+    session.dispatch('WINDOW.ADD', {
+      wallId,
+      t: 0.5,
+      width: 1,
+      sill: 0.9,
+      height: 1.2,
+    });
+    const finish = session.doc.get(id) as FinishEntity;
+    expect(finish.getNetArea()).toBeCloseTo(30 - 1 * 1.2, 9); // 28.8
+
+    // tiling to a 1.2 m dado clips the window overlap to 0.9 → 1.2
+    session.dispatch('FINISH.UPDATE', { id, topHeight: 1.2 });
+    expect(finish.getNetArea()).toBeCloseTo(10 * 1.2 - 1 * 0.3, 9); // 11.7
+
+    // half the wall's length, same band
+    session.dispatch('FINISH.UPDATE', { id, t0: 0, t1: 0.5 });
+    expect(finish.getNetArea()).toBeCloseTo(5 * 1.2 - 0.5 * 0.3, 9);
+  });
+
+  test('undo restores the previous band, material and thickness', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const tile = tileMaterial(session);
+    const paint = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Paint',
+      unit: 'm2',
+      costCode: 'paint',
+    });
+    const id = session.dispatch<EntityId>('FINISH.ADD', {
+      wallId,
+      side: 'face+',
+      materialId: tile,
+      sillHeight: 0.1,
+      topHeight: 1.2,
+      t0: 0.2,
+      t1: 0.8,
+      thickness: 0.015,
+    });
+    const finish = session.doc.get(id) as FinishEntity;
+    const areaBefore = finish.getNetArea();
+
+    session.dispatch('FINISH.UPDATE', {
+      id,
+      materialId: paint,
+      sillHeight: 0,
+      fullHeight: true,
+      t0: 0,
+      t1: 1,
+      thickness: 0.03,
+    });
+    expect(finish.topHeight).toBeNull();
+    expect(finish.getNetArea()).not.toBeCloseTo(areaBefore, 9);
+
+    session.undo();
+    const restored = session.doc.get(id) as FinishEntity;
+    expect(restored.materialId).toBe(tile);
+    expect(restored.sillHeight).toBe(0.1);
+    expect(restored.topHeight).toBe(1.2);
+    expect(restored.t0).toBe(0.2);
+    expect(restored.t1).toBe(0.8);
+    expect(restored.thickness).toBe(0.015);
+    expect(restored.getNetArea()).toBeCloseTo(areaBefore, 9);
+
+    session.redo();
+    expect((session.doc.get(id) as FinishEntity).topHeight).toBeNull();
+  });
+
+  test('rejects a bad target, a bad material and an empty edit', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const tile = tileMaterial(session);
+    const id = session.dispatch<EntityId>('FINISH.ADD', {
+      wallId,
+      side: 'face+',
+      materialId: tile,
+    });
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id: 'ghost', topHeight: 1.2 }),
+    ).toThrow();
+    // a wall is not a finish
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id: wallId, topHeight: 1.2 }),
+    ).toThrow();
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, materialId: 'ghost' }),
+    ).toThrow();
+    expect(() => session.dispatch('FINISH.UPDATE', { id })).toThrow();
+    // phase belongs to PHASE.SET — passing it here changes nothing
+    session.dispatch('FINISH.UPDATE', {
+      id,
+      topHeight: 1.2,
+      phase: 'demolish',
+    });
+    expect((session.doc.get(id) as FinishEntity).phase).toBe('new');
+  });
+
+  test('rejects an out-of-range or inverted band, against the merged values', () => {
+    const session = new EditorSession();
+    const wallId = addWall(session, 0, 0, 10, 0);
+    const id = session.dispatch<EntityId>('FINISH.ADD', {
+      wallId,
+      side: 'face+',
+      materialId: tileMaterial(session),
+      sillHeight: 0.5,
+      topHeight: 1.2,
+      t0: 0.2,
+      t1: 0.8,
+    });
+    const finish = session.doc.get(id) as FinishEntity;
+
+    expect(() => session.dispatch('FINISH.UPDATE', { id, t0: -0.1 })).toThrow();
+    expect(() => session.dispatch('FINISH.UPDATE', { id, t1: 1.4 })).toThrow();
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, t0: 0.9, t1: 0.4 }),
+    ).toThrow();
+    // t0 alone, checked against the t1 already on the entity (0.8)
+    expect(() => session.dispatch('FINISH.UPDATE', { id, t0: 0.9 })).toThrow();
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, sillHeight: -0.2 }),
+    ).toThrow();
+    // sillHeight alone, checked against the topHeight already on the entity (1.2)
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, sillHeight: 2 }),
+    ).toThrow();
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, topHeight: 0.4 }),
+    ).toThrow();
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, thickness: 0 }),
+    ).toThrow();
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, thickness: -0.01 }),
+    ).toThrow();
+    // topHeight and fullHeight contradict each other
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, topHeight: 2, fullHeight: true }),
+    ).toThrow();
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, fullHeight: 'yes' }),
+    ).toThrow();
+    // fullHeight:false says nothing, so this is an empty edit
+    expect(() =>
+      session.dispatch('FINISH.UPDATE', { id, fullHeight: false }),
+    ).toThrow();
+
+    // every rejection left the finish untouched
+    expect(finish.sillHeight).toBe(0.5);
+    expect(finish.topHeight).toBe(1.2);
+    expect(finish.t0).toBe(0.2);
+    expect(finish.t1).toBe(0.8);
+  });
+
+  test('a slab-hosted finish takes material and thickness, refuses the band', () => {
+    const session = new EditorSession();
+    const slabId = session.dispatch<EntityId>('SLAB.ADD', {
+      points: [point(0, 0), point(5, 0), point(5, 4), point(0, 4)],
+    });
+    const screed = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Screed',
+      unit: 'm3',
+      costCode: 'screed',
+    });
+    const vinyl = session.dispatch<MaterialId>('MATERIAL.ADD', {
+      name: 'Vinyl',
+      unit: 'm2',
+      costCode: 'vinyl',
+    });
+    const id = session.dispatch<EntityId>('FLOORFINISH.ADD', {
+      slabId,
+      materialId: screed,
+    });
+    const finish = session.doc.get(id) as FinishEntity;
+
+    session.dispatch('FINISH.UPDATE', {
+      id,
+      materialId: vinyl,
+      thickness: 0.05,
+    });
+    expect(finish.materialId).toBe(vinyl);
+    expect(finish.thickness).toBe(0.05);
+    expect(finish.getNetArea()).toBeCloseTo(20, 9); // still the whole footprint
+
+    // band/extent describe a wall face and mean nothing on a footprint
+    for (const band of [
+      { sillHeight: 0.1 },
+      { topHeight: 1.2 },
+      { fullHeight: true },
+      { t0: 0.2 },
+      { t1: 0.8 },
+    ]) {
+      expect(() =>
+        session.dispatch('FINISH.UPDATE', { id, ...band }),
+      ).toThrow();
+    }
+    expect(finish.sillHeight).toBe(0);
+    expect(finish.topHeight).toBeNull();
+  });
+});
+
 describe('FinishEntity — floor/ceiling finish on a slab', () => {
   test('a floor finish covers the slab footprint; count material yields tiles', () => {
     const session = new EditorSession();

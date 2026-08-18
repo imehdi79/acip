@@ -8,6 +8,12 @@ import type {
 import { WallEntity, layerQuantity } from '@acip/editor-core';
 import { computeFinishTakeoff } from '@acip/estimator';
 import type { EstimatorStep } from './estimator-steps';
+import {
+  ensureSlabUnder,
+  slabUnderRoom,
+  type Dispatch,
+  type RoomFootprint,
+} from './estimator-slabs';
 
 /**
  * Which face of a wall — core's own word for it.
@@ -20,6 +26,17 @@ import type { EstimatorStep } from './estimator-steps';
 export type FaceSide = 'face+' | 'face-';
 
 /**
+ * Which surface of a slab — core's own word again.
+ *
+ * A slab's top is the floor of the room standing on it and its underside is
+ * that room's ceiling, so `FLOORFINISH.ADD` takes `top`/`bottom` where the
+ * sheet says "Floor"/"Ceiling". Unlike the wall's A and B, these two words are
+ * never wrong about the world: which way is up is not a question the estimator
+ * has to guess at.
+ */
+export type SlabSurface = 'top' | 'bottom';
+
+/**
  * face+ → anchor 1, face- → anchor 2 in `WallEntity.getAnchors()`.
  *
  * Mirrors `anchorIndexForSide` in core's `commands/finishes.ts`. It is copied
@@ -30,6 +47,73 @@ export type FaceSide = 'face+' | 'face-';
 export function anchorForSide(side: FaceSide): number {
   return side === 'face+' ? 1 : 2;
 }
+
+/**
+ * top (floor) → anchor 0, bottom (ceiling) → anchor 1 on a slab.
+ *
+ * Mirrors `anchorIndexForSurface` in the same unexported corner of core, and
+ * pinned by the same kind of round-trip test. Note that these are NOT the wall
+ * numbers offset by one and they overlap them: anchor 1 is a wall's `face+`
+ * and a slab's underside. Read the wrong table and a floor finish lands on a
+ * ceiling — which is why the two anchor functions take disjoint argument
+ * types, and why nothing in this app maps a bare string into either.
+ */
+export function anchorForSurface(surface: SlabSurface): number {
+  return surface === 'bottom' ? 1 : 0;
+}
+
+/**
+ * The two tabs a WALL step shows, as the sheet's own ids.
+ *
+ * "Side A" and "Side B" rather than "Inside"/"Outside": the estimator has no
+ * idea which face of a given wall faces out — an internal partition has two
+ * insides — so those words would be a label that is sometimes simply wrong.
+ */
+export type WallSide = 'a' | 'b';
+
+/**
+ * The two tabs a ROOM step shows.
+ *
+ * A room used to get one list and no tabs, on the reasoning that a room is a
+ * volume rather than a face and has no second copy of its layers to hide
+ * behind a tab. That was wrong in the way that matters to a bill: the floor
+ * build-up and the ceiling build-up are different trades, priced against
+ * different surfaces of the same slab, and one list forced them into a single
+ * stack that the document then had to split again on the way out.
+ */
+export type RoomSide = 'floor' | 'ceiling';
+
+/** every tab id the walk can show — the union the sheet's state is drawn from */
+export type StepSide = WallSide | RoomSide;
+
+/**
+ * A resolved place to read or write a build-up: a host AND its surface,
+ * together, in one value.
+ *
+ * This is what replaced `sideToFace(side: string)`. That function mapped a tab
+ * id onto a wall face, which was fine while a wall face was the only place a
+ * finish could go; extending it to slabs would have meant a second function of
+ * the same shape, and two functions from `string` to two different vocabularies
+ * is an invitation to hand `'a'` to the slab one and quietly finish a ceiling
+ * instead of a floor. Nothing in the type of a bare `'a'` can stop that.
+ *
+ * So no caller maps a side any more. A spot is built once, from a target that
+ * already knows its host, and it carries `slabId` and `surface` in the SAME
+ * arm — there is no way to reach `FLOORFINISH.ADD` holding a wall face,
+ * because the value that gets you there does not have one. The mistake stopped
+ * being a bug to test for and became a compile error.
+ */
+export type FinishSpot =
+  | {
+      readonly kind: 'wall';
+      readonly wallId: EntityId;
+      readonly side: FaceSide;
+    }
+  | {
+      readonly kind: 'slab';
+      readonly slabId: EntityId;
+      readonly surface: SlabSurface;
+    };
 
 /** one finish on one face, resolved into what the sheet shows */
 export interface FinishRow {
@@ -63,7 +147,17 @@ function demoCode(baseCode: string | null): string {
 }
 
 /**
- * The finishes on ONE face of one wall, in the order they were added.
+ * The finishes hosted on one host at one anchor, in the order they were added.
+ *
+ * The whole body of the old `finishesOnFace` lives here, unchanged, because a
+ * wall face and a slab surface differ only in which anchor number they are —
+ * everything after that (creation order, the takeoff lookup, the demolition
+ * branch, the quantity) is host-agnostic, exactly as core promises: "the
+ * estimator and quantities read `getNetArea()` without knowing which host it
+ * sits on". Sharing the body rather than writing a slab version beside it is
+ * what guarantees a floor's rows are numbered by the same rule as a wall's,
+ * and that a slab row can never drift into reporting a different number from
+ * the one the bill carries.
  *
  * Order is creation order, which is what the relation graph hands back: a
  * finish carries no rank of its own, so the number on each row describes the
@@ -76,14 +170,13 @@ function demoCode(baseCode: string | null): string {
  * reads 12.4 m² here and 11.9 m² in the bill is worse than a face that reads
  * nothing at all.
  */
-export function finishesOnFace(
+function finishesAtAnchor(
   doc: DrawingDocument,
-  wallId: EntityId,
-  side: FaceSide,
+  hostId: EntityId,
+  anchor: number,
 ): FinishRow[] {
-  const anchor = anchorForSide(side);
   const onThisFace = doc.relations
-    .relationsOfHost(wallId)
+    .relationsOfHost(hostId)
     .filter((relation) => relation.anchorIndex === anchor)
     .map((relation) => relation.hostedId);
   if (onThisFace.length === 0) return [];
@@ -163,6 +256,42 @@ export function finishesOnFace(
   return rows;
 }
 
+/** the finishes on ONE face of one wall, in the order they were added */
+export function finishesOnFace(
+  doc: DrawingDocument,
+  wallId: EntityId,
+  side: FaceSide,
+): FinishRow[] {
+  return finishesAtAnchor(doc, wallId, anchorForSide(side));
+}
+
+/**
+ * The finishes on ONE surface of one slab — a room's floor, or its ceiling.
+ *
+ * The area behind these rows is the slab's whole footprint: core subtracts
+ * openings from a wall band but a slab has no penetrations in V1, so a floor
+ * reads the full room. That is the same number `FLOORFINISH.AUTO` would have
+ * produced and the same one the bill will carry, which is the only property
+ * the sheet actually needs to keep.
+ */
+export function finishesOnSurface(
+  doc: DrawingDocument,
+  slabId: EntityId,
+  surface: SlabSurface,
+): FinishRow[] {
+  return finishesAtAnchor(doc, slabId, anchorForSurface(surface));
+}
+
+/** whatever is built up at a resolved spot, wall face or slab surface alike */
+export function finishesAt(
+  doc: DrawingDocument,
+  spot: FinishSpot,
+): FinishRow[] {
+  return spot.kind === 'wall'
+    ? finishesOnFace(doc, spot.wallId, spot.side)
+    : finishesOnSurface(doc, spot.slabId, spot.surface);
+}
+
 /**
  * Where a step's build-up can actually be written.
  *
@@ -170,9 +299,20 @@ export function finishesOnFace(
  * nowhere else. So most of what the walk turns up cannot hold one, and this
  * says which and why instead of the sheet offering an Add button that would
  * have nothing to dispatch.
+ *
+ * A room takes two arms rather than one because a room reaches its slab
+ * THROUGH a floor that may not have been laid yet, and the difference is not
+ * cosmetic: `slab` can be read from immediately, while `room` has nothing to
+ * read and will write its first layer only after making somewhere to put it.
+ * Collapsing them into one arm with a nullable id would have put that
+ * distinction in a null check at every call site instead of in the type.
  */
 export type FinishTarget =
   | { readonly kind: 'wall'; readonly wallId: EntityId }
+  /** a room whose floor is already laid — the slab is the host */
+  | { readonly kind: 'slab'; readonly slabId: EntityId }
+  /** a room with no slab under it yet; the first layer lays one */
+  | { readonly kind: 'room'; readonly room: RoomFootprint }
   | { readonly kind: 'none'; readonly reason: string };
 
 /** `curtain-wall` → `curtain wall`, for a sentence rather than a heading */
@@ -188,19 +328,80 @@ export function finishTargetFor(
     const wall = doc.get(step.entityIds[0]);
     if (wall instanceof WallEntity) return { kind: 'wall', wallId: wall.id };
   }
-  if (step.kind === 'room') {
+  if (step.kind === 'room' && step.room) {
     // A room is derived from wall geometry and is not an entity, so there is
-    // nothing to host on. Core puts a floor finish on the SLAB under the room
-    // (FLOORFINISH.ADD) — which means finding or making one, and making one is
-    // a change to the drawing that nobody asked for by opening a sheet.
-    return {
-      kind: 'none',
-      reason:
-        'A room is finished through the slab under it, which is not wired up yet.',
-    };
+    // nothing to host on directly — core finishes it through the SLAB beneath
+    // it, whose top is this room's floor and whose underside is its ceiling.
+    // Found, and only made once the user says what the floor is built up from:
+    // see `ensureSlabUnder` for why that is deferred and why it is not
+    // SLAB.AUTO.
+    const slabId = slabUnderRoom(doc, step.room);
+    return slabId === null
+      ? { kind: 'room', room: step.room }
+      : { kind: 'slab', slabId };
   }
   return {
     kind: 'none',
-    reason: `A finish sits on a wall face, so a ${spoken(step.kind)} cannot carry one yet.`,
+    reason: `A finish sits on a wall face or a slab, so a ${spoken(step.kind)} cannot carry one.`,
   };
+}
+
+/**
+ * The spot behind each tab of a step, keyed by the tab's own id.
+ *
+ * The ONE place a tab and a document surface are ever put side by side. It is
+ * a table rather than a function of the side because a table can be read in
+ * both directions and checked at a glance, and because building the spots from
+ * a target means the host id is filled in from something that already knows
+ * it: there is no moment at which a surface exists without its host.
+ *
+ * `room` yields nothing, and that is the honest answer — a room with no slab
+ * has nowhere for a finish to be, so both its tabs read empty until one is
+ * laid. `none` yields nothing for the same reason, though the sheet blocks
+ * before it ever asks.
+ */
+export function spotsFor(
+  target: FinishTarget,
+): Partial<Record<StepSide, FinishSpot>> {
+  if (target.kind === 'wall') {
+    return {
+      a: { kind: 'wall', wallId: target.wallId, side: 'face+' },
+      b: { kind: 'wall', wallId: target.wallId, side: 'face-' },
+    };
+  }
+  if (target.kind === 'slab') {
+    return {
+      floor: { kind: 'slab', slabId: target.slabId, surface: 'top' },
+      ceiling: { kind: 'slab', slabId: target.slabId, surface: 'bottom' },
+    };
+  }
+  return {};
+}
+
+/**
+ * The spots to WRITE to — the same table, except that a room with no slab
+ * under it gets one first.
+ *
+ * Separate from `spotsFor` because the two are asked at completely different
+ * moments and only one of them may change the drawing. Reading happens on
+ * every document change and on every step; writing happens once, when the user
+ * has picked their materials and pressed save, which is the only point at
+ * which a new slab is a consequence of something they did rather than of
+ * something they looked at.
+ *
+ * The dispatch is a callback rather than a session so this stays a free
+ * function over a document — testable by handing it a real session's own
+ * `dispatch` and reading the result back out of the document, which is the
+ * only way the anchor mapping actually gets held honest.
+ */
+export function spotsToWrite(
+  doc: DrawingDocument,
+  target: FinishTarget,
+  dispatch: Dispatch,
+): Partial<Record<StepSide, FinishSpot>> {
+  if (target.kind !== 'room') return spotsFor(target);
+  const slabId = ensureSlabUnder(doc, target.room, dispatch);
+  // a boundary too degenerate to floor: nothing to write to, and nothing was
+  // created trying
+  return slabId === null ? {} : spotsFor({ kind: 'slab', slabId });
 }
