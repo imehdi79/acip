@@ -2,6 +2,7 @@ import type {
   DrawingDocument,
   EntityId,
   Geometry,
+  RenderItem,
   RegionShape,
   SpaceInfo,
   TextShape,
@@ -9,6 +10,7 @@ import type {
   WallAssemblyStrips,
 } from '@acip/editor-core';
 import {
+  HostedOpeningEntity,
   WallEntity,
   buildDisplayList,
   detectSpaces,
@@ -279,6 +281,42 @@ function drawGrid(
   // coloured full-width rules read as walls on a phone screen
 }
 
+/**
+ * The display list, with doors and windows painted LAST.
+ *
+ * `buildDisplayList` hands entities back in document order, which is creation
+ * order and makes no claim to be a painting order. That was harmless while a
+ * plan held only linework. It stopped being harmless when the estimator began
+ * writing finishes: a finish is created long after the wall it sits on and the
+ * openings cut through it, so it arrives later in the list and its dashed band
+ * paints straight over the door — hiding the one thing on that wall a reader
+ * navigates by, and hiding it only on the walls that had been priced, which
+ * reads as the estimator having damaged the drawing.
+ *
+ * A STABLE partition rather than a sort by rank: everything keeps the relative
+ * order it already had, and only the openings move, so this cannot quietly
+ * reshuffle anything else that happens to paint over its neighbour today.
+ *
+ * Done here rather than in core's `buildDisplayList`, which is shared with the
+ * desktop editor: what belongs on top is a decision about this plan view, not
+ * a fact about the document, and core deliberately does not have one.
+ */
+export function inPaintOrder(
+  doc: DrawingDocument,
+  view: ViewDefinition,
+): RenderItem[] {
+  const openings: RenderItem[] = [];
+  const rest: RenderItem[] = [];
+  for (const item of buildDisplayList(doc, view)) {
+    const entity = doc.get(item.entityId as EntityId);
+    // by base class, so a future kind of opening rises with the doors it is
+    // one of, rather than being remembered here later
+    if (entity instanceof HostedOpeningEntity) openings.push(item);
+    else rest.push(item);
+  }
+  return [...rest, ...openings];
+}
+
 export function drawScene(
   canvas: HTMLCanvasElement,
   viewport: Viewport2D,
@@ -349,7 +387,7 @@ export function drawScene(
 
   const texts: { shape: TextShape; color: string }[] = [];
   const marks: { text: string; x: number; y: number }[] = [];
-  for (const item of buildDisplayList(doc, view)) {
+  for (const item of inPaintOrder(doc, view)) {
     const isSelected = selection.has(item.entityId);
     // solid regions (wall spans) get a light fill under the stroke
     const regions: RegionShape[] = [];
