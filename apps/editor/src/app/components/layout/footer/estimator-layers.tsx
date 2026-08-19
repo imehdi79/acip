@@ -1,6 +1,7 @@
-import { Button, Tabs } from '@heroui/react';
-import { IconChevronDown, IconPlus, IconTrash } from '@tabler/icons-react';
+import { Tabs } from '@heroui/react';
+import { IconChevronDown, IconTrash } from '@tabler/icons-react';
 import type { FinishRow, StepSide } from './estimator-finishes';
+import type { OpeningRow } from './estimator-openings';
 import { FinishFields } from './estimator-fields';
 
 /** one side of a shape, and what to call it on its tab */
@@ -149,8 +150,11 @@ function LayerRow({
   open,
   onToggleDetail,
   onRemove,
+  openings,
   onEdit,
   onDeduct,
+  onDemolish,
+  onDemolishOpening,
 }: {
   row: FinishRow;
   /** its place in the build-up, printed first */
@@ -158,8 +162,11 @@ function LayerRow({
   open: boolean;
   onToggleDetail: () => void;
   onRemove: () => void;
+  openings: readonly OpeningRow[];
   onEdit: (patch: Record<string, number>) => void;
   onDeduct: (deductOpenings: boolean) => void;
+  onDemolish: (next: { width?: number; height?: number }) => void;
+  onDemolishOpening: (openingId: string, demolish: boolean) => void;
 }) {
   return (
     // a hairline between rows: now that a row carries a delete, where one row
@@ -215,7 +222,14 @@ function LayerRow({
               </div>
             ))}
           </dl>
-          <FinishFields row={row} onEdit={onEdit} onDeduct={onDeduct} />
+          <FinishFields
+            row={row}
+            openings={openings}
+            onEdit={onEdit}
+            onDeduct={onDeduct}
+            onDemolish={onDemolish}
+            onDemolishOpening={onDemolishOpening}
+          />
         </div>
       )}
     </div>
@@ -229,16 +243,25 @@ function SideLayers({
   side,
   onToggleDetail,
   onRemove,
+  openings,
   onEdit,
   onDeduct,
+  onDemolish,
+  onDemolishOpening,
 }: {
   rows: readonly FinishRow[];
   opened: ReadonlySet<string>;
   side: StepSide;
   onToggleDetail: (side: StepSide, finishId: string) => void;
   onRemove: (side: StepSide, finishId: string) => void;
+  openings: readonly OpeningRow[];
   onEdit: (finishId: string, patch: Record<string, number>) => void;
   onDeduct: (finishId: string, deductOpenings: boolean) => void;
+  onDemolish: (
+    finishId: string,
+    next: { width?: number; height?: number },
+  ) => void;
+  onDemolishOpening: (openingId: string, demolish: boolean) => void;
 }) {
   if (rows.length === 0) {
     // Empty is the STARTING state, not a failure: nothing is priced until
@@ -265,38 +288,15 @@ function SideLayers({
             open={opened.has(rowKey(side, row.id))}
             onToggleDetail={() => onToggleDetail(side, row.id)}
             onRemove={() => onRemove(side, row.id)}
+            openings={openings}
             onEdit={(patch) => onEdit(row.id, patch)}
             onDeduct={(on) => onDeduct(row.id, on)}
+            onDemolish={(next) => onDemolish(row.id, next)}
+            onDemolishOpening={onDemolishOpening}
           />
         </li>
       ))}
     </ol>
-  );
-}
-
-/**
- * The way anything gets onto the list — the last row OF the list.
- *
- * A full-width row under the layers rather than an icon squeezed in beside the
- * tabs. Two things fall out of that. The tab bar gets the whole width, which is
- * what a two-option segmented control needs to be readable and to give each
- * option half a phone to be tapped in; and the one control that is useless to
- * miss stops being a 32 px square in a field of empty space.
- */
-function AddRow({ onAdd }: { onAdd: () => void }) {
-  return (
-    <Button
-      fullWidth
-      variant="ghost"
-      size="sm"
-      onPress={onAdd}
-      // a top hairline, so it lands as the row after the last layer rather than
-      // as a button floating under a list
-      className="mt-1 justify-start gap-2 border-t border-separator"
-    >
-      <IconPlus size={16} />
-      Add layers
-    </Button>
   );
 }
 
@@ -325,7 +325,9 @@ export function LayerList({
   onRemove,
   onEdit,
   onDeduct,
-  onAdd,
+  openings,
+  onDemolish,
+  onDemolishOpening,
 }: {
   /** the `EstimatorStep.kind` being priced — decides how many sides it has */
   kind: string;
@@ -352,7 +354,15 @@ export function LayerList({
   onEdit: (finishId: string, patch: Record<string, number>) => void;
   /** whether the openings crossing this layer come out of its area */
   onDeduct: (finishId: string, deductOpenings: boolean) => void;
-  onAdd: () => void;
+  /** the doors and windows in the shape being priced, for the strip-out boxes */
+  openings: readonly OpeningRow[];
+  /** the strip-out extent for one layer — a finish of its own in the document */
+  onDemolish: (
+    finishId: string,
+    next: { width?: number; height?: number },
+  ) => void;
+  /** send one door or window to the bill as its own tear-out line */
+  onDemolishOpening: (openingId: string, demolish: boolean) => void;
 }) {
   if (blocked !== undefined) {
     return <p className="py-3 text-xs text-muted">{blocked}</p>;
@@ -400,13 +410,15 @@ export function LayerList({
               side={one.id}
               onToggleDetail={onToggleDetail}
               onRemove={onRemove}
+              openings={openings}
               onEdit={onEdit}
               onDeduct={onDeduct}
+              onDemolish={onDemolish}
+              onDemolishOpening={onDemolishOpening}
             />
           </Tabs.Panel>
         ))}
       </Tabs>
-      <AddRow onAdd={onAdd} />
     </div>
   );
 }

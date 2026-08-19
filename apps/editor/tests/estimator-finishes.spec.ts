@@ -3,9 +3,11 @@ import { EditorSession, point } from '@acip/editor-core';
 import type { EntityId, MaterialId } from '@acip/editor-core';
 import { assembleBoq } from '@acip/estimator';
 import { STARTER_MATERIALS, seedMaterials } from '@/data/materials';
+import { WallEntity } from '@acip/editor-core';
 import {
   anchorForSide,
   anchorForSurface,
+  clearSpan,
   coverPatch,
   finishTargetFor,
   finishesAt,
@@ -203,20 +205,45 @@ describe('reading the finishes on a face', () => {
     expect(row.quantity).toBeGreaterThan(row.area);
   });
 
-  it('prices a strip-out as area against a demo code', () => {
-    // demolition is a finish in reverse: you do not count the tiles you are
-    // tearing off a wall
+  it('shows a strip-out inside its layer, not beside it', () => {
+    // A demolish finish is the strip-out BELONGING to the build layer of the
+    // same material on the same surface. Listed separately it would double the
+    // build-up on screen and read as two coats of the same plaster.
+    const { session, walls } = plan();
+    const tile = material(session, 'wall-tile');
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: tile,
+    });
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: tile,
+      phase: 'demolish',
+      topHeight: 1.2,
+    });
+
+    const rows = finishesOnFace(session.doc, walls[0], 'face+');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].phase).toBe('new');
+    // and the strip-out is reachable through it, at its own extent
+    expect(rows[0].demolition.id).not.toBeNull();
+    expect(rows[0].demolition.height).toBeCloseTo(1.2, 6);
+  });
+
+  it('echoes the layer until something is actually stripped', () => {
+    // the honest starting guess: what is torn out is usually the face that is
+    // about to be re-covered
     const { session, walls } = plan();
     session.dispatch('FINISH.ADD', {
       wallId: walls[0],
       side: 'face+',
-      materialId: material(session, 'wall-tile'),
-      phase: 'demolish',
+      materialId: material(session, 'paint'),
     });
     const row = finishesOnFace(session.doc, walls[0], 'face+')[0];
-    expect(row.costCode).toBe('demo-wall-tile');
-    expect(row.unit).toBe('m2');
-    expect(row.quantity).toBeCloseTo(row.area, 6);
+    expect(row.demolition.id).toBeNull();
+    expect(row.demolition.width).toBeCloseTo(row.cover?.width ?? -1, 6);
   });
 });
 
@@ -634,5 +661,62 @@ describe('reading the estimate back', () => {
     const room = review.find((s) => s.name.startsWith('Room'));
     expect(room?.layers).toBe(1);
     expect(room?.surfaces.find((f) => f.rows.length > 0)?.label).toBe('Floor');
+  });
+});
+
+/**
+ * A wall's baseline runs to the junction POINT — the centreline of whatever it
+ * meets — so covering it end to end swallows half of every wall it runs into.
+ * Plaster does not do that, and neither does the dimension drawn over it.
+ */
+describe('how far a new layer reaches', () => {
+  it('stops at the neighbouring walls, not at the junction points', () => {
+    const { session, walls } = plan();
+    const wall = session.doc.get(walls[0]);
+    if (!(wall instanceof WallEntity)) throw new Error('not a wall');
+
+    const span = clearSpan(wall);
+    // both ends meet a 0.3 m wall square on, so each is cut back by 0.15 m
+    expect(span.t0 * wall.getLength()).toBeCloseTo(0.15, 6);
+    expect((1 - span.t1) * wall.getLength()).toBeCloseTo(0.15, 6);
+  });
+
+  it('covers the whole wall when nothing crosses it', () => {
+    // a lone wall has no junction to stop at, and covering none of it would be
+    // a worse answer than covering all of it
+    const session = new EditorSession();
+    const lone = session.dispatch<EntityId>('WALL.ADD', {
+      a: point(0, 0),
+      b: point(5, 0),
+      thickness: 0.3,
+      height: 3,
+    });
+    const wall = session.doc.get(lone);
+    if (!(wall instanceof WallEntity)) throw new Error('not a wall');
+    expect(clearSpan(wall)).toEqual({ t0: 0, t1: 1 });
+  });
+
+  it('gives both faces the same clear span', () => {
+    // which face points into a room is a question this sheet refuses to
+    // answer, and does not need to: a finish stops at the adjacent wall
+    // whichever side it is on, and on a partition both sides are inner
+    const { session, walls } = plan();
+    const wall = session.doc.get(walls[0]);
+    if (!(wall instanceof WallEntity)) throw new Error('not a wall');
+    const span = clearSpan(wall);
+    for (const side of ['face+', 'face-'] as const) {
+      session.dispatch('FINISH.ADD', {
+        wallId: walls[0],
+        side,
+        materialId: material(session, 'paint'),
+        t0: span.t0,
+        t1: span.t1,
+      });
+    }
+    const a = finishesOnFace(session.doc, walls[0], 'face+')[0];
+    const b = finishesOnFace(session.doc, walls[0], 'face-')[0];
+    expect(a.cover?.width).toBeCloseTo(b.cover?.width ?? -1, 9);
+    // and it is shorter than the wall's own baseline
+    expect(a.cover?.width).toBeLessThan(wall.getLength());
   });
 });

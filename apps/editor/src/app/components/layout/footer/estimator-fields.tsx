@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Label, Switch } from '@heroui/react';
+import { Checkbox, Label, Switch } from '@heroui/react';
 import { coverPatch, type FinishRow } from './estimator-finishes';
+import type { OpeningRow } from './estimator-openings';
 
 /**
  * A number the user types, committed when they leave the field.
@@ -98,15 +99,24 @@ function NumberInput({
  */
 export function FinishFields({
   row,
+  openings,
   onEdit,
   onDeduct,
+  onDemolish,
+  onDemolishOpening,
 }: {
   row: FinishRow;
+  /** the doors and windows in the wall this layer sits on; empty for a slab */
+  openings: readonly OpeningRow[];
   onEdit: (patch: Record<string, number>) => void;
   onDeduct: (deductOpenings: boolean) => void;
+  /** the strip-out extent, which is a finish of its own and not this one */
+  onDemolish: (next: { width?: number; height?: number }) => void;
+  onDemolishOpening: (openingId: string, demolish: boolean) => void;
 }) {
   const cover = row.cover;
   if (!cover) return null;
+  const onWall = cover.host === 'wall';
 
   return (
     <div className="flex flex-col gap-1 pt-1 text-xs">
@@ -116,13 +126,17 @@ export function FinishFields({
         suffix="m"
         onCommit={(width) => onEdit(coverPatch(cover, { width }))}
       />
+      {/* the second dimension is not the same measurement on both hosts, and
+          calling both of them "height" made a floor read as though it stood
+          up: a wall band is measured UP FROM THE GROUND, a floor is measured
+          across the plan and has a length */}
       <NumberInput
-        label="Height"
+        label={onWall ? 'Height from ground' : 'Length'}
         value={cover.height}
         suffix="m"
         onCommit={(height) => onEdit(coverPatch(cover, { height }))}
       />
-      {cover.host === 'wall' && (
+      {onWall && (
         // Net or solid. Not a preference: they are two measurement
         // conventions, and under the solid one the doors and windows are
         // billed as their own items rather than being folded into the face.
@@ -134,6 +148,43 @@ export function FinishFields({
           />
         </div>
       )}
+      {/* What is being torn OUT, stated beside what is going in. A layer is
+          not one or the other: a room is stripped and then rebuilt, and the
+          two quantities are both real and both priced — the strip-out against
+          its own demo- code at its own rate. */}
+      <div className="border-t border-separator pt-1">
+        <p className="pb-1 font-medium text-muted">Demolition</p>
+        <NumberInput
+          label="Width"
+          value={row.demolition.width}
+          suffix="m"
+          onCommit={(width) => onDemolish({ width })}
+        />
+        <NumberInput
+          label={onWall ? 'Height from ground' : 'Length'}
+          value={row.demolition.height}
+          suffix="m"
+          onCommit={(height) => onDemolish({ height })}
+        />
+        {/* one box per opening actually in this wall, because "does the door
+            go too" is a question about that door and not about the layer —
+            marking it sends the door to the bill as its own strip-out line */}
+        {openings.map((opening) => (
+          <Checkbox
+            key={opening.id}
+            isSelected={opening.demolish}
+            onChange={(on) => onDemolishOpening(opening.id, on)}
+            className="w-full py-1"
+          >
+            <Checkbox.Content className="gap-2">
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              <Label>Take out {opening.name}</Label>
+            </Checkbox.Content>
+          </Checkbox>
+        ))}
+      </div>
     </div>
   );
 }

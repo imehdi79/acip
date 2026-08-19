@@ -64,7 +64,7 @@ const THROUGH_TOLERANCE = 0.01;
  * the user drew as one wall do not obstruct each other. The largest setback
  * wins — a span stops at the first thing it runs into, not the last.
  */
-function setbackAt(wall: WallEntity, which: 'start' | 'end'): number {
+export function setbackAt(wall: WallEntity, which: 'start' | 'end'): number {
   const { a, b } = wall.getBaseline();
   const len = Math.hypot(b.x - a.x, b.y - a.y);
   if (len < 1e-9) return 0;

@@ -4,14 +4,23 @@ import {
   IconArrowsMaximize,
   IconCalculator,
   IconFocusCentered,
+  IconPlus,
 } from '@tabler/icons-react';
-import type { BBox, DrawingDocument, Material } from '@acip/editor-core';
+import type {
+  BBox,
+  DrawingDocument,
+  EntityId,
+  Material,
+} from '@acip/editor-core';
+import { WallEntity } from '@acip/editor-core';
 import { useSession } from '@/editor/session-context';
 import { useRuntime } from '@/editor/runtime';
 import type { FitBounds } from '@/editor/ui-state';
 import { estimatorSteps, type EstimatorStep } from './estimator-steps';
 import { LayerList, defaultSide, rowKey, sidesFor } from './estimator-layers';
 import {
+  clearSpan,
+  coverPatch,
   finishTargetFor,
   finishesAt,
   spotsFor,
@@ -20,6 +29,7 @@ import {
   type FinishTarget,
   type StepSide,
 } from './estimator-finishes';
+import { openingsAt, type OpeningRow } from './estimator-openings';
 import { AddLayersSheet } from './estimator-add-layers';
 import { ReviewSheet, reviewSteps } from './estimator-review';
 
@@ -112,10 +122,12 @@ interface DocView {
   readonly rows: Readonly<Record<string, readonly FinishRow[]>>;
   /** the drawing's own catalogue — what a surface can be built up from */
   readonly materials: readonly Material[];
+  /** the doors and windows in the shape, keyed by side id */
+  readonly openings: Readonly<Record<string, readonly OpeningRow[]>>;
 }
 
 /** nothing read yet, and what a step with nowhere to host a finish shows */
-const NOTHING_READ: DocView = { rows: {}, materials: [] };
+const NOTHING_READ: DocView = { rows: {}, materials: [], openings: {} };
 
 /** the same set without one key, or the same set when it never had it */
 function without(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
@@ -147,14 +159,16 @@ function readDoc(
   target: FinishTarget | null,
 ): DocView {
   const materials = doc.materials.list();
-  if (!step || !target) return { rows: {}, materials };
+  if (!step || !target) return { rows: {}, materials, openings: {} };
   const spots = spotsFor(target);
   const rows: Record<string, readonly FinishRow[]> = {};
+  const openings: Record<string, readonly OpeningRow[]> = {};
   for (const one of sidesFor(step.kind)) {
     const spot = spots[one.id];
     rows[one.id] = spot ? finishesAt(doc, spot) : [];
+    openings[one.id] = spot ? openingsAt(doc, spot) : [];
   }
-  return { rows, materials };
+  return { rows, materials, openings };
 }
 
 /** what to call the surface being added to — "Side B", "Ceiling" */
@@ -378,7 +392,77 @@ function ShapeWizard({ close }: { close: () => void }) {
                 deductOpenings,
               });
             }}
-            onAdd={() => setAdding(true)}
+            /**
+             * The strip-out is a FINISH OF ITS OWN — same surface, same
+             * material, `phase: 'demolish'` — because that is how core models
+             * demolition, and it is what puts a `demo-` line in the bill at
+             * its own rate. It is created the first time a figure is typed
+             * rather than the moment a layer is added: a strip-out nobody
+             * asked for would price every refurbishment as a demolition.
+             *
+             * Paired back to its layer by material on the same surface, which
+             * is why there is at most one and why the sheet can show it inside
+             * the layer instead of as a rival row beside it.
+             */
+            onDemolish={(finishId, next) => {
+              const row = (view.rows[side] ?? []).find(
+                (r) => r.id === finishId,
+              );
+              const spot = target ? spotsFor(target)[side] : undefined;
+              if (!row?.cover || !spot || !row.materialId) return;
+              // the partner's OWN extent, not the layer's, so typing a width
+              // does not silently restate a height taken from the wrong finish
+              const partner = {
+                ...row.cover,
+                width: row.demolition.width,
+                height: row.demolition.height,
+              };
+              if (row.demolition.id !== null) {
+                session.dispatch('FINISH.UPDATE', {
+                  id: row.demolition.id,
+                  ...coverPatch(partner, next),
+                });
+                return;
+              }
+              const full = coverPatch(partner, {
+                width: next.width ?? partner.width,
+                height: next.height ?? partner.height,
+              });
+              if (spot.kind === 'wall') {
+                session.dispatch('FINISH.ADD', {
+                  wallId: spot.wallId,
+                  side: spot.side,
+                  materialId: row.materialId,
+                  phase: 'demolish',
+                  t0: partner.t0,
+                  t1: full['t1'],
+                  sillHeight: partner.sillHeight,
+                  topHeight: full['topHeight'],
+                });
+                return;
+              }
+              // FLOORFINISH.ADD takes no covered rectangle, so the extent is
+              // stated in a second breath — two dispatches, one undo apiece,
+              // which is the honest cost of a command that cannot say it once
+              const id = session.dispatch<EntityId>('FLOORFINISH.ADD', {
+                slabId: spot.slabId,
+                surface: spot.surface,
+                materialId: row.materialId,
+                phase: 'demolish',
+              });
+              session.dispatch('FINISH.UPDATE', { id, ...full });
+            }}
+            openings={view.openings[side] ?? []}
+            // the door's OWN phase, not the layer's: "does the door go too" is
+            // a question about that door, and PHASE.SET already moves openings
+            // as well as finishes. The bill then carries it as its own
+            // demo-door line rather than folding it into the wall.
+            onDemolishOpening={(openingId, demolish) => {
+              session.dispatch('PHASE.SET', {
+                ids: [openingId],
+                phase: demolish ? 'demolish' : 'new',
+              });
+            }}
           />
         ) : (
           <p className="text-sm text-muted">
@@ -394,6 +478,22 @@ function ShapeWizard({ close }: { close: () => void }) {
           <Button variant="ghost" onPress={close}>
             Close
           </Button>
+          {/* Adding a layer is an ACTION on the sheet, so it sits in the row
+              the sheet keeps its actions in — beside Close and the camera,
+              under the thumb, in the one place that does not move when the
+              list under it grows. As a full-width row at the end of the list
+              it scrolled away exactly when a long build-up made it hardest to
+              reach, and it cost a row of a screen that is half a phone. */}
+          {step && target !== null && target.kind !== 'none' && (
+            <Button
+              isIconOnly
+              aria-label="Add layers"
+              variant="ghost"
+              onPress={() => setAdding(true)}
+            >
+              <IconPlus />
+            </Button>
+          )}
           {step && (
             <Button
               isIconOnly
@@ -498,10 +598,21 @@ function ShapeWizard({ close }: { close: () => void }) {
             if (!spot) return;
             for (const materialId of materialIds) {
               if (spot.kind === 'wall') {
+                // face to face, not end to end. A wall's baseline runs to the
+                // junction POINT, so the default [0, 1] would cover half of
+                // every wall it meets — plaster does not, and neither does the
+                // dimension drawn over it.
+                const wall = session.doc.get(spot.wallId);
+                const span =
+                  wall instanceof WallEntity
+                    ? clearSpan(wall)
+                    : { t0: 0, t1: 1 };
                 session.dispatch('FINISH.ADD', {
                   wallId: spot.wallId,
                   side: spot.side,
                   materialId,
+                  t0: span.t0,
+                  t1: span.t1,
                 });
               } else {
                 session.dispatch('FLOORFINISH.ADD', {

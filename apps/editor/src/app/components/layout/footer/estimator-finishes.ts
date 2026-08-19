@@ -13,6 +13,7 @@ import {
   layerQuantity,
 } from '@acip/editor-core';
 import { computeFinishTakeoff } from '@acip/estimator';
+import { setbackAt } from '@/editor/viewport/wall-dimensions';
 import type { EstimatorStep } from './estimator-steps';
 import {
   ensureSlabUnder,
@@ -183,6 +184,40 @@ export function coverPatch(
   return patch;
 }
 
+/**
+ * The stretch of a wall a new finish should cover: face to face, not end to
+ * end.
+ *
+ * A wall's baseline runs to the junction POINT — the centreline of whatever it
+ * meets — so `[0, 1]` covers half of every wall it runs into. Plaster does not
+ * do that. It starts where the adjacent wall's face is and stops at the next
+ * one, which is the width anybody actually builds to and the width a tape
+ * held in the room reads.
+ *
+ * `setbackAt` already works this out for the plan's own dimension lanes, cut
+ * back by `thickness / 2 / sin θ` at each end so a skew junction is right too;
+ * reusing it is what stops the sheet and the dimension over it disagreeing
+ * about the same wall. A neighbour running straight through is not a junction
+ * and does not cut.
+ *
+ * BOTH faces get it. Which one points into a room is a question this sheet
+ * refuses to answer — that is why they are Side A and Side B — and it does not
+ * need to: a finish stops at the adjacent wall whichever side it is on, and on
+ * a partition both sides are inner anyway.
+ *
+ * Returned as baseline parameters because that is what the document stores.
+ * The degenerate cases collapse to the whole wall: a wall shorter than the
+ * walls crossing it has no clear span, and covering it end to end is a better
+ * answer than covering none of it.
+ */
+export function clearSpan(wall: WallEntity): { t0: number; t1: number } {
+  const length = wall.getLength();
+  if (length < 1e-9) return { t0: 0, t1: 1 };
+  const t0 = setbackAt(wall, 'start') / length;
+  const t1 = 1 - setbackAt(wall, 'end') / length;
+  return t1 - t0 < 1e-9 ? { t0: 0, t1: 1 } : { t0, t1 };
+}
+
 /** one finish on one face, resolved into what the sheet shows */
 export interface FinishRow {
   readonly id: EntityId;
@@ -214,21 +249,32 @@ export interface FinishRow {
    */
   readonly cover: FinishCover | null;
   /**
+   * What is being torn OUT of this surface before the layer goes on.
+   *
+   * A layer is not either built or demolished: a room is stripped and then
+   * rebuilt, and both quantities are real and both are priced — the strip-out
+   * against its own `demo-` code at its own rate. So the demolition travels
+   * WITH the layer rather than as a rival to it.
+   *
+   * It is a real finish in the document (`phase: 'demolish'`, same surface,
+   * same material) and not a number kept here, for the same reason the build
+   * layer is. Until one exists the figures echo the build layer's own extent,
+   * which is the honest starting guess: what is being stripped is usually the
+   * face that is about to be re-covered.
+   */
+  readonly demolition: {
+    readonly width: number;
+    readonly height: number;
+    /** the partner finish, once there is one to update rather than create */
+    readonly id: EntityId | null;
+  };
+  /**
    * Whether the openings crossing this layer come out of its area.
    *
    * A wall-face question only: a slab has no openings, and core rejects the
    * flag for one rather than letting it be set where it could do nothing.
    */
   readonly deductOpenings: boolean;
-}
-
-/**
- * Cost code for a strip-out, the "demolition is a finish in reverse"
- * convention: `wall-tile` → `demo-wall-tile`. Copied from the BOQ's own
- * `demoCode` for the same reason `anchorForSide` is.
- */
-function demoCode(baseCode: string | null): string {
-  return baseCode ? `demo-${baseCode}` : 'demo-finish';
 }
 
 /**
@@ -286,10 +332,25 @@ function finishesAtAnchor(
     computeFinishTakeoff(doc).map((finish) => [finish.entityId, finish]),
   );
 
+  // Demolish-phase finishes are NOT rows of their own. Each is the strip-out
+  // belonging to the build layer of the same material on this surface, and it
+  // is shown through that layer's own demolition figures — listed separately
+  // it would double the build-up on screen and read as two coats of plaster.
+  const strippedBy = new Map<string, { id: EntityId; area: number }>();
+  for (const id of onThisFace) {
+    const finish = takeoff.get(id);
+    if (finish?.phase !== 'demolish') continue;
+    const key = finish.layer?.materialId ?? '';
+    if (!strippedBy.has(key)) {
+      strippedBy.set(key, { id, area: finish.area });
+    }
+  }
+
   const rows: FinishRow[] = [];
   for (const id of onThisFace) {
     const finish = takeoff.get(id);
     if (!finish) continue; // hosted here but not a finish — an opening, say
+    if (finish.phase === 'demolish') continue; // shown through its build layer
     const layer = finish.layer;
     // straight off the entity: the takeoff reports what a finish MEASURES, not
     // the numbers it was measured from, and those are what an edit changes
@@ -320,32 +381,33 @@ function finishesAtAnchor(
         };
       }
     }
+    const partner = strippedBy.get(layer?.materialId ?? '') ?? null;
+    const stripped =
+      partner && doc.get(partner.id) instanceof FinishEntity
+        ? (doc.get(partner.id) as FinishEntity)
+        : null;
     const editable = {
       thickness: finish.thickness,
       cover,
       deductOpenings:
         entity instanceof FinishEntity ? entity.deductOpenings : true,
+      demolition: {
+        id: partner?.id ?? null,
+        width: stripped
+          ? hostIsWall
+            ? Math.max(0, (stripped.t1 - stripped.t0) * hostLength)
+            : (stripped.coverWidth ?? cover?.width ?? 0)
+          : (cover?.width ?? 0),
+        height: stripped
+          ? hostIsWall
+            ? Math.max(
+                0,
+                (stripped.topHeight ?? hostHeight) - stripped.sillHeight,
+              )
+            : (stripped.coverHeight ?? cover?.height ?? 0)
+          : (cover?.height ?? 0),
+      },
     };
-
-    // Demolition is the same area priced as a strip-out, never as tiles: you
-    // do not count the tiles you are tearing off a wall. Straight from the
-    // BOQ, so a demolish row shows the number the bill will carry.
-    if (finish.phase === 'demolish') {
-      rows.push({
-        id,
-        ...editable,
-        materialId: layer?.materialId ?? null,
-        name: layer ? `Demolish ${layer.name}` : 'Demolish finish',
-        unit: 'm2',
-        costCode: demoCode(layer?.costCode ?? null),
-        area: finish.area,
-        length: finish.length,
-        quantity: finish.area,
-        phase: finish.phase,
-        unpriced: !layer,
-      });
-      continue;
-    }
 
     // a finish whose material was never set, or was removed out from under it
     if (!layer) {

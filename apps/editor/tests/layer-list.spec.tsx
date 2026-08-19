@@ -11,6 +11,7 @@ import {
   sidesFor,
 } from '@/app/components/layout/footer/estimator-layers';
 import { FinishFields } from '@/app/components/layout/footer/estimator-fields';
+import type { OpeningRow } from '@/app/components/layout/footer/estimator-openings';
 import { coverPatch } from '@/app/components/layout/footer/estimator-finishes';
 import {
   LayerChoices,
@@ -47,6 +48,9 @@ const row = (over: Partial<FinishRow> = {}): FinishRow => ({
   unpriced: false,
   thickness: 0.01,
   deductOpenings: true,
+  // nothing stripped yet: the figures echo the build layer's own extent, which
+  // is the honest starting guess for what is about to be re-covered
+  demolition: { width: 6, height: 3, id: null },
   // a wall face by default, since that is the host that argues about openings;
   // the floor cases override host to 'slab'
   cover: {
@@ -106,7 +110,9 @@ function list({
       onRemove={noop}
       onEdit={noop}
       onDeduct={noop}
-      onAdd={noop}
+      openings={[]}
+      onDemolish={noop}
+      onDemolishOpening={noop}
     />,
   );
 }
@@ -158,9 +164,11 @@ describe('the layer list', () => {
     expect(html).toContain('tabs__indicator');
   });
 
-  it('offers the add row whether there are tabs or not', () => {
-    expect(list()).toContain('Add layers');
-    expect(list({ kind: 'room' })).toContain('Add layers');
+  it('leaves adding to the sheet, not to the list', () => {
+    // the add control moved into the sheet's own footer: as a row at the end
+    // of the list it scrolled away exactly when a long build-up made it
+    // hardest to reach, and it cost a row of a screen that is half a phone
+    expect(list()).not.toContain('Add layers');
   });
 
   it('numbers the layers in the order they went on', () => {
@@ -392,9 +400,16 @@ describe('how much of the plan the sheet may cover', () => {
  * measures standing in the room.
  */
 describe('the fields behind a row', () => {
-  const fields = (r: FinishRow) =>
+  const fields = (r: FinishRow, openings: OpeningRow[] = []) =>
     renderToStaticMarkup(
-      <FinishFields row={r} onEdit={noop} onDeduct={noop} />,
+      <FinishFields
+        row={r}
+        openings={openings}
+        onEdit={noop}
+        onDeduct={noop}
+        onDemolish={noop}
+        onDemolishOpening={noop}
+      />,
     );
 
   const floorRow = (over: Partial<FinishRow> = {}) =>
@@ -407,23 +422,48 @@ describe('the fields behind a row', () => {
         sillHeight: 0,
         hostLength: 0,
       },
+      demolition: { width: 6, height: 4, id: null },
       ...over,
     });
 
-  it('offers a width and a height, in metres, on a wall face', () => {
+  it('measures a wall up FROM THE GROUND, and says so', () => {
     const html = fields(row());
     expect(html).toContain('Width');
-    expect(html).toContain('Height');
+    expect(html).toContain('Height from ground');
     expect(html).toContain('value="6"');
     expect(html).toContain('value="3"');
   });
 
-  it('offers the same two on a floor', () => {
-    // the document holds a floor as an unanchored rectangle and a wall as
-    // parameters along a baseline; the sheet says width and height for both
+  it('measures a floor across the plan, so it has a length', () => {
+    // calling both dimensions "height" made a floor read as though it stood
+    // up; a floor is measured across the plan and has a length
     const html = fields(floorRow());
     expect(html).toContain('Width');
-    expect(html).toContain('Height');
+    expect(html).toContain('Length');
+    expect(html).not.toContain('Height from ground');
+  });
+
+  it('states what is torn out beside what goes in', () => {
+    // a layer is not either built or demolished: a room is stripped and then
+    // rebuilt, and both quantities are real and both are priced
+    expect(fields(row())).toContain('Demolition');
+    expect(fields(floorRow())).toContain('Demolition');
+  });
+
+  it('offers a box per opening actually in the wall', () => {
+    // "does the door go too" is a question about that door, not about the
+    // layer, so it is one box per door rather than one switch for all of them
+    const html = fields(row(), [
+      { id: 'd1' as EntityId, name: 'Door D1', demolish: false },
+      { id: 'w1' as EntityId, name: 'Window WN2', demolish: true },
+    ]);
+    expect(html).toContain('Take out Door D1');
+    expect(html).toContain('Take out Window WN2');
+  });
+
+  it('offers no opening boxes on a floor', () => {
+    const html = fields(floorRow());
+    expect(html).not.toContain('Take out Door');
   });
 
   it('offers the opening toggle on a wall face only', () => {
