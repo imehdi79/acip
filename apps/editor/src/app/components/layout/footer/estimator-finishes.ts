@@ -14,6 +14,7 @@ import {
 } from '@acip/editor-core';
 import { computeFinishTakeoff } from '@acip/estimator';
 import { setbackAt } from '@/editor/viewport/wall-dimensions';
+import { DEMO_RATES, demoCodeFor, priceOf, type Priced } from '@/data/rates';
 import type { EstimatorStep } from './estimator-steps';
 import {
   ensureSlabUnder,
@@ -150,6 +151,49 @@ export interface FinishCover {
   readonly sillHeight: number;
   /** wall only: the wall's own length, to turn a width in metres back into t1 */
   readonly hostLength: number;
+  /** wall only: the wall's own height, which a band cannot reach past */
+  readonly hostHeight: number;
+}
+
+/**
+ * How far a width and a height may be typed.
+ *
+ * Not decoration, and not politeness: `FINISH.UPDATE` REJECTS a `t` outside
+ * 0..1 and a `topHeight` at or below the sill, and a rejected dispatch inside
+ * a tap handler is an unhandled throw out of a React event — the sheet dies
+ * rather than the number being refused. Clamping is what turns "you cannot
+ * plaster 9 m of a 6 m wall" from a crash into the wall's own length appearing
+ * in the box.
+ *
+ * A wall is bounded by the wall: the band starts at `t0` and cannot run past
+ * the end of the baseline, nor above the wall's head. A SLAB deliberately has
+ * no upper bound — a covered rectangle is a takeoff figure rather than a
+ * region, and one larger than the drawn slab usually includes a threshold or a
+ * return on purpose (see `coverWidth` in core). Clamping it would be the
+ * drawing overruling a measurement somebody took with a tape.
+ *
+ * The floor is a hair above zero on both, because a finish of no size is not a
+ * measurement, it is a row that should have been deleted.
+ */
+export const MIN_COVER = 0.01;
+
+export function coverBounds(cover: FinishCover): {
+  width: { min: number; max?: number };
+  height: { min: number; max?: number };
+} {
+  if (cover.host === 'slab') {
+    return { width: { min: MIN_COVER }, height: { min: MIN_COVER } };
+  }
+  return {
+    width: {
+      min: MIN_COVER,
+      max: Math.max(MIN_COVER, (1 - cover.t0) * cover.hostLength),
+    },
+    height: {
+      min: MIN_COVER,
+      max: Math.max(MIN_COVER, cover.hostHeight - cover.sillHeight),
+    },
+  };
 }
 
 /**
@@ -267,7 +311,15 @@ export interface FinishRow {
     readonly height: number;
     /** the partner finish, once there is one to update rather than create */
     readonly id: EntityId | null;
+    /** the `demo-` code the strip-out is billed against */
+    readonly costCode: string;
+    /** m² of surface coming off — a strip-out is priced by area, never by tile */
+    readonly quantity: number;
+    /** null when nobody has quoted this strip-out */
+    readonly priced: Priced | null;
   };
+  /** what this layer comes to, or null when its code has no rate */
+  readonly priced: Priced | null;
   /**
    * Whether the openings crossing this layer come out of its area.
    *
@@ -368,6 +420,7 @@ function finishesAtAnchor(
           t0: entity.t0,
           sillHeight: entity.sillHeight,
           hostLength,
+          hostHeight,
         };
       } else if (slabBox) {
         cover = {
@@ -378,9 +431,11 @@ function finishesAtAnchor(
           t0: 0,
           sillHeight: 0,
           hostLength: 0,
+          hostHeight: 0,
         };
       }
     }
+    const demoCode = demoCodeFor(layer?.costCode ?? null);
     const partner = strippedBy.get(layer?.materialId ?? '') ?? null;
     const stripped =
       partner && doc.get(partner.id) instanceof FinishEntity
@@ -393,6 +448,9 @@ function finishesAtAnchor(
         entity instanceof FinishEntity ? entity.deductOpenings : true,
       demolition: {
         id: partner?.id ?? null,
+        costCode: demoCode,
+        quantity: partner?.area ?? 0,
+        priced: partner ? priceOf(DEMO_RATES, demoCode, partner.area) : null,
         width: stripped
           ? hostIsWall
             ? Math.max(0, (stripped.t1 - stripped.t0) * hostLength)
@@ -423,6 +481,7 @@ function finishesAtAnchor(
         quantity: finish.area,
         phase: finish.phase,
         unpriced: true,
+        priced: priceOf(DEMO_RATES, 'finish-area', finish.area),
       });
       continue;
     }
@@ -432,6 +491,13 @@ function finishesAtAnchor(
       area: finish.area,
       length: finish.length,
     };
+    const quantity = layerQuantity(
+      layer.unit,
+      finish.thickness,
+      finish.thickness,
+      refs,
+      layer.coverage,
+    );
     rows.push({
       id,
       ...editable,
@@ -441,15 +507,10 @@ function finishesAtAnchor(
       costCode: layer.costCode,
       area: finish.area,
       length: finish.length,
-      quantity: layerQuantity(
-        layer.unit,
-        finish.thickness,
-        finish.thickness,
-        refs,
-        layer.coverage,
-      ),
+      quantity,
       phase: finish.phase,
       unpriced: false,
+      priced: priceOf(DEMO_RATES, layer.costCode, quantity),
     });
   }
   return rows;

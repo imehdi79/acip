@@ -12,7 +12,11 @@ import {
 } from '@/app/components/layout/footer/estimator-layers';
 import { FinishFields } from '@/app/components/layout/footer/estimator-fields';
 import type { OpeningRow } from '@/app/components/layout/footer/estimator-openings';
-import { coverPatch } from '@/app/components/layout/footer/estimator-finishes';
+import {
+  coverBounds,
+  coverPatch,
+} from '@/app/components/layout/footer/estimator-finishes';
+import { DEMO_RATES, demoCodeFor, priceOf } from '@/data/rates';
 import {
   LayerChoices,
   codeOf,
@@ -48,9 +52,17 @@ const row = (over: Partial<FinishRow> = {}): FinishRow => ({
   unpriced: false,
   thickness: 0.01,
   deductOpenings: true,
+  priced: { rate: 12, amount: 148.8 },
   // nothing stripped yet: the figures echo the build layer's own extent, which
   // is the honest starting guess for what is about to be re-covered
-  demolition: { width: 6, height: 3, id: null },
+  demolition: {
+    width: 6,
+    height: 3,
+    id: null,
+    costCode: 'demo-plaster',
+    quantity: 0,
+    priced: null,
+  },
   // a wall face by default, since that is the host that argues about openings;
   // the floor cases override host to 'slab'
   cover: {
@@ -60,6 +72,7 @@ const row = (over: Partial<FinishRow> = {}): FinishRow => ({
     t0: 0,
     sillHeight: 0,
     hostLength: 6,
+    hostHeight: 3,
   },
   ...over,
 });
@@ -421,8 +434,16 @@ describe('the fields behind a row', () => {
         t0: 0,
         sillHeight: 0,
         hostLength: 0,
+        hostHeight: 0,
       },
-      demolition: { width: 6, height: 4, id: null },
+      demolition: {
+        width: 6,
+        height: 4,
+        id: null,
+        costCode: 'demo-plaster',
+        quantity: 0,
+        priced: null,
+      },
       ...over,
     });
 
@@ -544,5 +565,136 @@ describe('turning a width and a height into an edit', () => {
   it('leaves a zero-length wall alone rather than dividing by it', () => {
     const degenerate = { ...wall, hostLength: 0 };
     expect(coverPatch(degenerate, { width: 3 })).toEqual({});
+  });
+});
+
+/**
+ * Bounds are not politeness. FINISH.UPDATE REJECTS a `t` outside 0..1 and a
+ * `topHeight` at or below the sill, and a rejected dispatch inside a tap
+ * handler is an unhandled throw out of a React event — the sheet dies rather
+ * than the number being refused.
+ */
+describe('how far a figure may be typed', () => {
+  const wall = {
+    width: 6,
+    height: 3,
+    host: 'wall' as const,
+    t0: 0,
+    sillHeight: 0,
+    hostLength: 6,
+    hostHeight: 3,
+  };
+
+  it('stops a band at the end of its own wall', () => {
+    // typing 9 on a 6 m wall would send t1 to 1.5, which the command throws on
+    expect(coverBounds(wall).width.max).toBeCloseTo(6, 6);
+  });
+
+  it('measures the remaining run from where the band starts', () => {
+    // a band starting a quarter along has three quarters of wall left to it
+    const late = { ...wall, t0: 0.25 };
+    expect(coverBounds(late).width.max).toBeCloseTo(4.5, 6);
+  });
+
+  it('stops a band at the head of its own wall', () => {
+    expect(coverBounds(wall).height.max).toBeCloseTo(3, 6);
+    // and from a raised sill there is less wall above it
+    expect(coverBounds({ ...wall, sillHeight: 1 }).height.max).toBeCloseTo(
+      2,
+      6,
+    );
+  });
+
+  it('leaves a floor unbounded, on purpose', () => {
+    // a covered rectangle is a takeoff figure rather than a region, and one
+    // larger than the drawn slab usually includes a threshold on purpose —
+    // clamping it would be the drawing overruling somebody's tape
+    const slab = { ...wall, host: 'slab' as const };
+    expect(coverBounds(slab).width.max).toBeUndefined();
+    expect(coverBounds(slab).height.max).toBeUndefined();
+  });
+
+  it('never lets a finish shrink to nothing', () => {
+    // a finish of no size is not a measurement, it is a row that should have
+    // been deleted
+    for (const host of ['wall', 'slab'] as const) {
+      const bounds = coverBounds({ ...wall, host });
+      expect(bounds.width.min).toBeGreaterThan(0);
+      expect(bounds.height.min).toBeGreaterThan(0);
+    }
+  });
+
+  it('never hands back a max under the min', () => {
+    // a degenerate wall must not produce a range nothing can satisfy
+    const degenerate = { ...wall, hostLength: 0, hostHeight: 0 };
+    const bounds = coverBounds(degenerate);
+    expect(bounds.width.max).toBeGreaterThanOrEqual(bounds.width.min);
+    expect(bounds.height.max).toBeGreaterThanOrEqual(bounds.height.min);
+  });
+});
+
+describe('what a layer costs', () => {
+  it('prices a quantity against its cost code', () => {
+    expect(priceOf(DEMO_RATES, 'paint', 10)).toEqual({
+      rate: 12,
+      amount: 120,
+    });
+  });
+
+  it('answers null for a code nobody has quoted', () => {
+    // zero is a PRICE — it says this costs nothing — and a bill that quietly
+    // totals unquoted work at nothing is the most expensive kind of wrong
+    expect(priceOf(DEMO_RATES, 'demo-block', 10)).toBeNull();
+  });
+
+  it('bills a strip-out against its own demo code', () => {
+    expect(demoCodeFor('wall-tile')).toBe('demo-wall-tile');
+    // taking paint OFF costs a fraction of putting it on. Compared against
+    // paint rather than tile on purpose: both are quoted per m², whereas a
+    // tile is supplied by the unit and stripped by the area, so the two
+    // numbers are not the same kind of thing and comparing them says nothing
+    expect(DEMO_RATES.rates['demo-paint']?.unit).toBe(
+      DEMO_RATES.rates['paint']?.unit,
+    );
+    expect(DEMO_RATES.rates['demo-paint']?.unitCost).toBeLessThan(
+      DEMO_RATES.rates['paint']?.unitCost ?? 0,
+    );
+  });
+
+  it('strips a tiled wall by the area, not by the tile', () => {
+    // you do not count the tiles you are tearing off a wall
+    expect(DEMO_RATES.rates['wall-tile']?.unit).toBe('count');
+    expect(DEMO_RATES.rates['demo-wall-tile']?.unit).toBe('m2');
+  });
+
+  it('falls back to the generic strip-out with no material', () => {
+    expect(demoCodeFor(null)).toBe('demo-finish');
+  });
+
+  it('shows the money on the row, beside the measurement', () => {
+    // the quantity is the measurement and the money is the answer; a row with
+    // only one of them sends the reader behind the chevron on every layer
+    const html = list({ rows: { a: [PLASTER] } });
+    expect(html).toContain('12.40 m²');
+    expect(html).toContain('148.80 EUR');
+  });
+
+  it('says so on the row when nothing has been quoted', () => {
+    const html = list({ rows: { a: [row({ priced: null })] } });
+    expect(html).toContain('no rate');
+  });
+
+  it('spells the arithmetic out behind the chevron', () => {
+    // a single total is a number to be trusted; a rate times a quantity is a
+    // number that can be checked
+    const facts = finishFacts(PLASTER);
+    expect(facts.some((f) => f.label === 'Rate')).toBe(true);
+    expect(facts.some((f) => f.label === 'Amount')).toBe(true);
+  });
+
+  it('names the unquoted code rather than printing a zero', () => {
+    const facts = finishFacts(row({ priced: null }));
+    expect(facts.find((f) => f.label === 'Rate')?.value).toContain('plaster');
+    expect(facts.some((f) => f.label === 'Amount')).toBe(false);
   });
 });

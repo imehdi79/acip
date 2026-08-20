@@ -8,6 +8,7 @@ import {
   type FinishRow,
 } from './estimator-finishes';
 import { formatQuantity, sidesFor } from './estimator-layers';
+import { DEMO_RATES, formatMoney } from '@/data/rates';
 
 /** one surface of one shape, and what ended up on it */
 export interface ReviewSurface {
@@ -23,6 +24,10 @@ export interface ReviewStep {
   readonly surfaces: readonly ReviewSurface[];
   /** how many layers the whole shape carries, across both surfaces */
   readonly layers: number;
+  /** what the shape comes to — build and strip-out together */
+  readonly amount: number;
+  /** cost codes on this shape that nobody has quoted */
+  readonly unquoted: number;
 }
 
 /**
@@ -55,11 +60,28 @@ export function reviewSteps(
         rows: spot ? finishesAt(doc, spot) : [],
       };
     });
+    // Build AND strip-out, because both are real work on this shape and a
+    // total that counted only one of them would be a number nobody could
+    // reconcile against the bill.
+    let amount = 0;
+    let unquoted = 0;
+    for (const surface of surfaces) {
+      for (const row of surface.rows) {
+        if (row.priced) amount += row.priced.amount;
+        else unquoted += 1;
+        if (row.demolition.quantity > 0) {
+          if (row.demolition.priced) amount += row.demolition.priced.amount;
+          else unquoted += 1;
+        }
+      }
+    }
     return {
       id: step.id,
       name: step.name,
       surfaces,
       layers: surfaces.reduce((n, surface) => n + surface.rows.length, 0),
+      amount,
+      unquoted,
     };
   });
 }
@@ -97,6 +119,8 @@ export function ReviewSheet({
 }) {
   const priced = steps.filter((step) => step.layers > 0).length;
   const layers = steps.reduce((n, step) => n + step.layers, 0);
+  const total = steps.reduce((sum, step) => sum + step.amount, 0);
+  const unquoted = steps.reduce((n, step) => n + step.unquoted, 0);
 
   return (
     <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
@@ -110,7 +134,18 @@ export function ReviewSheet({
               {priced} of {steps.length} priced · {layers}{' '}
               {layers === 1 ? 'layer' : 'layers'}
             </p>
-            <Modal.Heading>The estimate</Modal.Heading>
+            <Modal.Heading>
+              {formatMoney(total, DEMO_RATES.currency)}
+            </Modal.Heading>
+            {/* what the total does NOT include, said next to it. A total with
+                unquoted work silently left out of it is the most expensive
+                kind of wrong an estimate can be. */}
+            {unquoted > 0 && (
+              <p className="text-xs text-muted">
+                {unquoted} {unquoted === 1 ? 'line has' : 'lines have'} no rate
+                yet and {unquoted === 1 ? 'is' : 'are'} not in that figure.
+              </p>
+            )}
           </Modal.Header>
           <Modal.Body className="text-left">
             {steps.length === 0 ? (
@@ -124,7 +159,16 @@ export function ReviewSheet({
                     key={step.id}
                     className="border-b border-separator py-2 last:border-0"
                   >
-                    <p className="font-medium">{step.name}</p>
+                    <div className="flex justify-between gap-2">
+                      <p className="min-w-0 truncate font-medium">
+                        {step.name}
+                      </p>
+                      {step.amount > 0 && (
+                        <p className="shrink-0 tabular-nums">
+                          {formatMoney(step.amount, DEMO_RATES.currency)}
+                        </p>
+                      )}
+                    </div>
                     {step.layers === 0 ? (
                       // the row worth reading the list for
                       <p className="text-xs text-muted">Nothing on this one.</p>
@@ -149,6 +193,9 @@ export function ReviewSheet({
                                   </span>
                                   <span className="shrink-0 text-muted tabular-nums">
                                     {formatQuantity(row.quantity, row.unit)}
+                                    {row.priced
+                                      ? ` · ${formatMoney(row.priced.amount, DEMO_RATES.currency)}`
+                                      : ' · no rate'}
                                   </span>
                                 </li>
                               ))}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Checkbox, Label, Switch } from '@heroui/react';
-import { coverPatch, type FinishRow } from './estimator-finishes';
+import { coverBounds, coverPatch, type FinishRow } from './estimator-finishes';
+import { DEMO_RATES, formatMoney } from '@/data/rates';
 import type { OpeningRow } from './estimator-openings';
 
 /**
@@ -27,12 +28,18 @@ function NumberInput({
   label,
   value,
   suffix,
+  min,
+  max,
   onCommit,
 }: {
   label: string;
   value: number;
   /** the unit shown after the box: `m`, `%` */
   suffix: string;
+  /** the smallest sensible value; anything under it clamps up to it */
+  min?: number;
+  /** the largest the host allows, when the host allows one at all */
+  max?: number;
   onCommit: (value: number) => void;
 }) {
   const [draft, setDraft] = useState(String(value));
@@ -46,7 +53,15 @@ function NumberInput({
       setDraft(String(value));
       return;
     }
-    if (next !== value) onCommit(next);
+    // CLAMPED, not refused. The command rejects a band past the end of its
+    // wall by throwing, and a throw inside a tap handler takes the sheet with
+    // it — so an over-long width becomes the wall's own length, which is both
+    // the nearest true answer and visibly not what was typed.
+    let bounded = next;
+    if (min !== undefined) bounded = Math.max(min, bounded);
+    if (max !== undefined) bounded = Math.min(max, bounded);
+    if (bounded !== next) setDraft(String(bounded));
+    if (bounded !== value) onCommit(bounded);
   };
 
   return (
@@ -117,6 +132,7 @@ export function FinishFields({
   const cover = row.cover;
   if (!cover) return null;
   const onWall = cover.host === 'wall';
+  const bounds = coverBounds(cover);
 
   return (
     <div className="flex flex-col gap-1 pt-1 text-xs">
@@ -124,6 +140,8 @@ export function FinishFields({
         label="Width"
         value={cover.width}
         suffix="m"
+        min={bounds.width.min}
+        max={bounds.width.max}
         onCommit={(width) => onEdit(coverPatch(cover, { width }))}
       />
       {/* the second dimension is not the same measurement on both hosts, and
@@ -134,6 +152,8 @@ export function FinishFields({
         label={onWall ? 'Height from ground' : 'Length'}
         value={cover.height}
         suffix="m"
+        min={bounds.height.min}
+        max={bounds.height.max}
         onCommit={(height) => onEdit(coverPatch(cover, { height }))}
       />
       {onWall && (
@@ -145,7 +165,11 @@ export function FinishFields({
           <Switch
             isSelected={row.deductOpenings}
             onChange={(on) => onDeduct(on)}
-          />
+          >
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+          </Switch>
         </div>
       )}
       {/* What is being torn OUT, stated beside what is going in. A layer is
@@ -158,14 +182,28 @@ export function FinishFields({
           label="Width"
           value={row.demolition.width}
           suffix="m"
+          min={bounds.width.min}
+          max={bounds.width.max}
           onCommit={(width) => onDemolish({ width })}
         />
         <NumberInput
           label={onWall ? 'Height from ground' : 'Length'}
           value={row.demolition.height}
           suffix="m"
+          min={bounds.height.min}
+          max={bounds.height.max}
           onCommit={(height) => onDemolish({ height })}
         />
+        {/* the strip-out is priced against its OWN code at its own rate:
+            tearing tile off a wall costs a fraction of laying it, and has
+            nothing to do with what the tile was worth */}
+        <p className="py-1 text-muted">
+          {row.demolition.quantity <= 0
+            ? 'Nothing being taken off yet.'
+            : row.demolition.priced
+              ? `${row.demolition.quantity.toFixed(2)} m² · ${formatMoney(row.demolition.priced.amount, DEMO_RATES.currency)}`
+              : `${row.demolition.quantity.toFixed(2)} m² · no rate for ${row.demolition.costCode} yet`}
+        </p>
         {/* one box per opening actually in this wall, because "does the door
             go too" is a question about that door and not about the layer —
             marking it sends the door to the bill as its own strip-out line */}

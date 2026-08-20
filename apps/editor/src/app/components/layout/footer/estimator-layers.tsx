@@ -1,5 +1,6 @@
 import { Tabs } from '@heroui/react';
 import { IconChevronDown, IconTrash } from '@tabler/icons-react';
+import { DEMO_RATES, formatMoney } from '@/data/rates';
 import type { FinishRow, StepSide } from './estimator-finishes';
 import type { OpeningRow } from './estimator-openings';
 import { FinishFields } from './estimator-fields';
@@ -122,6 +123,20 @@ export function finishFacts(
     value: formatQuantity(row.quantity, row.unit),
   });
   facts.push({ label: 'Cost code', value: row.costCode });
+  // the arithmetic spelled out, because a single total is a number to be
+  // trusted and a rate times a quantity is a number that can be checked
+  facts.push({
+    label: 'Rate',
+    value: row.priced
+      ? `${formatMoney(row.priced.rate, DEMO_RATES.currency)} / ${row.unit === 'count' ? 'unit' : row.unit === 'm2' ? 'm²' : row.unit === 'm3' ? 'm³' : row.unit}`
+      : `nobody has quoted ${row.costCode} yet`,
+  });
+  if (row.priced) {
+    facts.push({
+      label: 'Amount',
+      value: formatMoney(row.priced.amount, DEMO_RATES.currency),
+    });
+  }
   if (row.unpriced) {
     facts.push({
       label: 'Note',
@@ -183,8 +198,19 @@ function LayerRow({
         {/* the quantity on the row itself, because it is the answer the sheet
             exists to give and opening every row to find it would be a tap per
             layer. The detail below breaks it down. */}
-        <span className="shrink-0 text-xs text-muted tabular-nums">
-          {formatQuantity(row.quantity, row.unit)}
+        {/* the quantity AND what it comes to. The quantity is the measurement
+            and the money is the answer, and a row that showed only one of them
+            would send the reader behind the chevron for the other on every
+            single layer. */}
+        <span className="flex shrink-0 flex-col items-end text-xs tabular-nums">
+          <span className="text-muted">
+            {formatQuantity(row.quantity, row.unit)}
+          </span>
+          <span className={row.priced ? '' : 'text-muted'}>
+            {row.priced
+              ? formatMoney(row.priced.amount, DEMO_RATES.currency)
+              : 'no rate'}
+          </span>
         </span>
         {/* the icons carry no text, and a bare "remove" would come out as a
             column of identical buttons to anyone not looking at it */}
