@@ -7,6 +7,7 @@ import {
   defaultSide,
   finishFacts,
   formatQuantity,
+  layerTotal,
   rowKey,
   sidesFor,
 } from '@/app/components/layout/footer/estimator-layers';
@@ -683,9 +684,91 @@ describe('what a layer costs', () => {
     expect(html).toContain('148.80 EUR');
   });
 
-  it('says so on the row when nothing has been quoted', () => {
-    const html = list({ rows: { a: [row({ priced: null })] } });
-    expect(html).toContain('no rate');
+  it('marks the row when part of it has no rate', () => {
+    // the amount says what it covers and the marker says what it does not; a
+    // total that silently drops the unpriced half is the most expensive kind
+    // of wrong an estimate can be
+    // nothing quoted at all is not a price of nothing
+    expect(list({ rows: { a: [row({ priced: null })] } })).toContain('no rate');
+
+    // but a row that HAS a figure and is still carrying something unpriced
+    // beside it says both
+    const half = list({
+      rows: {
+        a: [
+          row({
+            demolition: {
+              width: 6,
+              height: 3,
+              id: 'd1' as EntityId,
+              on: true,
+              costCode: 'demo-screed',
+              quantity: 18,
+              priced: null,
+            },
+          }),
+        ],
+      },
+    });
+    expect(half).toContain('148.80 EUR +');
+  });
+
+  it('moves the row total when demolition is switched on', () => {
+    // the bug this pins: the row printed the build price alone, so turning
+    // demolition on put real work and real money into the estimate and the
+    // only number on screen did not move
+    const off = layerTotal(row());
+    const on = layerTotal(
+      row({
+        demolition: {
+          width: 6,
+          height: 3,
+          id: 'd1' as EntityId,
+          on: true,
+          costCode: 'demo-plaster',
+          quantity: 18,
+          priced: { rate: 6, amount: 108 },
+        },
+      }),
+    );
+    expect(on.amount).toBeGreaterThan(off.amount);
+    expect(on.amount).toBeCloseTo(148.8 + 108, 6);
+  });
+
+  it('ignores a strip-out that is switched off', () => {
+    // a figure the estimate does not carry must not be added to it
+    const parked = layerTotal(
+      row({
+        demolition: {
+          width: 6,
+          height: 3,
+          id: null,
+          on: false,
+          costCode: 'demo-plaster',
+          quantity: 18,
+          priced: { rate: 6, amount: 108 },
+        },
+      }),
+    );
+    expect(parked.amount).toBeCloseTo(148.8, 6);
+  });
+
+  it('flags a strip-out nobody has quoted', () => {
+    const total = layerTotal(
+      row({
+        demolition: {
+          width: 6,
+          height: 3,
+          id: 'd1' as EntityId,
+          on: true,
+          costCode: 'demo-screed',
+          quantity: 18,
+          priced: null,
+        },
+      }),
+    );
+    expect(total.unquoted).toBe(true);
+    expect(total.amount).toBeCloseTo(148.8, 6);
   });
 
   it('spells the arithmetic out behind the chevron', () => {

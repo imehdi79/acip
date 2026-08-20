@@ -92,6 +92,37 @@ export function formatQuantity(quantity: number, unit: string): string {
 }
 
 /**
+ * What one row adds to the invoice: the layer AND the strip-out under it.
+ *
+ * The row used to print the build price alone, which made the demolition
+ * switch look broken — you turned it on, real work and real money joined the
+ * estimate, and the only number on screen did not move. A layer is one line of
+ * an estimate to the person reading it, and both halves of it are that line.
+ *
+ * `unquoted` travels with the figure rather than being folded into it. A total
+ * that silently drops the half nobody has priced is the most expensive kind of
+ * wrong an estimate can be, so the amount says what it covers and the flag
+ * says what it does not.
+ *
+ * Pure, so the row and the invoice add up the same way — they used to do this
+ * arithmetic separately, which is how two screens start disagreeing.
+ */
+export function layerTotal(row: FinishRow): {
+  amount: number;
+  unquoted: boolean;
+} {
+  let amount = 0;
+  let unquoted = false;
+  if (row.priced) amount += row.priced.amount;
+  else unquoted = true;
+  if (row.demolition.on) {
+    if (row.demolition.priced) amount += row.demolition.priced.amount;
+    else unquoted = true;
+  }
+  return { amount, unquoted };
+}
+
+/**
  * What a row's detail panel says — the facts, not a placeholder.
  *
  * This used to print prose that changed per layer, standing in for inputs that
@@ -135,6 +166,23 @@ export function finishFacts(
     facts.push({
       label: 'Amount',
       value: formatMoney(row.priced.amount, DEMO_RATES.currency),
+    });
+  }
+  // the strip-out and the sum, so the number on the row can be checked rather
+  // than trusted — it is two figures added together and neither is obvious
+  if (row.demolition.on) {
+    facts.push({
+      label: 'Strip out',
+      value: row.demolition.priced
+        ? `${row.demolition.quantity.toFixed(2)} m² · ${formatMoney(row.demolition.priced.amount, DEMO_RATES.currency)}`
+        : `${row.demolition.quantity.toFixed(2)} m² · nobody has quoted ${row.demolition.costCode} yet`,
+    });
+    const total = layerTotal(row);
+    facts.push({
+      label: 'Total',
+      value: total.unquoted
+        ? `${formatMoney(total.amount, DEMO_RATES.currency)}, plus what is unquoted`
+        : formatMoney(total.amount, DEMO_RATES.currency),
     });
   }
   if (row.unpriced) {
@@ -185,6 +233,7 @@ function LayerRow({
   onDemolishToggle: (on: boolean) => void;
   onDemolishOpening: (openingId: string, demolish: boolean) => void;
 }) {
+  const total = layerTotal(row);
   return (
     // a hairline between rows: now that a row carries a delete, where one row
     // ends and the next begins is the difference between removing 2 and 3
@@ -200,18 +249,22 @@ function LayerRow({
         {/* the quantity on the row itself, because it is the answer the sheet
             exists to give and opening every row to find it would be a tap per
             layer. The detail below breaks it down. */}
-        {/* the quantity AND what it comes to. The quantity is the measurement
-            and the money is the answer, and a row that showed only one of them
-            would send the reader behind the chevron for the other on every
-            single layer. */}
+        {/* the quantity AND what it comes to. The money is the layer PLUS its
+            strip-out, so turning demolition on visibly moves the one number
+            the reader is looking at — showing the build alone made the switch
+            look like it had done nothing. */}
         <span className="flex shrink-0 flex-col items-end text-xs tabular-nums">
           <span className="text-muted">
             {formatQuantity(row.quantity, row.unit)}
+            {row.demolition.on && ' + strip'}
           </span>
-          <span className={row.priced ? '' : 'text-muted'}>
-            {row.priced
-              ? formatMoney(row.priced.amount, DEMO_RATES.currency)
-              : 'no rate'}
+          {/* "0.00 EUR +" for a row where nothing at all is quoted reads as a
+              price of nothing; it is not one. The trailing + is for a row that
+              HAS a figure and is still carrying something unpriced beside it. */}
+          <span className={total.unquoted ? 'text-muted' : ''}>
+            {total.unquoted && total.amount === 0
+              ? 'no rate'
+              : `${formatMoney(total.amount, DEMO_RATES.currency)}${total.unquoted ? ' +' : ''}`}
           </span>
         </span>
         {/* the icons carry no text, and a bare "remove" would come out as a

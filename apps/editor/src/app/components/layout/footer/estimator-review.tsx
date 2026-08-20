@@ -7,7 +7,7 @@ import {
   spotsFor,
   type FinishRow,
 } from './estimator-finishes';
-import { formatQuantity, sidesFor } from './estimator-layers';
+import { formatQuantity, layerTotal, sidesFor } from './estimator-layers';
 import { DEMO_RATES, formatMoney } from '@/data/rates';
 
 /** one surface of one shape, and what ended up on it */
@@ -60,19 +60,17 @@ export function reviewSteps(
         rows: spot ? finishesAt(doc, spot) : [],
       };
     });
-    // Build AND strip-out, because both are real work on this shape and a
-    // total that counted only one of them would be a number nobody could
-    // reconcile against the bill.
+    // Through `layerTotal`, the same function the row itself adds up with.
+    // These two used to do the arithmetic separately, which is exactly how a
+    // list and the invoice at the end of it start disagreeing about the same
+    // wall — and the invoice is the one nobody can check against anything.
     let amount = 0;
     let unquoted = 0;
     for (const surface of surfaces) {
       for (const row of surface.rows) {
-        if (row.priced) amount += row.priced.amount;
-        else unquoted += 1;
-        if (row.demolition.quantity > 0) {
-          if (row.demolition.priced) amount += row.demolition.priced.amount;
-          else unquoted += 1;
-        }
+        const total = layerTotal(row);
+        amount += total.amount;
+        if (total.unquoted) unquoted += 1;
       }
     }
     return {
@@ -202,7 +200,7 @@ export function ReviewSheet({
                                       a bill that folded it into the layer
                                       above could not be reconciled against
                                       the BOQ's own demo- lines */}
-                                  {row.demolition.quantity > 0 && (
+                                  {row.demolition.on && (
                                     <span className="flex justify-between gap-2 py-0.5 pl-3">
                                       <span className="min-w-0 truncate text-muted">
                                         Take out {row.name}

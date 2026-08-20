@@ -3,6 +3,7 @@ import { EditorSession, point } from '@acip/editor-core';
 import type { EntityId, MaterialId } from '@acip/editor-core';
 import { assembleBoq } from '@acip/estimator';
 import { STARTER_MATERIALS, seedMaterials } from '@/data/materials';
+import { DEMO_RATES } from '@/data/rates';
 import { WallEntity } from '@acip/editor-core';
 import {
   anchorForSide,
@@ -850,5 +851,72 @@ describe('the invoice at the end of the walk', () => {
       estimatorSteps(session.doc, null),
     ).find((s) => s.name.startsWith('Room'));
     expect(step?.unquoted).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The sheet is a view onto the estimate, and that has to hold for the money as
+ * well as the quantity. It prices from `DEMO_RATES` directly; the bill prices
+ * the same table through `assembleBoq`. If those two ever disagree the sheet
+ * is quoting a number the invoice will not carry.
+ */
+describe('the money the sheet shows and the money the bill carries', () => {
+  it('prices a layer the same way the bill does', () => {
+    const { session, walls } = plan();
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: material(session, 'paint'),
+    });
+    const row = finishesOnFace(session.doc, walls[0], 'face+')[0];
+    const line = assembleBoq(session.doc, { rates: DEMO_RATES }).lines.find(
+      (l) => l.costCode === 'paint',
+    );
+    expect(row.priced?.amount).toBeCloseTo(line?.amount ?? -1, 6);
+  });
+
+  it('prices a strip-out the same way the bill does', () => {
+    // the probe that found this showed the sheet quoting demo-paint at 4 while
+    // the bill reported null, because nobody had handed assembleBoq the table
+    const { session, walls } = plan();
+    const paint = material(session, 'paint');
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: paint,
+    });
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: paint,
+      phase: 'demolish',
+    });
+    const row = finishesOnFace(session.doc, walls[0], 'face+')[0];
+    const line = assembleBoq(session.doc, { rates: DEMO_RATES }).lines.find(
+      (l) => l.costCode === 'demo-paint',
+    );
+    expect(row.demolition.on).toBe(true);
+    expect(row.demolition.priced?.amount).toBeCloseTo(line?.amount ?? -1, 6);
+  });
+
+  it('agrees with the bill about what nobody has quoted', () => {
+    // demo-screed is deliberately absent from the table; both must say so
+    const { session } = plan();
+    addRoomLayer(session, 'floor', 'screed');
+    const spot = spotsFor(
+      finishTargetFor(session.doc, roomStep(session)),
+    ).floor;
+    if (!spot || spot.kind !== 'slab') throw new Error('no floor');
+    session.dispatch('FLOORFINISH.ADD', {
+      slabId: spot.slabId,
+      surface: 'top',
+      materialId: material(session, 'screed'),
+      phase: 'demolish',
+    });
+    const row = finishesAt(session.doc, spot)[0];
+    expect(row.demolition.priced).toBeNull();
+    expect(
+      assembleBoq(session.doc, { rates: DEMO_RATES }).missingRates,
+    ).toContain('demo-screed');
   });
 });
