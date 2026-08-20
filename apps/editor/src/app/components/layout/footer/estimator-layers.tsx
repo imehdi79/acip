@@ -169,6 +169,7 @@ function LayerRow({
   onEdit,
   onDeduct,
   onDemolish,
+  onDemolishToggle,
   onDemolishOpening,
 }: {
   row: FinishRow;
@@ -181,6 +182,7 @@ function LayerRow({
   onEdit: (patch: Record<string, number>) => void;
   onDeduct: (deductOpenings: boolean) => void;
   onDemolish: (next: { width?: number; height?: number }) => void;
+  onDemolishToggle: (on: boolean) => void;
   onDemolishOpening: (openingId: string, demolish: boolean) => void;
 }) {
   return (
@@ -254,6 +256,7 @@ function LayerRow({
             onEdit={onEdit}
             onDeduct={onDeduct}
             onDemolish={onDemolish}
+            onDemolishToggle={onDemolishToggle}
             onDemolishOpening={onDemolishOpening}
           />
         </div>
@@ -273,6 +276,7 @@ function SideLayers({
   onEdit,
   onDeduct,
   onDemolish,
+  onDemolishToggle,
   onDemolishOpening,
 }: {
   rows: readonly FinishRow[];
@@ -287,6 +291,7 @@ function SideLayers({
     finishId: string,
     next: { width?: number; height?: number },
   ) => void;
+  onDemolishToggle: (finishId: string, on: boolean) => void;
   onDemolishOpening: (openingId: string, demolish: boolean) => void;
 }) {
   if (rows.length === 0) {
@@ -318,6 +323,7 @@ function SideLayers({
             onEdit={(patch) => onEdit(row.id, patch)}
             onDeduct={(on) => onDeduct(row.id, on)}
             onDemolish={(next) => onDemolish(row.id, next)}
+            onDemolishToggle={(on) => onDemolishToggle(row.id, on)}
             onDemolishOpening={onDemolishOpening}
           />
         </li>
@@ -353,6 +359,7 @@ export function LayerList({
   onDeduct,
   openings,
   onDemolish,
+  onDemolishToggle,
   onDemolishOpening,
 }: {
   /** the `EstimatorStep.kind` being priced — decides how many sides it has */
@@ -387,6 +394,8 @@ export function LayerList({
     finishId: string,
     next: { width?: number; height?: number },
   ) => void;
+  /** turn a layer's strip-out on or off; off erases the partner entity */
+  onDemolishToggle: (finishId: string, on: boolean) => void;
   /** send one door or window to the bill as its own tear-out line */
   onDemolishOpening: (openingId: string, demolish: boolean) => void;
 }) {
@@ -440,6 +449,7 @@ export function LayerList({
               onEdit={onEdit}
               onDeduct={onDeduct}
               onDemolish={onDemolish}
+              onDemolishToggle={onDemolishToggle}
               onDemolishOpening={onDemolishOpening}
             />
           </Tabs.Panel>

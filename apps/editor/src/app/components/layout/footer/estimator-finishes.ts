@@ -311,6 +311,8 @@ export interface FinishRow {
     readonly height: number;
     /** the partner finish, once there is one to update rather than create */
     readonly id: EntityId | null;
+    /** whether anything is being torn out at all — the switch's own state */
+    readonly on: boolean;
     /** the `demo-` code the strip-out is billed against */
     readonly costCode: string;
     /** m² of surface coming off — a strip-out is priced by area, never by tile */
@@ -448,6 +450,7 @@ function finishesAtAnchor(
         entity instanceof FinishEntity ? entity.deductOpenings : true,
       demolition: {
         id: partner?.id ?? null,
+        on: partner !== null,
         costCode: demoCode,
         quantity: partner?.area ?? 0,
         priced: partner ? priceOf(DEMO_RATES, demoCode, partner.area) : null,

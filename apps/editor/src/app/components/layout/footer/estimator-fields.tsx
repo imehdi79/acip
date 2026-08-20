@@ -118,6 +118,7 @@ export function FinishFields({
   onEdit,
   onDeduct,
   onDemolish,
+  onDemolishToggle,
   onDemolishOpening,
 }: {
   row: FinishRow;
@@ -127,6 +128,8 @@ export function FinishFields({
   onDeduct: (deductOpenings: boolean) => void;
   /** the strip-out extent, which is a finish of its own and not this one */
   onDemolish: (next: { width?: number; height?: number }) => void;
+  /** turn the strip-out on or off — it exists as an entity only while on */
+  onDemolishToggle: (on: boolean) => void;
   onDemolishOpening: (openingId: string, demolish: boolean) => void;
 }) {
   const cover = row.cover;
@@ -160,50 +163,75 @@ export function FinishFields({
         // Net or solid. Not a preference: they are two measurement
         // conventions, and under the solid one the doors and windows are
         // billed as their own items rather than being folded into the face.
-        <div className="flex items-center justify-between gap-2 py-1">
-          <Label>Take out doors and windows</Label>
-          <Switch
-            isSelected={row.deductOpenings}
-            onChange={(on) => onDeduct(on)}
-          >
+        <Switch
+          isSelected={row.deductOpenings}
+          onChange={onDeduct}
+          className="w-full py-1"
+        >
+          {/* Switch.Content IS the pressable element — react-aria's
+              SwitchButton. Without it the track and thumb render and nothing
+              is tappable, which is a control that looks live and is not. The
+              label goes inside it so the words toggle too, which on a phone is
+              most of the target. */}
+          <Switch.Content className="w-full justify-between gap-2">
+            <Label>Take out doors and windows</Label>
             <Switch.Control>
               <Switch.Thumb />
             </Switch.Control>
-          </Switch>
-        </div>
+          </Switch.Content>
+        </Switch>
       )}
       {/* What is being torn OUT, stated beside what is going in. A layer is
           not one or the other: a room is stripped and then rebuilt, and the
           two quantities are both real and both priced — the strip-out against
           its own demo- code at its own rate. */}
       <div className="border-t border-separator pt-1">
-        <p className="pb-1 font-medium text-muted">Demolition</p>
-        <NumberInput
-          label="Width"
-          value={row.demolition.width}
-          suffix="m"
-          min={bounds.width.min}
-          max={bounds.width.max}
-          onCommit={(width) => onDemolish({ width })}
-        />
-        <NumberInput
-          label={onWall ? 'Height from ground' : 'Length'}
-          value={row.demolition.height}
-          suffix="m"
-          min={bounds.height.min}
-          max={bounds.height.max}
-          onCommit={(height) => onDemolish({ height })}
-        />
-        {/* the strip-out is priced against its OWN code at its own rate:
+        {/* Demolition is OFF until somebody says otherwise, and the figures
+            only exist once it is on. A strip-out nobody asked for would price
+            every refurbishment as a demolition, and boxes standing ready for
+            one read as though it had already been decided. */}
+        <Switch
+          isSelected={row.demolition.on}
+          onChange={onDemolishToggle}
+          className="w-full py-1"
+        >
+          <Switch.Content className="w-full justify-between gap-2">
+            <Label className="font-medium">Demolition</Label>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+          </Switch.Content>
+        </Switch>
+        {row.demolition.on && (
+          <>
+            <NumberInput
+              label="Width"
+              value={row.demolition.width}
+              suffix="m"
+              min={bounds.width.min}
+              max={bounds.width.max}
+              onCommit={(width) => onDemolish({ width })}
+            />
+            <NumberInput
+              label={onWall ? 'Height from ground' : 'Length'}
+              value={row.demolition.height}
+              suffix="m"
+              min={bounds.height.min}
+              max={bounds.height.max}
+              onCommit={(height) => onDemolish({ height })}
+            />
+            {/* the strip-out is priced against its OWN code at its own rate:
             tearing tile off a wall costs a fraction of laying it, and has
             nothing to do with what the tile was worth */}
-        <p className="py-1 text-muted">
-          {row.demolition.quantity <= 0
-            ? 'Nothing being taken off yet.'
-            : row.demolition.priced
-              ? `${row.demolition.quantity.toFixed(2)} m² · ${formatMoney(row.demolition.priced.amount, DEMO_RATES.currency)}`
-              : `${row.demolition.quantity.toFixed(2)} m² · no rate for ${row.demolition.costCode} yet`}
-        </p>
+            <p className="py-1 text-muted">
+              {row.demolition.quantity <= 0
+                ? 'Nothing being taken off yet.'
+                : row.demolition.priced
+                  ? `${row.demolition.quantity.toFixed(2)} m² · ${formatMoney(row.demolition.priced.amount, DEMO_RATES.currency)}`
+                  : `${row.demolition.quantity.toFixed(2)} m² · no rate for ${row.demolition.costCode} yet`}
+            </p>
+          </>
+        )}
         {/* one box per opening actually in this wall, because "does the door
             go too" is a question about that door and not about the layer —
             marking it sends the door to the bill as its own strip-out line */}

@@ -131,7 +131,7 @@ export function ReviewSheet({
                 the walk is finished in the sense the user cares about: not
                 "did I reach the end" but "did I leave anything bare" */}
             <p className="text-xs text-muted">
-              {priced} of {steps.length} priced · {layers}{' '}
+              Invoice · {priced} of {steps.length} priced · {layers}{' '}
               {layers === 1 ? 'layer' : 'layers'}
             </p>
             <Modal.Heading>
@@ -184,19 +184,37 @@ export function ReviewSheet({
                             </p>
                             <ul className="pl-3 text-xs">
                               {surface.rows.map((row) => (
-                                <li
-                                  key={row.id}
-                                  className="flex justify-between gap-2 py-0.5"
-                                >
-                                  <span className="min-w-0 truncate">
-                                    {row.name}
+                                <li key={row.id}>
+                                  <span className="flex justify-between gap-2 py-0.5">
+                                    <span className="min-w-0 truncate">
+                                      {row.name}
+                                    </span>
+                                    <span className="shrink-0 text-muted tabular-nums">
+                                      {formatQuantity(row.quantity, row.unit)}
+                                      {row.priced
+                                        ? ` · ${formatMoney(row.priced.amount, DEMO_RATES.currency)}`
+                                        : ' · no rate'}
+                                    </span>
                                   </span>
-                                  <span className="shrink-0 text-muted tabular-nums">
-                                    {formatQuantity(row.quantity, row.unit)}
-                                    {row.priced
-                                      ? ` · ${formatMoney(row.priced.amount, DEMO_RATES.currency)}`
-                                      : ' · no rate'}
-                                  </span>
+                                  {/* the strip-out is its own line on the
+                                      invoice, not a note on the build one: it
+                                      is separate work at a separate rate, and
+                                      a bill that folded it into the layer
+                                      above could not be reconciled against
+                                      the BOQ's own demo- lines */}
+                                  {row.demolition.quantity > 0 && (
+                                    <span className="flex justify-between gap-2 py-0.5 pl-3">
+                                      <span className="min-w-0 truncate text-muted">
+                                        Take out {row.name}
+                                      </span>
+                                      <span className="shrink-0 text-muted tabular-nums">
+                                        {row.demolition.quantity.toFixed(2)} m²
+                                        {row.demolition.priced
+                                          ? ` · ${formatMoney(row.demolition.priced.amount, DEMO_RATES.currency)}`
+                                          : ' · no rate'}
+                                      </span>
+                                    </span>
+                                  )}
                                 </li>
                               ))}
                             </ul>

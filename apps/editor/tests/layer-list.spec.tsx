@@ -59,6 +59,7 @@ const row = (over: Partial<FinishRow> = {}): FinishRow => ({
     width: 6,
     height: 3,
     id: null,
+    on: false,
     costCode: 'demo-plaster',
     quantity: 0,
     priced: null,
@@ -125,6 +126,7 @@ function list({
       onDeduct={noop}
       openings={[]}
       onDemolish={noop}
+      onDemolishToggle={noop}
       onDemolishOpening={noop}
     />,
   );
@@ -421,6 +423,7 @@ describe('the fields behind a row', () => {
         onEdit={noop}
         onDeduct={noop}
         onDemolish={noop}
+        onDemolishToggle={noop}
         onDemolishOpening={noop}
       />,
     );
@@ -440,6 +443,7 @@ describe('the fields behind a row', () => {
         width: 6,
         height: 4,
         id: null,
+        on: false,
         costCode: 'demo-plaster',
         quantity: 0,
         priced: null,
@@ -696,5 +700,100 @@ describe('what a layer costs', () => {
     const facts = finishFacts(row({ priced: null }));
     expect(facts.find((f) => f.label === 'Rate')?.value).toContain('plaster');
     expect(facts.some((f) => f.label === 'Amount')).toBe(false);
+  });
+});
+
+/**
+ * A switch that renders and cannot be pressed is worse than no switch: it
+ * reads as a setting the user has already made. HeroUI's `Switch.Content` IS
+ * the pressable element (react-aria's SwitchButton) — the track and thumb
+ * alone are decoration.
+ */
+describe('the switches actually being pressable', () => {
+  const fields = (r: FinishRow) =>
+    renderToStaticMarkup(
+      <FinishFields
+        row={r}
+        openings={[]}
+        onEdit={noop}
+        onDeduct={noop}
+        onDemolish={noop}
+        onDemolishToggle={noop}
+        onDemolishOpening={noop}
+      />,
+    );
+
+  it('wraps every switch in the element that takes the press', () => {
+    // the bug this pins: a Switch with only Control and Thumb inside renders
+    // a track, a thumb, and nothing that responds to a thumb
+    const html = fields(row());
+    const switches = html.match(/data-slot="switch"/g) ?? [];
+    const pressable = html.match(/data-slot="switch-content"/g) ?? [];
+    expect(switches.length).toBeGreaterThan(0);
+    expect(pressable).toHaveLength(switches.length);
+  });
+
+  it('gives the switch a thumb to move', () => {
+    expect(fields(row())).toContain('switch-thumb');
+  });
+
+  it('shows which way each switch is set', () => {
+    expect(fields(row({ deductOpenings: true }))).toContain(
+      'data-selected="true"',
+    );
+    expect(fields(row({ deductOpenings: false }))).not.toContain(
+      'data-selected="true"',
+    );
+  });
+});
+
+describe('turning demolition on', () => {
+  const fields = (r: FinishRow) =>
+    renderToStaticMarkup(
+      <FinishFields
+        row={r}
+        openings={[]}
+        onEdit={noop}
+        onDeduct={noop}
+        onDemolish={noop}
+        onDemolishToggle={noop}
+        onDemolishOpening={noop}
+      />,
+    );
+
+  const stripping = (over: Partial<FinishRow['demolition']> = {}) =>
+    row({
+      demolition: {
+        width: 6,
+        height: 3,
+        id: 'd1' as EntityId,
+        on: true,
+        costCode: 'demo-plaster',
+        quantity: 18,
+        priced: { rate: 6, amount: 108 },
+        ...over,
+      },
+    });
+
+  it('offers the switch but no figures until it is on', () => {
+    // boxes standing ready for a strip-out read as though one had already been
+    // decided, and a strip-out nobody asked for prices every refurbishment as
+    // a demolition
+    const html = fields(row());
+    expect(html).toContain('Demolition');
+    expect(html).not.toContain('Nothing being taken off yet.');
+  });
+
+  it('shows the figures and the money once it is on', () => {
+    const html = fields(stripping());
+    expect(html).toContain('18.00 m²');
+    expect(html).toContain('108.00 EUR');
+  });
+
+  it('says so when the strip-out has no rate', () => {
+    // never a zero: a bill that totals unquoted work at nothing is the most
+    // expensive kind of wrong
+    const html = fields(stripping({ priced: null }));
+    expect(html).toContain('no rate for demo-plaster yet');
   });
 });

@@ -720,3 +720,135 @@ describe('how far a new layer reaches', () => {
     expect(a.cover?.width).toBeLessThan(wall.getLength());
   });
 });
+
+/**
+ * The strip-out switch is what BRINGS a demolish finish into the drawing and
+ * takes it out again — there is no third state where the sheet remembers a
+ * figure the estimate does not carry.
+ */
+describe('switching a strip-out on and off', () => {
+  function painted() {
+    const { session, walls } = plan();
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: material(session, 'paint'),
+    });
+    const read = () => finishesOnFace(session.doc, walls[0], 'face+')[0];
+    return { session, walls, read };
+  }
+
+  it('is off until a strip-out exists', () => {
+    const row = painted().read();
+    expect(row.demolition.on).toBe(false);
+    expect(row.demolition.id).toBeNull();
+    expect(row.demolition.quantity).toBe(0);
+  });
+
+  it('comes on when the partner is added, and prices itself', () => {
+    const { session, walls, read } = painted();
+    const before = read();
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: material(session, 'paint'),
+      phase: 'demolish',
+      t0: before.cover?.t0,
+      t1: before.cover ? before.cover.t0 + 3 / before.cover.hostLength : 1,
+    });
+    const row = read();
+    expect(row.demolition.on).toBe(true);
+    expect(row.demolition.costCode).toBe('demo-paint');
+    // priced by AREA against its own code, at its own rate
+    expect(row.demolition.priced?.rate).toBe(4);
+    expect(row.demolition.priced?.amount).toBeCloseTo(
+      row.demolition.quantity * 4,
+      6,
+    );
+  });
+
+  it('goes off again when the partner is erased', () => {
+    const { session, walls, read } = painted();
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: material(session, 'paint'),
+      phase: 'demolish',
+    });
+    const on = read();
+    expect(on.demolition.on).toBe(true);
+    session.dispatch('ENTITY.ERASE', { ids: [on.demolition.id] });
+    const off = read();
+    expect(off.demolition.on).toBe(false);
+    expect(off.demolition.priced).toBeNull();
+  });
+
+  it('still shows one row, whatever the strip-out is doing', () => {
+    // the strip-out lives inside its layer; listed beside it, one plaster
+    // would read as two
+    const { session, walls } = plan();
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: material(session, 'paint'),
+    });
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: material(session, 'paint'),
+      phase: 'demolish',
+    });
+    expect(finishesOnFace(session.doc, walls[0], 'face+')).toHaveLength(1);
+  });
+});
+
+describe('the invoice at the end of the walk', () => {
+  it('counts the strip-out into the shape total', () => {
+    // both are real work on this shape, and a total counting only one of them
+    // could not be reconciled against the bill
+    const { session, walls } = plan();
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: material(session, 'paint'),
+    });
+    const build = reviewSteps(
+      session.doc,
+      estimatorSteps(session.doc, null),
+    ).find((s) => s.amount > 0)?.amount;
+
+    session.dispatch('FINISH.ADD', {
+      wallId: walls[0],
+      side: 'face+',
+      materialId: material(session, 'paint'),
+      phase: 'demolish',
+    });
+    const both = reviewSteps(
+      session.doc,
+      estimatorSteps(session.doc, null),
+    ).find((s) => s.amount > 0)?.amount;
+
+    expect(both).toBeGreaterThan(build ?? 0);
+  });
+
+  it('counts an unquoted strip-out as unquoted, never as nothing', () => {
+    // nothing prices demo-screed, and pretending it is free is the most
+    // expensive kind of wrong an estimate can be
+    const { session } = plan();
+    addRoomLayer(session, 'floor', 'screed');
+    const room = roomStep(session);
+    const spot = spotsFor(finishTargetFor(session.doc, room)).floor;
+    if (!spot || spot.kind !== 'slab') throw new Error('no floor');
+    session.dispatch('FLOORFINISH.ADD', {
+      slabId: spot.slabId,
+      surface: 'top',
+      materialId: material(session, 'screed'),
+      phase: 'demolish',
+    });
+    const step = reviewSteps(
+      session.doc,
+      estimatorSteps(session.doc, null),
+    ).find((s) => s.name.startsWith('Room'));
+    expect(step?.unquoted).toBeGreaterThan(0);
+  });
+});

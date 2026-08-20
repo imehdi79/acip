@@ -328,6 +328,55 @@ function ShapeWizard({ close }: { close: () => void }) {
     ui.requestFit(framing(step.bounds));
   }, [session, ui, step, wholePlan]);
 
+  /**
+   * Bring a layer's strip-out into the drawing, at the extent it is showing.
+   *
+   * Same surface, same material, `phase: 'demolish'` — that is how core models
+   * demolition and it is what puts a `demo-` line in the bill at its own rate.
+   * Shared by the switch and by the figures, so a strip-out cannot come into
+   * existence two slightly different ways.
+   */
+  const startDemolition = (
+    row: FinishRow,
+    at: StepSide,
+    next: { width?: number; height?: number } = {},
+  ) => {
+    const spot = target ? spotsFor(target)[at] : undefined;
+    if (!row.cover || !spot || !row.materialId) return;
+    const partner = {
+      ...row.cover,
+      width: row.demolition.width,
+      height: row.demolition.height,
+    };
+    const full = coverPatch(partner, {
+      width: next.width ?? partner.width,
+      height: next.height ?? partner.height,
+    });
+    if (spot.kind === 'wall') {
+      session.dispatch('FINISH.ADD', {
+        wallId: spot.wallId,
+        side: spot.side,
+        materialId: row.materialId,
+        phase: 'demolish',
+        t0: partner.t0,
+        t1: full['t1'],
+        sillHeight: partner.sillHeight,
+        topHeight: full['topHeight'],
+      });
+      return;
+    }
+    // FLOORFINISH.ADD takes no covered rectangle, so the extent is stated in a
+    // second breath — two dispatches, one undo apiece, which is the honest
+    // cost of a command that cannot say it in one
+    const id = session.dispatch<EntityId>('FLOORFINISH.ADD', {
+      slabId: spot.slabId,
+      surface: spot.surface,
+      materialId: row.materialId,
+      phase: 'demolish',
+    });
+    session.dispatch('FINISH.UPDATE', { id, ...full });
+  };
+
   return (
     <>
       {/* The shape being priced is the HEADING, and the counter the line above
@@ -412,45 +461,46 @@ function ShapeWizard({ close }: { close: () => void }) {
               if (!row?.cover || !spot || !row.materialId) return;
               // the partner's OWN extent, not the layer's, so typing a width
               // does not silently restate a height taken from the wrong finish
-              const partner = {
-                ...row.cover,
-                width: row.demolition.width,
-                height: row.demolition.height,
-              };
-              if (row.demolition.id !== null) {
-                session.dispatch('FINISH.UPDATE', {
-                  id: row.demolition.id,
-                  ...coverPatch(partner, next),
-                });
+              session.dispatch('FINISH.UPDATE', {
+                id: row.demolition.id,
+                ...coverPatch(
+                  {
+                    ...row.cover,
+                    width: row.demolition.width,
+                    height: row.demolition.height,
+                  },
+                  next,
+                ),
+              });
+            }}
+            /**
+             * The switch is what BRINGS the strip-out into existence, and
+             * turning it off takes it out again. That is the honest shape of
+             * it: a demolish finish either is in the drawing, priced and
+             * billed, or it is not — there is no third state where the sheet
+             * remembers a figure that the estimate does not carry.
+             *
+             * On, it starts at the layer's own extent, which is the usual
+             * answer: what is being stripped is the face about to be
+             * re-covered. Off, the entity is erased, and one undo puts it and
+             * its figures back.
+             */
+            onDemolishToggle={(finishId, on) => {
+              const row = (view.rows[side] ?? []).find(
+                (r) => r.id === finishId,
+              );
+              if (!row) return;
+              if (!on) {
+                if (row.demolition.id !== null) {
+                  session.dispatch('ENTITY.ERASE', {
+                    ids: [row.demolition.id],
+                  });
+                }
                 return;
               }
-              const full = coverPatch(partner, {
-                width: next.width ?? partner.width,
-                height: next.height ?? partner.height,
-              });
-              if (spot.kind === 'wall') {
-                session.dispatch('FINISH.ADD', {
-                  wallId: spot.wallId,
-                  side: spot.side,
-                  materialId: row.materialId,
-                  phase: 'demolish',
-                  t0: partner.t0,
-                  t1: full['t1'],
-                  sillHeight: partner.sillHeight,
-                  topHeight: full['topHeight'],
-                });
-                return;
+              if (row.demolition.id === null) {
+                startDemolition(row, side);
               }
-              // FLOORFINISH.ADD takes no covered rectangle, so the extent is
-              // stated in a second breath — two dispatches, one undo apiece,
-              // which is the honest cost of a command that cannot say it once
-              const id = session.dispatch<EntityId>('FLOORFINISH.ADD', {
-                slabId: spot.slabId,
-                surface: spot.surface,
-                materialId: row.materialId,
-                phase: 'demolish',
-              });
-              session.dispatch('FINISH.UPDATE', { id, ...full });
             }}
             openings={view.openings[side] ?? []}
             // the door's OWN phase, not the layer's: "does the door go too" is
@@ -522,17 +572,20 @@ function ShapeWizard({ close }: { close: () => void }) {
               Back
             </Button>
             {/* Next never disappears now: on the last shape it walks off the
-                end into the summary, which is a step in the same sense the
+                end into the invoice, which is a step in the same sense the
                 shapes are. A button that vanished used to be how the walk
-                said "that was the last one" — the summary says it better, and
-                says what was left bare while it does. */}
+                said "that was the last one" — the invoice says it better, and
+                says what was left bare and what it all comes to while it
+                does. It is named for where it goes rather than for being over,
+                because "Finish" and the Finish entities on every row were the
+                same word for two unrelated things. */}
             <Button
               onPress={() => {
                 if (last) setReviewing(true);
                 else setIndex((at) => Math.min(steps.length - 1, at + 1));
               }}
             >
-              {last ? 'Finish' : 'Next'}
+              {last ? 'Invoice' : 'Next'}
             </Button>
           </div>
         )}
