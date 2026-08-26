@@ -24,6 +24,24 @@ import type { OpeningRow } from './estimator-openings';
  * undo, or the command clamping something — so the box can never sit showing a
  * number the document did not accept.
  */
+/**
+ * A metre reading, to the centimetre.
+ *
+ * The numbers reaching these boxes are derived, not typed: a width is
+ * `(t1 - t0) x length`, and floating point hands back 5.699999999999999 for a
+ * wall somebody measured at 5.7. Nobody builds to the eleventh decimal, so the
+ * box does not offer one.
+ *
+ * The rounding is applied on the way OUT as well as on the way in — what is
+ * committed is what was read — so the document stops accumulating the noise
+ * rather than merely hiding it, and a value that comes back through the reader
+ * matches the draft it was typed into instead of re-rendering as a different
+ * number.
+ */
+export function toCentimetre(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 function NumberInput({
   label,
   value,
@@ -42,15 +60,16 @@ function NumberInput({
   max?: number;
   onCommit: (value: number) => void;
 }) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
+  const shown = toCentimetre(value);
+  const [draft, setDraft] = useState(String(shown));
+  useEffect(() => setDraft(String(shown)), [shown]);
 
   const commit = () => {
-    const next = Number.parseFloat(draft);
+    const next = toCentimetre(Number.parseFloat(draft));
     // a blank or half-typed box is not an edit, it is a field the user walked
     // away from; putting the committed value back beats dispatching NaN
     if (!Number.isFinite(next)) {
-      setDraft(String(value));
+      setDraft(String(shown));
       return;
     }
     // CLAMPED, not refused. The command rejects a band past the end of its
@@ -58,10 +77,13 @@ function NumberInput({
     // it — so an over-long width becomes the wall's own length, which is both
     // the nearest true answer and visibly not what was typed.
     let bounded = next;
-    if (min !== undefined) bounded = Math.max(min, bounded);
-    if (max !== undefined) bounded = Math.min(max, bounded);
+    if (min !== undefined) bounded = Math.max(min, toCentimetre(bounded));
+    if (max !== undefined) bounded = Math.min(toCentimetre(max), bounded);
+    bounded = toCentimetre(bounded);
     if (bounded !== next) setDraft(String(bounded));
-    if (bounded !== value) onCommit(bounded);
+    // against the ROUNDED value, or a wall whose true width is 5.699999999
+    // would dispatch on every blur for a number that never changed on screen
+    if (bounded !== shown) onCommit(bounded);
   };
 
   return (

@@ -70,7 +70,18 @@ function Slot({
   // an empty centre must still hold the slack open, or the end slot slides
   if (items.length === 0) return grow ? <div className="flex-1" /> : null;
   return (
-    <div className={cn('flex items-center', grow && 'flex-1')}>
+    <div
+      className={cn(
+        'flex items-center',
+        // The ENDS never give way. They carry the mode buttons — the estimator,
+        // the danger zone, the way out — and the danger zone alone can widen
+        // the bar past a phone, at which point flex was shrinking every slot
+        // equally and walking the end slot off the right of the screen. The
+        // centre is tools: it is the one that can afford to scroll, and it is
+        // the one the thumb is already dragging along.
+        grow ? 'min-w-0 flex-1 justify-center overflow-x-auto' : 'shrink-0',
+      )}
+    >
       {chunk(items).map((run) => {
         const body = run.map((entry) => (
           <FooterButton key={entry.item.id} entry={entry} api={api} ctx={ctx} />

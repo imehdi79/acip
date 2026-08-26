@@ -22,6 +22,7 @@ import type { MeasureMode, OverlayState, UnderlayState } from '../ui-state';
 import { formatLength } from '../units';
 import { visibleSpaceName } from '../spaces';
 import { planDimensions } from './wall-dimensions';
+import { shapeColor, shapeFill } from '../shape-colors';
 
 const COLORS = {
   background: '#ffffff',
@@ -393,9 +394,11 @@ export function drawScene(
     const regions: RegionShape[] = [];
     collectRegions(item.geometry, regions);
     if (regions.length > 0) {
+      // by kind, so a wall span reads as masonry and a slab as concrete
+      // without a legend — the same table the 3D model is built from
       ctx.fillStyle = isSelected
         ? COLORS.regionFillSelected
-        : COLORS.regionFill;
+        : shapeFill(doc.get(item.entityId as EntityId)?.type ?? 'line');
       ctx.beginPath();
       for (const region of regions) pathGeometry(ctx, region);
       ctx.fill('evenodd');
@@ -425,7 +428,10 @@ export function drawScene(
         ? COLORS.demolition
         : isFinish
           ? COLORS.finish
-          : (item.style.stroke ?? '#2b2f36');
+          : // the layer's own colour still wins where somebody has set one;
+            // otherwise the KIND decides, so a plan is legible the moment it
+            // is drawn rather than only once layers have been organised
+            (item.style.stroke ?? shapeColor(entity?.type ?? 'line'));
     ctx.strokeStyle = color;
     // divide by scale so line weights stay zoom-independent
     ctx.lineWidth =

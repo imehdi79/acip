@@ -28,6 +28,7 @@ import {
   detectSpaces,
   distance,
   hasGrips,
+  FinishEntity,
   isEntityInteractive,
   pointInLoop,
   sub,
@@ -459,16 +460,31 @@ export class SelectTool implements Tool {
     return !!hit && ctx.selection.has(hit.id);
   }
 
+  /**
+   * Can a tap land on this at all?
+   *
+   * Layer visibility and lock are core's answer, and on top of it: a FINISH is
+   * not a tap target on the plan. It is drawn as a dashed band hugging the
+   * face of the wall it sits on, which means it covers that wall's own
+   * linework — so every tap meant for a priced wall was landing on the plaster
+   * instead, and the wall underneath became unselectable the moment it was
+   * estimated. A finish is edited where it is created and read, in the
+   * estimator, and nothing in the plan tools does anything with one.
+   */
+  private canPick(entity: Entity): boolean {
+    const ctx = this.ctx;
+    if (!ctx) return false;
+    if (entity instanceof FinishEntity) return false;
+    return isEntityInteractive(ctx.doc, entity);
+  }
+
   private topHit(point: Point, tolerance: number): Entity | null {
     const ctx = this.ctx;
     if (!ctx) return null;
     const area = bboxExpand(bboxFromPoints([point]), tolerance);
     const hits = ctx.doc
       .queryBBox(area)
-      .filter(
-        (ent) =>
-          isEntityInteractive(ctx.doc, ent) && ent.hitTest(point, tolerance),
-      );
+      .filter((ent) => this.canPick(ent) && ent.hitTest(point, tolerance));
     return hits[hits.length - 1] ?? null;
   }
 
@@ -555,7 +571,7 @@ export class SelectTool implements Tool {
       // an opening's ends are a width, not a junction: a window sitting flush
       // against a wall corner must not be stretched when that corner moves
       if (!hasGrips(entity) || entity instanceof HostedOpeningEntity) continue;
-      if (!isEntityInteractive(ctx.doc, entity)) continue;
+      if (!this.canPick(entity)) continue;
       for (const grip of entity.getGrips()) {
         if (distance(grip.point, anchor) <= JOIN_TOLERANCE) {
           out.push({ id: entity.id, index: grip.index });
@@ -660,7 +676,7 @@ export class SelectTool implements Tool {
     const box = bboxFromPoints([mode.start, end]);
     const crossing = end.x < mode.start.x;
     const candidates = ctx.doc.queryBBox(box).filter((ent) => {
-      if (!isEntityInteractive(ctx.doc, ent)) return false;
+      if (!this.canPick(ent)) return false;
       if (crossing) return true; // bbox intersection is enough for crossing
       const b = ent.getBounds();
       return (
