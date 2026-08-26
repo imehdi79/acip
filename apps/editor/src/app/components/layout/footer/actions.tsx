@@ -7,6 +7,7 @@ import {
   IconRotateClockwise2,
   IconRulerMeasure,
   IconSignature,
+  IconStack2,
   IconTrash,
 } from '@tabler/icons-react';
 import type { EditorUi } from '@/editor/ui-state';
@@ -23,6 +24,7 @@ import { OpeningMeasurements } from './opening-measurements-modal';
 import { RoomName } from './room-name';
 import { MoveMode } from './move-mode';
 import { Modes } from './modes';
+import { Floors } from './floors';
 import { cycleDoorHang } from './door-hang';
 import { duplicateSelection } from './duplicate';
 
@@ -118,6 +120,19 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
      */
     visible: (ctx) => ctx.view === 'editor',
     render: (api, ctx) => <Modes {...api} compact={ctx.count > 0} />,
+  },
+  {
+    id: 'floors',
+    label: 'Floors',
+    icon: <IconStack2 />,
+    slot: 'start',
+    group: 'session',
+    // the drawing as a whole, so it sits with undo and the modes rather than
+    // with the buttons that come and go with a selection
+    visible: (ctx) => ctx.view === 'editor',
+    render: ({ session, ui, user }, ctx) => (
+      <Floors session={session} ui={ui} user={user} compact={ctx.count > 0} />
+    ),
   },
   {
     id: 'measure',

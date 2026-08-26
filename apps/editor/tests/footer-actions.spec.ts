@@ -36,7 +36,7 @@ const enabledOf = (c: FooterContext, id: string) =>
 
 describe('resolveFooter', () => {
   it('shows undo and the tools on a fresh plan, with undo greyed out', () => {
-    expect(ids(ctx())).toEqual(['undo', 'redo', 'modes', 'tools']);
+    expect(ids(ctx())).toEqual(['undo', 'redo', 'modes', 'floors', 'tools']);
     expect(enabledOf(ctx(), 'undo')).toBe(false);
   });
 
@@ -63,6 +63,7 @@ describe('resolveFooter', () => {
       'undo',
       'redo',
       'modes',
+      'floors',
       'measure',
       'move-mode',
       'duplicate',
@@ -76,6 +77,7 @@ describe('resolveFooter', () => {
       'undo',
       'redo',
       'modes',
+      'floors',
       // a room IS a wall-only selection, so the wall dialog applies to all of it
       'measure',
       'rename',
@@ -101,13 +103,14 @@ describe('resolveFooter', () => {
       'undo',
       'redo',
       'modes',
+      'floors',
       'measure-opening',
       'door-hang',
       'delete',
     ]);
     expect(
       ids(ctx({ selection: 'window', types: ['window'], count: 1 })),
-    ).toEqual(['undo', 'redo', 'modes', 'measure-opening', 'delete']);
+    ).toEqual(['undo', 'redo', 'modes', 'floors', 'measure-opening', 'delete']);
   });
 
   it('never offers both measurements buttons at once', () => {
@@ -129,7 +132,7 @@ describe('resolveFooter', () => {
   it('leaves a mixed selection with delete only', () => {
     expect(
       ids(ctx({ selection: 'mixed', types: ['wall', 'window'], count: 2 })),
-    ).toEqual(['undo', 'redo', 'modes', 'delete']);
+    ).toEqual(['undo', 'redo', 'modes', 'floors', 'delete']);
   });
 
   // `selection` is the entity's own type, so a future type needs no change in
@@ -137,7 +140,7 @@ describe('resolveFooter', () => {
   it('carries an unknown future entity type through as its own kind', () => {
     expect(
       ids(ctx({ selection: 'stair', types: ['stair'], count: 1 })),
-    ).toEqual(['undo', 'redo', 'modes', 'delete']);
+    ).toEqual(['undo', 'redo', 'modes', 'floors', 'delete']);
   });
 
   it('gives guests nothing they can act on, whatever the context', () => {
@@ -151,13 +154,13 @@ describe('resolveFooter', () => {
     // only the ungated modes menu resolves (the tools cluster is hidden by the
     // selection), and it renders nothing for a user who may use none of what it
     // holds — see the per-item gates below
-    expect(ids(busy, guest)).toEqual(['modes']);
+    expect(ids(busy, guest)).toEqual(['modes', 'floors']);
   });
 
   // the cluster stays put while a tool is armed — it carries the armed tool
   // AND the way to put it down, so there is no separate Cancel to appear
   it('keeps the tools while a tool is armed', () => {
-    const bar = ['undo', 'redo', 'modes', 'tools'];
+    const bar = ['undo', 'redo', 'modes', 'floors', 'tools'];
     expect(ids(ctx())).toEqual(bar);
     expect(ids(ctx({ tool: 'wall' }))).toEqual(bar);
     expect(ids(ctx({ tool: 'window' }))).toEqual(bar);
@@ -173,12 +176,16 @@ describe('resolveFooter', () => {
   it('lets even a guest put a tool down', () => {
     // guests hold no footer.* permission, but the cluster is ungated on
     // purpose — arming a tool must never be a one-way door
-    expect(ids(ctx({ tool: 'wall' }), guest)).toEqual(['modes', 'tools']);
+    expect(ids(ctx({ tool: 'wall' }), guest)).toEqual([
+      'modes',
+      'floors',
+      'tools',
+    ]);
   });
 
   it('gives a guest nothing to arm in the first place', () => {
     // ungated does not mean unguarded: the cluster shows, its tools do not
-    expect(ids(ctx(), guest)).toEqual(['modes', 'tools']);
+    expect(ids(ctx(), guest)).toEqual(['modes', 'floors', 'tools']);
     expect(can(guest, 'footer.insert')).toBe(false);
   });
 
@@ -260,7 +267,10 @@ describe('resolveFooter', () => {
       const groups = resolveFooter(FOOTER_ITEMS, c, editor)
         .filter((entry) => entry.item.slot === 'start')
         .map((entry) => entry.item.group);
-      expect(groups.length).toBe(3);
+      // undo, redo, modes, floors — the drawing-as-a-whole run
+      expect(groups.length).toBe(4);
+      // the point of the test: ONE group, so they render as a single joined
+      // control rather than as four buttons that happen to be adjacent
       expect(new Set(groups)).toEqual(new Set(['session']));
     }
   });

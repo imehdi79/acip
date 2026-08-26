@@ -1,4 +1,9 @@
-import type { EditorSession, Layer, LayerId } from '@acip/editor-core';
+import type {
+  DrawingDocument,
+  EditorSession,
+  Layer,
+  LayerId,
+} from '@acip/editor-core';
 import type { EditorUi } from './ui-state';
 
 /**
@@ -32,6 +37,22 @@ export function dangerZoneLayer(session: EditorSession): Layer | null {
   return (
     session.doc.layersList().find((l) => l.name === DANGER_ZONE_LAYER) ?? null
   );
+}
+
+/**
+ * Is this entity part of the danger zone?
+ *
+ * Takes a DOCUMENT rather than a session, so the readers that only ever have
+ * one — the estimator's walk among them — can ask without being handed an
+ * editor. The layer's NAME is the identity, exactly as `dangerZoneLayer` has
+ * it: a reopened document has to be recognised as holding a zone.
+ */
+export function isDangerZoneEntity(
+  doc: DrawingDocument,
+  entity: { layerId: LayerId },
+): boolean {
+  const layer = doc.getLayer(entity.layerId);
+  return layer?.name === DANGER_ZONE_LAYER;
 }
 
 /** is the mode on right now? */

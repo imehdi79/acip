@@ -18,6 +18,7 @@ import {
   isEntityVisible,
 } from '@acip/editor-core';
 import { visibleSpaceName } from '@/editor/spaces';
+import { isDangerZoneEntity } from '@/editor/danger-zone';
 import type { RoomFootprint } from './estimator-slabs';
 
 /** One shape to walk past — an entity, or a room derived from the walls. */
@@ -163,7 +164,15 @@ export function estimatorSteps(
     if (entity instanceof SpaceTagEntity) continue;
     if (entity instanceof FinishEntity) continue; // a build-up layer, not a shape
     if (entity instanceof SlabEntity) continue; // priced as the room above it
-    if (!isEntityVisible(doc, entity)) continue; // a hidden layer hides it everywhere
+    // A hidden layer hides a shape everywhere — EXCEPT the danger zone, whose
+    // layer is hidden precisely when the zone is closed. That work is the
+    // change being priced: it is what somebody came to this plan to add, and
+    // leaving it out of the walk would quote the building as though nobody had
+    // proposed anything. It is walked whether the zone is open or shut, so an
+    // estimate does not change depending on which mode the footer is in.
+    if (!isEntityVisible(doc, entity) && !isDangerZoneEntity(doc, entity)) {
+      continue;
+    }
     if (entity instanceof WallEntity) walls.push(entity);
     // by base class, so a future kind of opening sorts with the openings
     else if (entity instanceof HostedOpeningEntity) openings.push(entity);

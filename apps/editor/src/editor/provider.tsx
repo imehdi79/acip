@@ -27,6 +27,12 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     if (generatedFor.current === template) return;
     generatedFor.current = template;
     generatePlan(session, template);
+    // Free draw hands over a blank sheet, and the first thing anybody does
+    // with one is move it to where they want to start. So the editor lands on
+    // the tool that PANS rather than one that would take that first drag as a
+    // wall — the drawing tools are a tap away in the bar, and an accidental
+    // line is not.
+    runtime.tools.useById('select');
     // The viewport subscribes in a child effect, which has already run.
     runtime.ui.requestFit();
   }, [session, runtime, template, view]);
