@@ -64,14 +64,11 @@ export function Floors({
   session,
   ui,
   user,
-  compact = false,
 }: {
   session: EditorSession;
   ui: EditorUi;
   /** gates ADDING a floor, not looking at one */
   user: User | null;
-  /** no room for the name: the bar is carrying a selection's buttons too */
-  compact?: boolean;
 }) {
   const activeId = useStoreValue(ui.activeLevelId);
   const levels = session.doc.levels.list();
@@ -96,14 +93,16 @@ export function Floors({
 
   return (
     <Dropdown>
+      {/* icon only, like every other button in the bar. Which floor is live
+          is answered by the menu itself the moment it opens, and by the plan
+          behind it — the bar cannot afford a name that grows with it. */}
       <Button
-        isIconOnly={compact}
-        aria-label="Floors"
+        isIconOnly
+        aria-label={`Floors — ${floorLabel(levels, activeId)}`}
         variant="tertiary"
         className="text-foreground"
       >
         <IconStack2 />
-        {!compact && floorLabel(levels, activeId)}
       </Button>
       {/* top start, like the modes menu: the footer is at the bottom of a
           phone, so a menu has only one direction to open in */}

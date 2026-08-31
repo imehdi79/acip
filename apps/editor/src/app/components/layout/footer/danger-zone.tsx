@@ -18,28 +18,32 @@ import { toggleDangerZone } from '@/editor/danger-zone';
  * colour the zone itself draws in, and says so in words rather than only in an
  * aria-label. A mode you can be in without noticing is a mode that loses work.
  *
- * `compact` drops the word, not the red. The label is ~110 px of a phone's
- * ~360, and it is spent exactly when the bar is fullest — a selection brings
- * its own run of buttons — so the row would push its own ends off the screen.
- * The colour is what actually carries the mode; the word is the reinforcement,
- * and it is the reinforcement that gives way.
+ * The word is gone, and the red is not. The label was ~110 px of a phone's
+ * ~360, spent exactly when the bar is fullest: opening the zone ADDS this
+ * button to a row that already holds the session run, the tools and whatever a
+ * selection brought, so the one control that announced the mode was also the
+ * one pushing the row's own ends off the screen. It used to give the word up
+ * only under a selection, which meant the bar overflowed whenever there was
+ * not one.
+ *
+ * The colour was always what carried the mode — solid red, the colour the zone
+ * itself draws in, against a bar of muted icons — and it still does. The icon
+ * says it twice, filled rather than outlined. What is lost is the reinforcement
+ * for somebody who reads words before colour; `aria-label` still says "Leave
+ * the danger zone", so the mode is never unannounced, only unwritten.
  */
 export function DangerZone({
   session,
   ui,
-  compact = false,
 }: {
   session: EditorSession;
   ui: EditorUi;
-  /** no room for the label: the bar is carrying a selection's buttons too */
-  compact?: boolean;
 }) {
   const on = useStoreValue(ui.dangerZone) !== null;
-  const labelled = on && !compact;
 
   return (
     <Button
-      isIconOnly={!labelled}
+      isIconOnly
       aria-label={on ? 'Leave the danger zone' : 'Danger zone'}
       aria-pressed={on}
       variant={on ? 'danger' : 'tertiary'}
@@ -49,7 +53,6 @@ export function DangerZone({
       onPress={() => toggleDangerZone(session, ui)}
     >
       {on ? <IconAlertTriangleFilled /> : <IconAlertTriangle />}
-      {labelled && 'Danger zone'}
     </Button>
   );
 }

@@ -1,1 +1,30 @@
-/* Your styles goes here. */
+/**
+ * The app shell's height.
+ *
+ * `dvh` is the unit that tracks Safari's collapsing toolbar, and it is also the
+ * unit older iOS does not know — so it needs a `vh` fallback underneath it.
+ * Two ways of writing that were tried and both failed:
+ *
+ * 1. `min-h-screen min-h-dvh` as utilities. The order of names in a class
+ *    attribute has no effect on anything, and Tailwind emits its utilities in
+ *    a canonical order that puts `.min-h-screen` AFTER `.min-h-dvh` — so every
+ *    browser understanding both took `100vh`, exactly the unit whose whole
+ *    problem is that it ignores the toolbar.
+ * 2. Two declarations in one rule, the classic fallback. Lightning CSS
+ *    minifies the first one away as redundant, leaving `dvh` alone and no
+ *    fallback at all — which turns "the footer is under the toolbar" into
+ *    "there is no height" on any iOS that predates the unit.
+ *
+ * `@supports` is what survives both. The query is a fact about the browser
+ * rather than a declaration the minifier may reason about, so the fallback is
+ * still in the shipped file.
+ */
+.app-shell {
+  min-height: 100vh;
+}
+
+@supports (min-height: 100dvh) {
+  .app-shell {
+    min-height: 100dvh;
+  }
+}

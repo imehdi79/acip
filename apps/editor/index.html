@@ -5,7 +5,17 @@
     <title>Editor</title>
     <base href="/" />
 
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      viewport-fit=cover lets the page reach the edges of a notched iPhone,
+      which is what makes env(safe-area-inset-*) report anything but zero. The
+      header and footer pad themselves by those insets, so reaching the edge
+      buys the full screen without putting a button under the home indicator
+      or behind the notch.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>

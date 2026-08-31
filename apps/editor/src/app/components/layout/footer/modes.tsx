@@ -77,10 +77,8 @@ export function Modes({
   ui,
   tools,
   user,
-  compact,
 }: FooterApi & {
   /** the bar is carrying a selection's buttons too — no room for a word */
-  compact?: boolean;
 }) {
   // the estimator is a dialog, not a mode: it is "live" exactly while open, and
   // picking it from the menu opens it rather than arming anything
@@ -108,7 +106,7 @@ export function Modes({
           toggles, and a mode with no way back to it is a trap */}
       {pen && <Pen ui={ui} tools={tools} />}
       {multi && <MultiSelect ui={ui} />}
-      {zone && <DangerZone session={session} ui={ui} compact={compact} />}
+      {zone && <DangerZone session={session} ui={ui} />}
       {estimating && (
         <Estimator defaultOpen onOpenChange={(open) => setEstimating(open)} />
       )}

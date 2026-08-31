@@ -40,7 +40,14 @@ function FooterButton({
   if (item.render) return item.render(api, ctx);
   return (
     <Button
-      isIconOnly={item.iconOnly}
+      // ICON ONLY, always. A label is ~110 px of a phone's ~360 and the bar
+      // has to hold the session run, the tools and whatever a selection adds
+      // — with the danger zone open it was pushing its own ends off the
+      // screen. One labelled button is affordable and four are not, and any
+      // rule that keeps some words is a rule about which button matters most,
+      // which is a different answer on every screen. The icons carry the
+      // meaning; `label` carries it for a screen reader.
+      isIconOnly
       isDisabled={!enabled}
       aria-label={item.label}
       variant="tertiary"
@@ -50,7 +57,6 @@ function FooterButton({
       onPress={() => item.run?.(api)}
     >
       {item.icon}
-      {!item.iconOnly && item.label}
     </Button>
   );
 }
@@ -112,7 +118,10 @@ const Footer = () => {
     resolved.filter((entry) => entry.item.slot === slot);
 
   return (
-    <div className="absolute bottom-0 h-14 w-full flex items-center gap-2 px-4">
+    // the same safe-area rule as the header, at the other end: on an iPhone
+    // the home indicator sits over the bottom ~34 px, and a footer that ends
+    // at bottom-0 puts its buttons underneath it
+    <div className="absolute bottom-0 flex min-h-14 w-full items-center gap-2 px-4 pb-[env(safe-area-inset-bottom)]">
       <Slot items={inSlot('start')} api={api} ctx={ctx} />
       {/* the centre takes the slack, so the tools sit between the two ends and
           have somewhere to travel when one of them is armed */}

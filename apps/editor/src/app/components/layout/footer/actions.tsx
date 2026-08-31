@@ -39,13 +39,18 @@ export interface FooterApi {
 
 export interface FooterItem {
   readonly id: string;
-  /** aria-label, and the visible text unless `iconOnly` */
+  /**
+   * The aria-label, and the only place the button's meaning is written down.
+   *
+   * The bar shows icons and nothing else (see FooterButton), so this is never
+   * on screen — which makes it the thing a screen reader has, and the thing
+   * anyone reading FOOTER_ITEMS has. It is not decoration.
+   */
   readonly label: string;
   readonly icon: ReactNode;
   readonly slot: 'start' | 'center' | 'end';
   /** consecutive visible items sharing a group render as one ButtonGroup */
   readonly group?: string;
-  readonly iconOnly?: boolean;
   readonly permission?: Permission;
   /** in the bar at all */
   readonly visible: (ctx: FooterContext) => boolean;
@@ -76,7 +81,6 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     icon: <IconArrowBackUp />,
     slot: 'start',
     group: 'session',
-    iconOnly: true,
     permission: 'footer.undo',
     // stays put and greys out, so the bar does not reflow on every edit
     visible: (ctx) => ctx.view === 'editor',
@@ -89,7 +93,6 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     icon: <IconArrowForwardUp />,
     slot: 'start',
     group: 'session',
-    iconOnly: true,
     permission: 'footer.redo',
     // Always there, greyed when there is nothing to redo. It used to appear
     // only when it had work to do, which kept the bar tidy at the cost of the
@@ -105,7 +108,6 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     icon: null,
     slot: 'start',
     group: 'session',
-    iconOnly: true,
     /*
      * The modes menu, and whichever mode is live right now.
      *
@@ -119,7 +121,7 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
      * every time a tap changed which buttons that run holds.
      */
     visible: (ctx) => ctx.view === 'editor',
-    render: (api, ctx) => <Modes {...api} compact={ctx.count > 0} />,
+    render: (api) => <Modes {...api} />,
   },
   {
     id: 'floors',
@@ -130,8 +132,8 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     // the drawing as a whole, so it sits with undo and the modes rather than
     // with the buttons that come and go with a selection
     visible: (ctx) => ctx.view === 'editor',
-    render: ({ session, ui, user }, ctx) => (
-      <Floors session={session} ui={ui} user={user} compact={ctx.count > 0} />
+    render: ({ session, ui, user }) => (
+      <Floors session={session} ui={ui} user={user} />
     ),
   },
   {
@@ -140,7 +142,6 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     icon: <IconRulerMeasure />,
     slot: 'end',
     group: 'selection',
-    iconOnly: true,
     permission: 'footer.measure',
     // Length, height and thickness are per-wall, so this only makes sense once
     // the selection is walls and nothing else. A room is exactly that — the
@@ -157,7 +158,6 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     icon: <IconRulerMeasure />,
     slot: 'end',
     group: 'selection',
-    iconOnly: true,
     permission: 'footer.measureOpening',
     // An opening measures nothing like its host: width, height, a sill and a
     // frame depth, none of which a wall has. Own gate, own dialog — widening
@@ -171,7 +171,6 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     icon: <IconSignature />,
     slot: 'end',
     group: 'selection',
-    iconOnly: true,
     permission: 'footer.rename',
     visible: (ctx) => ctx.selection === 'room',
     render: ({ session, ui }) => <RoomName session={session} ui={ui} />,
@@ -182,7 +181,6 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     icon: <IconRotateClockwise2 />,
     slot: 'end',
     group: 'selection',
-    iconOnly: true,
     permission: 'footer.doorHang',
     visible: (ctx) => ctx.selection === 'door',
     // one press, one visible change: the swing flips, then the hinge moves,
@@ -195,7 +193,6 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     icon: null,
     slot: 'end',
     group: 'selection',
-    iconOnly: true,
     permission: 'footer.moveMode',
     // only walls carry joins, so only a wall or room selection has anything
     // to detach from
@@ -208,7 +205,6 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     icon: <IconCopy className="rotate-180" />,
     slot: 'end',
     group: 'selection',
-    iconOnly: true,
     permission: 'footer.duplicate',
     visible: (ctx) => ctx.selection === 'room' || ctx.selection === 'wall',
     run: ({ session, ui }) => duplicateSelection(session, ui),
@@ -219,7 +215,6 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     icon: <IconTrash className="text-danger" />,
     slot: 'end',
     group: 'selection',
-    iconOnly: true,
     permission: 'footer.delete',
     visible: (ctx) => ctx.count > 0,
     run: ({ session }) => {

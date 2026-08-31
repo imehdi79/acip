@@ -14,7 +14,10 @@ const Header = () => {
   const isGuest = user?.role === 'guest';
 
   return (
-    <div className="absolute top-0 z-10 h-14 flex w-full items-center justify-between px-4">
+    // min-h rather than h, so the safe-area padding ADDS to the bar instead of
+    // eating into it: on a notched iPhone the row still gets its full 56 px of
+    // touch target, sitting below the notch rather than under it.
+    <div className="absolute top-0 z-10 flex min-h-14 w-full items-center justify-between px-4 pt-[env(safe-area-inset-top)]">
       {/* The menu is the same on both views and never fully gated — it carries
           Create New, which took over from Back as the way out of the editor. */}
       <HeaderMore
