@@ -3,6 +3,13 @@ import type { InputModifiers, ViewDefinition } from '@acip/editor-core';
 import { isEntityVisible } from '@acip/editor-core';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
+import {
+  LOUPE_SIZE,
+  loupePlacement,
+  paintLoupe,
+  sizeLoupe,
+  type LoupeSurfaces,
+} from './loupe';
 import { Viewport2D } from './viewport2d';
 import {
   drawOverlay,
@@ -19,6 +26,9 @@ const SNAP_PIXELS = 10;
 const TOUCH_PICK_PIXELS = 20;
 const TOUCH_SNAP_PIXELS = 24;
 const TAP_SLOP_PIXELS = 8;
+/* the band at the bottom the footer sits over, which the loupe stays clear of
+   so it never covers the bar it is trying not to be in the way of */
+const FOOTER_PIXELS = 64;
 
 function modifiersOf(e: PointerEvent): InputModifiers {
   return { shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey };
@@ -34,6 +44,9 @@ export function Viewport2DView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const baseRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
+  const loupeRef = useRef<HTMLDivElement>(null);
+  const loupeBaseRef = useRef<HTMLCanvasElement>(null);
+  const loupeOverlayRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<Viewport2D | null>(null);
   if (!viewportRef.current) viewportRef.current = new Viewport2D();
 
@@ -42,7 +55,17 @@ export function Viewport2DView() {
     const base = baseRef.current;
     const overlay = overlayRef.current;
     const viewport = viewportRef.current;
+    const loupeFrame = loupeRef.current;
+    const loupeBase = loupeBaseRef.current;
+    const loupeOverlay = loupeOverlayRef.current;
     if (!container || !base || !overlay || !viewport) return;
+    if (!loupeFrame || !loupeBase || !loupeOverlay) return;
+    const loupe: LoupeSurfaces = {
+      frame: loupeFrame,
+      base: loupeBase,
+      overlay: loupeOverlay,
+    };
+    sizeLoupe(loupe);
 
     let baseRaf = 0;
     const planView = (): ViewDefinition => ({
@@ -194,6 +217,44 @@ export function Viewport2DView() {
     let pinchMid = { x: 0, y: 0 };
     let lastToolPoint = { x: 0, y: 0 };
 
+    /**
+     * The glass follows the finger, and only the finger.
+     *
+     * TOUCH ONLY, checked on the event rather than on a media query: a mouse
+     * already puts the cursor beside the point instead of on top of it, and a
+     * hybrid laptop should get the loupe for its screen and not for its
+     * trackpad. `pointerType` is the honest answer to which one this is.
+     *
+     * Called from the existing touch handlers and changing none of them — it
+     * reads the same client coordinates they already have, and every tool sees
+     * exactly the events it saw before.
+     */
+    const showLoupe = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      const rect = overlay.getBoundingClientRect();
+      const finger = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const where = loupePlacement(
+        finger,
+        { width: rect.width, height: rect.height },
+        FOOTER_PIXELS,
+      );
+      loupe.frame.style.left = `${where.left}px`;
+      loupe.frame.style.top = `${where.top}px`;
+      loupe.frame.classList.remove('hidden');
+      paintLoupe(loupe, viewport, finger, {
+        doc: session.doc,
+        view: planView(),
+        selection: new Set(session.selection.list()),
+        showMarks: ui.showMarks.get(),
+        underlay: ui.underlay.get(),
+        showDemolition: ui.showDemolition.get(),
+        measureMode: ui.measureMode.get(),
+        overlay: ui.overlay.get(),
+      });
+    };
+
+    const hideLoupe = () => loupe.frame.classList.add('hidden');
+
     const forward = (fn: () => void) => {
       try {
         fn();
@@ -237,6 +298,12 @@ export function Viewport2DView() {
         } else {
           touchMode = 'tap';
         }
+        // Both modes put a finger over the point that matters: a drag is
+        // holding the thing being moved, and a tap is about to place one. Pan
+        // and pinch are neither — nothing under the finger is being aimed at —
+        // so the glass is not raised for them and is put away below if a tap
+        // turns into one.
+        showLoupe(e);
       } else if (touches.size === 2) {
         // a second finger ends any in-progress drag, then starts a pinch
         if (touchMode === 'tool-drag') {
@@ -249,6 +316,7 @@ export function Viewport2DView() {
           ui.setSnap(null);
         }
         touchMode = 'pinch';
+        hideLoupe();
         const [a, b] = [...touches.values()];
         pinchDist = Math.hypot(b.x - a.x, b.y - a.y);
         pinchMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
@@ -268,6 +336,9 @@ export function Viewport2DView() {
         forward(() =>
           tools.pointerMove({ point, modifiers: modifiersOf(e), snapped }),
         );
+        // AFTER the tool has moved, so the glass shows the rubber band where
+        // it now is rather than where it was one frame ago
+        showLoupe(e);
         return;
       }
       if (touchMode === 'tap') {
@@ -277,6 +348,10 @@ export function Viewport2DView() {
         ) {
           touchMode = 'pan';
           lastPan = { x: e.clientX, y: e.clientY };
+          // this finger is moving the plan now, not aiming at anything on it
+          hideLoupe();
+        } else {
+          showLoupe(e);
         }
       } else if (touchMode === 'pan') {
         viewport.panBy(e.clientX - lastPan.x, e.clientY - lastPan.y);
@@ -301,6 +376,9 @@ export function Viewport2DView() {
 
     const onTouchEnd = (e: PointerEvent, cancelled: boolean) => {
       if (!touches.delete(e.pointerId)) return;
+      // the finger is off the glass, so there is nothing under it to see —
+      // FIRST, so an early return below cannot leave the loupe up forever
+      hideLoupe();
       if (touchMode === 'tool-drag') {
         const modifiers = modifiersOf(e);
         if (cancelled) forward(() => tools.key('Escape'));
@@ -426,6 +504,19 @@ export function Viewport2DView() {
     <div className="viewport" ref={containerRef}>
       <canvas ref={baseRef} />
       <canvas ref={overlayRef} />
+      {/* The touch loupe. Hidden and `pointer-events: none` at rest, so it
+          takes no space and can never intercept a gesture meant for the plan —
+          it is a picture of the drawing, not part of it. Two stacked canvases
+          because the overlay renderer clears its own surface. */}
+      <div
+        ref={loupeRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute z-20 hidden overflow-hidden rounded-full border border-separator bg-surface shadow-overlay"
+        style={{ width: LOUPE_SIZE, height: LOUPE_SIZE }}
+      >
+        <canvas ref={loupeBaseRef} className="absolute inset-0" />
+        <canvas ref={loupeOverlayRef} className="absolute inset-0" />
+      </div>
     </div>
   );
 }
