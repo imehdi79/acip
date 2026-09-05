@@ -71,6 +71,10 @@ function Fields({
       walls,
       { length, height, thickness },
       view,
+      // the same toggle that decides whether a DRAG carries its joins decides
+      // whether a resize carries the rooms beyond it: linked pushes them along
+      // intact, separate makes them absorb the change and stay put
+      ui.detachedMove.get() ? 'absorb' : 'push',
     );
     setInvalid(bad);
     if (bad.length === 0) close();

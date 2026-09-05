@@ -5,7 +5,8 @@ import type {
 } from '@acip/editor-core';
 import { WallEntity, distance } from '@acip/editor-core';
 import { formatLengthValue, lengthUnit, parseLength } from '@/editor/units';
-import { resizeWallLength } from '@/editor/rooms';
+import { planWallResize, resizeWallLength } from '@/editor/rooms';
+import type { ResizeSpread } from '@/editor/rooms';
 import { labelledWallLength } from '@/editor/viewport/wall-dimensions';
 import type { MeasureMode } from '@/editor/ui-state';
 
@@ -136,6 +137,7 @@ export function applyMeasurements(
   walls: readonly WallEntity[],
   edits: MeasurementEdits,
   view: MeasureView,
+  spread: ResizeSpread = 'push',
 ): MeasurementField[] {
   // length belongs to one baseline; there is no sensible way to give six
   // walls the same length at once, so it is a single-wall edit only
@@ -163,6 +165,16 @@ export function applyMeasurements(
       : null;
   // a length that would leave nothing but corner miters is not a wall
   if (single && length !== null && baseline === null) invalid.push('length');
+  // ...nor is one that only fits by shortening a neighbour out of existence,
+  // which absorbing can do. Asked BEFORE anything is dispatched, so the dialog
+  // says it does not fit instead of the plan quietly half-applying it.
+  else if (
+    single &&
+    baseline !== null &&
+    !planWallResize(session.doc, single.id, baseline, spread)
+  ) {
+    invalid.push('length');
+  }
   if (invalid.length > 0) return invalid;
 
   if (height === null && thickness === null && baseline === null) return [];
@@ -187,6 +199,7 @@ export function applyMeasurements(
         session.doc,
         single.id,
         baseline,
+        spread,
       );
     }
   } finally {

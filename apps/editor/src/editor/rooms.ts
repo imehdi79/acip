@@ -1,5 +1,5 @@
 import type { DrawingDocument, EntityId, Point } from '@acip/editor-core';
-import { WallEntity, isEntityInteractive } from '@acip/editor-core';
+import { WallEntity, distance, isEntityInteractive } from '@acip/editor-core';
 
 const TOL = 1e-3;
 
@@ -98,6 +98,21 @@ export function resizeRectRoomTo(
   dispatch('GRIP.MOVEMANY', { moves });
 }
 
+/**
+ * What a resize does to the rest of the plan.
+ *
+ * `push` — everything beyond the growing corner travels with it. A room
+ * further along keeps every length and every angle it had; the building gets
+ * bigger.
+ *
+ * `absorb` — only the corner moves. Whatever is immediately beyond it gives up
+ * the difference by getting shorter, and the far side of the plan stays where
+ * it is; the footprint is unchanged.
+ *
+ * Neither ever rotates a wall it did not have to, which is the point of both.
+ */
+export type ResizeSpread = 'push' | 'absorb';
+
 /** which end of a wall a resize holds still */
 export interface WallResizePlan {
   /** grip index (0 = baseline 'a', 1 = 'b') that stays put, or null when both move */
@@ -142,6 +157,7 @@ export function planWallResize(
   doc: DrawingDocument,
   wallId: EntityId,
   newLength: number,
+  spread: ResizeSpread = 'push',
 ): WallResizePlan | null {
   const wall = doc.get(wallId);
   if (!(wall instanceof WallEntity) || newLength <= 0) return null;
@@ -184,39 +200,111 @@ export function planWallResize(
     };
   }
 
-  const movingIndex = anchorIndex === 0 ? 1 : 0;
   const sign = anchorIndex === 0 ? 1 : -1;
   const grow = newLength - len;
-  const delta = { x: ux * sign * grow, y: uy * sign * grow };
+  // the direction the wall grows in: anchor -> moving end
+  const out = { x: ux * sign, y: uy * sign };
+  const delta = { x: out.x * grow, y: out.y * grow };
   const moved = anchorIndex === 0 ? b : a;
 
+  /*
+   * How far a point sits along the growth direction, measured from the corner
+   * that is moving. Negative is behind it (toward the anchor), zero is ON it,
+   * positive is beyond it.
+   *
+   * This single number is what decides the whole propagation, and it is a
+   * property of the DRAWING. What it replaced counted hops through the join
+   * graph — carry the neighbour rigidly, stretch whatever is one step past it
+   * — which is a property of the traversal instead, and tore any room that
+   * straddled the boundary: a second room had its near wall rigidly carried
+   * and its far wall stretched, so it came out sheared, one wall rotated off
+   * square and another two thirds shorter.
+   */
+  const along = (p: Point) => (p.x - moved.x) * out.x + (p.y - moved.y) * out.y;
+
+  const carries =
+    spread === 'push'
+      ? // everything from the moving corner outward travels together, so a
+        // room further along keeps every length and every angle it had and is
+        // simply further along
+        (p: Point) => along(p) > -TOL
+      : // only the corner itself moves; whatever is beyond absorbs the change
+        // by getting shorter, and the far side of the plan stays put
+        (p: Point) => Math.abs(along(p)) <= TOL;
+
   const moves = new Map<string, { id: EntityId; index: number; to: Point }>();
-  const put = (m: { id: EntityId; index: number; to: Point }) =>
-    moves.set(`${m.id}:${m.index}`, m);
-
-  // the anchor stays put; the other end slides along the baseline, so the
-  // wall keeps its bearing
-  put({
-    id: wallId,
-    index: movingIndex,
-    to: { x: moved.x + delta.x, y: moved.y + delta.y },
-  });
-
-  // carry the corner partners at that end, rigid so their own size is kept —
-  // except the ones under a lock, which are joined to this wall but not open
-  // to being moved by it
-  for (const join of joins[anchorIndex === 0 ? 'end' : 'start']) {
-    if (join.kind !== 'corner') continue;
-    if (!isEntityInteractive(doc, join.wall)) continue;
-    const plan = planStickyWallMove(doc, [join.wall.id], delta);
-    if (plan) for (const m of plan.moves) put(m);
+  for (const member of joinedCluster(doc, wall)) {
+    // joined to this structure, but not ours to move: a lock is not undone by
+    // sharing a corner with something that grew
+    if (!isEntityInteractive(doc, member)) continue;
+    for (const grip of member.getGrips()) {
+      if (!carries(grip.point)) continue;
+      moves.set(`${member.id}:${grip.index}`, {
+        id: member.id,
+        index: grip.index,
+        to: { x: grip.point.x + delta.x, y: grip.point.y + delta.y },
+      });
+    }
   }
 
-  // the anchor is the one thing that must never move: a carried wall welded
-  // back to it (a triangle, a stub) would otherwise drag it along
+  // the anchor is the one thing that must never move. `along` puts it at -len
+  // so it is already excluded, but a zero-length stub welded to it would sit
+  // at 0 and drag it along.
   moves.delete(`${wallId}:${anchorIndex}`);
 
-  return { anchorIndex, moves: [...moves.values()] };
+  // Absorbing has a floor: a neighbour can only give up so much before it is
+  // not a wall any more. Refused rather than clamped, because silently
+  // applying a different number than the one that was typed is worse than
+  // saying it does not fit.
+  return collapses(doc, moves)
+    ? null
+    : { anchorIndex, moves: [...moves.values()] };
+}
+
+/**
+ * Every wall welded into the same structure as `from`, corner joins and tees
+ * alike.
+ *
+ * The bound that matters: a resize must not reach a wall it is not actually
+ * connected to. Without it, "everything beyond the corner moves" would also
+ * pick up the separate building parked further along the same axis, because
+ * being further along is all that predicate tests.
+ */
+function joinedCluster(doc: DrawingDocument, from: WallEntity): WallEntity[] {
+  const seen = new Set<EntityId>([from.id]);
+  const cluster = [from];
+  const queue = [from];
+  while (queue.length > 0) {
+    const wall = queue.pop() as WallEntity;
+    for (const side of ['start', 'end'] as const) {
+      for (const join of wall.getJoinsAt(side)) {
+        if (seen.has(join.wall.id)) continue;
+        seen.add(join.wall.id);
+        cluster.push(join.wall);
+        queue.push(join.wall);
+      }
+    }
+  }
+  return cluster;
+}
+
+/** would this plan shorten some wall out of existence? */
+function collapses(
+  doc: DrawingDocument,
+  moves: ReadonlyMap<string, { id: EntityId; index: number; to: Point }>,
+): boolean {
+  const touched = new Set<EntityId>();
+  for (const move of moves.values()) touched.add(move.id);
+  for (const id of touched) {
+    const wall = doc.get(id);
+    if (!(wall instanceof WallEntity)) continue;
+    const ends = wall.getGrips().map((grip) => {
+      const move = moves.get(`${id}:${grip.index}`);
+      return move ? move.to : grip.point;
+    });
+    if (ends.length === 2 && distance(ends[0], ends[1]) <= TOL) return true;
+  }
+  return false;
 }
 
 /**
@@ -229,8 +317,9 @@ export function resizeWallLength(
   doc: DrawingDocument,
   wallId: EntityId,
   newLength: number,
+  spread: ResizeSpread = 'push',
 ): void {
-  const plan = planWallResize(doc, wallId, newLength);
+  const plan = planWallResize(doc, wallId, newLength, spread);
   if (plan) dispatch('GRIP.MOVEMANY', { moves: plan.moves });
 }
 
