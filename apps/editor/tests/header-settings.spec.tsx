@@ -40,11 +40,19 @@ describe('the header menu', () => {
   it('offers Settings to a viewer, who holds the permission', () => {
     // a viewer changing which faces are dimensioned changes nothing in the
     // document, so the gate is deliberately wider than the editing set
-    expect(itemsFor(viewer)).toEqual(['create-new', 'settings']);
+    // Save and Open sit with Create New: all three answer "which drawing am I
+    // in", and none of them is gated — a plan somebody spent an afternoon on
+    // should not need a role to survive the tab closing
+    expect(itemsFor(viewer)).toEqual([
+      'create-new',
+      'save',
+      'open',
+      'settings',
+    ]);
   });
 
   it('offers a guest the way out and nothing else', () => {
-    expect(itemsFor(guest)).toEqual(['create-new']);
+    expect(itemsFor(guest)).toEqual(['create-new', 'save', 'open']);
   });
 
   it('never drops Create New, whoever is asking', () => {

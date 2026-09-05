@@ -1,13 +1,16 @@
 import { useState, type ReactNode } from 'react';
 import { Button, Dropdown, Label } from '@heroui/react';
 import {
+  IconDeviceFloppy,
   IconDotsVertical,
   IconFilePlus,
+  IconFolderOpen,
   IconSettings,
 } from '@tabler/icons-react';
 import { SettingsSheet } from './settings';
+import { ProjectsSheet } from './projects-sheet';
 
-type MoreItemId = 'create-new' | 'settings';
+type MoreItemId = 'create-new' | 'save' | 'open' | 'settings';
 
 type MoreItem = {
   id: MoreItemId;
@@ -28,6 +31,22 @@ export const moreItems = (canOpenSettings: boolean): readonly MoreItem[] => [
     id: 'create-new',
     label: 'Create New',
     icon: <IconFilePlus className={iconClass} stroke={2} />,
+  },
+  /*
+   * Save and Open sit next to Create New because all three are the same
+   * question — which drawing am I in — and a guest gets them for the same
+   * reason a guest gets Create New: a plan somebody spent an afternoon on
+   * should not depend on their role to survive the tab closing.
+   */
+  {
+    id: 'save',
+    label: 'Save plan',
+    icon: <IconDeviceFloppy className={iconClass} stroke={2} />,
+  },
+  {
+    id: 'open',
+    label: 'Open plan',
+    icon: <IconFolderOpen className={iconClass} stroke={2} />,
   },
   ...(canOpenSettings
     ? [
@@ -54,6 +73,8 @@ const HeaderMore = ({ canOpenSettings, onCreateNew }: HeaderMoreProps) => {
   // The one thing the menu has to remember: a dialog has no lasting state of its
   // own to ask about, the same way the footer's estimator does not.
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** null = shut; otherwise which half of the projects sheet opened */
+  const [projects, setProjects] = useState<'save' | 'open' | null>(null);
   const items = moreItems(canOpenSettings);
 
   return (
@@ -66,6 +87,8 @@ const HeaderMore = ({ canOpenSettings, onCreateNew }: HeaderMoreProps) => {
           <Dropdown.Menu
             onAction={(key) => {
               if (key === 'create-new') onCreateNew();
+              else if (key === 'save') setProjects('save');
+              else if (key === 'open') setProjects('open');
               else if (key === 'settings') setSettingsOpen(true);
             }}
           >
@@ -89,6 +112,11 @@ const HeaderMore = ({ canOpenSettings, onCreateNew }: HeaderMoreProps) => {
       {canOpenSettings && (
         <SettingsSheet isOpen={settingsOpen} onOpenChange={setSettingsOpen} />
       )}
+      {/* beside the Dropdown for the same reason the settings sheet is */}
+      <ProjectsSheet
+        mode={projects}
+        onOpenChange={(open) => !open && setProjects(null)}
+      />
     </>
   );
 };
