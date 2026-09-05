@@ -10,10 +10,26 @@ import type { ResizeSpread } from '@/editor/rooms';
 import { labelledWallLength } from '@/editor/viewport/wall-dimensions';
 import type { MeasureMode } from '@/editor/ui-state';
 
-export type MeasurementField = 'length' | 'height' | 'thickness';
+/** the three plain sizes, which are the only things with a text box each */
+export type SizeField = 'length' | 'height' | 'thickness';
 
-/** what the three inputs hold; blank means "leave this alone" */
-export type MeasurementEdits = Record<MeasurementField, string>;
+/** everything the dialog can report as unusable, jogs included */
+export type MeasurementField = SizeField | 'jogStart' | 'jogEnd';
+
+/** which corner of the wall a jog belongs to */
+export type JogSide = 'start' | 'end';
+
+/** one corner's step, as the dialog holds it */
+export interface JogEdit {
+  readonly on: boolean;
+  /** the step size as typed; a negative steps the other way */
+  readonly size: string;
+}
+
+export type JogEdits = Record<JogSide, JogEdit>;
+
+/** what the three size inputs hold; blank means "leave this alone" */
+export type MeasurementEdits = Record<SizeField, string>;
 
 /**
  * Which drawing the dialog is talking about — the level it is showing and
@@ -91,6 +107,33 @@ export function commonValue<T>(
 export const prefill = (value: number | null): string =>
   value === null ? '' : formatLengthValue(value);
 
+/**
+ * The two corners of a wall as the dialog shows them: on when the wall
+ * already steps there, with the step it steps by.
+ */
+export function jogPrefill(wall: WallEntity): JogEdits {
+  const one = (side: JogSide): JogEdit => {
+    const jog = wall.getJog(side);
+    return { on: jog !== 0, size: jog === 0 ? '' : formatLengthValue(jog) };
+  };
+  return { start: one('start'), end: one('end') };
+}
+
+/**
+ * A jog in meters, or null when the text cannot be one.
+ *
+ * Signed, unlike every other field here, because a corner can step either way
+ * and there is no third control to say which. Zero is rejected the same as
+ * blank: a step of nothing is the switch being off, and the switch already
+ * says that.
+ */
+function jogMeters(text: string): number | null {
+  if (text.trim() === '') return null;
+  const size = parseLength(text.replace('-', ''), lengthUnit.get());
+  if (size === null || size <= 1e-3) return null;
+  return text.trim().startsWith('-') ? -size : size;
+}
+
 /** meters, or null when the text is unparseable or not a usable size */
 function meters(text: string): number | null {
   if (text.trim() === '') return null;
@@ -138,6 +181,7 @@ export function applyMeasurements(
   edits: MeasurementEdits,
   view: MeasureView,
   spread: ResizeSpread = 'push',
+  jogs?: JogEdits,
 ): MeasurementField[] {
   // length belongs to one baseline; there is no sensible way to give six
   // walls the same length at once, so it is a single-wall edit only
@@ -147,10 +191,35 @@ export function applyMeasurements(
     length: single ? edits.length : '',
   };
 
-  const fields: MeasurementField[] = ['length', 'height', 'thickness'];
-  const invalid = fields.filter(
+  const fields = ['length', 'height', 'thickness'] as const;
+  const invalid: MeasurementField[] = fields.filter(
     (field) => wanted[field].trim() !== '' && meters(wanted[field]) === null,
   );
+
+  /*
+   * A jog is per-corner, so it is a single-wall edit for the same reason
+   * Length is: there is no one corner shared by six walls.
+   *
+   * A switch that is ON with nothing usable in its box is the error worth
+   * catching. Switching one OFF is a real instruction — remove the step —
+   * so it needs no size at all and is written as a zero.
+   */
+  const wantedJogs: { side: JogSide; offset: number }[] = [];
+  if (single && jogs) {
+    for (const side of ['start', 'end'] as const) {
+      const edit = jogs[side];
+      const offset = jogMeters(edit.size);
+      if (!edit.on) {
+        if (single.getJog(side) !== 0) wantedJogs.push({ side, offset: 0 });
+        continue;
+      }
+      if (offset === null) {
+        invalid.push(side === 'start' ? 'jogStart' : 'jogEnd');
+        continue;
+      }
+      if (offset !== single.getJog(side)) wantedJogs.push({ side, offset });
+    }
+  }
 
   const height = meters(wanted.height);
   const thickness = meters(wanted.thickness);
@@ -177,7 +246,14 @@ export function applyMeasurements(
   }
   if (invalid.length > 0) return invalid;
 
-  if (height === null && thickness === null && baseline === null) return [];
+  if (
+    height === null &&
+    thickness === null &&
+    baseline === null &&
+    wantedJogs.length === 0
+  ) {
+    return [];
+  }
 
   session.history.beginGroup();
   try {
@@ -201,6 +277,14 @@ export function applyMeasurements(
         baseline,
         spread,
       );
+    }
+    // last, so a corner steps from wherever the length edit left it
+    for (const { side, offset } of wantedJogs) {
+      session.dispatch('WALL.SETJOG', {
+        ids: [single?.id],
+        which: side,
+        offset,
+      });
     }
   } finally {
     session.history.endGroup();

@@ -358,6 +358,82 @@ export const SetWallPropsCommand: Command<SetWallPropsParams, number> = {
   },
 };
 
+export interface SetWallJogParams {
+  ids: EntityId[];
+  /** which end steps */
+  which: 'start' | 'end';
+  /** how far it steps sideways, in meters; 0 takes the jog off */
+  offset: number;
+}
+
+/**
+ * Step one end of a wall sideways.
+ *
+ * A jog is the small offset where two runs of wall meet out of line — one face
+ * carries on past the corner while the other steps in. It is the per-corner
+ * override deferred beyond joins V2 (docs/editor-core/04-systems/
+ * wall-joins.md): joins stay derived, and this is the one thing about a
+ * junction the drawing cannot work out for itself because it is a decision
+ * rather than a consequence.
+ *
+ * The baseline does not move. A jogged end simply stops mitering and steps
+ * instead, so lengths, joins, snapping and grips all go on reading the two
+ * points they always did.
+ *
+ * Signed along the wall's own +normal, so the SAME number means opposite sides
+ * on two walls pointing opposite ways. That is the honest way round: the sign
+ * belongs to the wall it is stored on, and a caller that wants "toward the
+ * room" has to say which way that is for this wall.
+ *
+ * Zero removes it, and removing is the whole undo story — nothing else about
+ * the wall was touched.
+ */
+export const SetWallJogCommand: Command<SetWallJogParams, number> = {
+  name: 'WALL.SETJOG',
+  description:
+    'Step one end of one or more walls sideways by a signed distance in ' +
+    'meters (positive is toward the wall +normal), so the corner steps ' +
+    'instead of mitering. Pass 0 to remove the jog. Returns how many walls ' +
+    'changed.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      const which = raw['which'];
+      if (which !== 'start' && which !== 'end') {
+        throw new ValidationError("which must be 'start' or 'end'");
+      }
+      return {
+        ids: asIdArray(raw['ids'], 'ids'),
+        which,
+        offset: asNumber(raw['offset'], 'offset'),
+      };
+    },
+    () =>
+      S.object(
+        {
+          ids: S.array(S.id('wall id'), 'walls to update'),
+          which: S.string("which end steps: 'start' or 'end'"),
+          offset: S.number(
+            'sideways step in meters, signed along the wall +normal; 0 removes it',
+          ),
+        },
+        ['ids', 'which', 'offset'],
+      ),
+  ),
+  execute(ctx, params) {
+    let count = 0;
+    for (const id of params.ids) {
+      const entity = ctx.doc.get(id);
+      if (!(entity instanceof WallEntity)) continue;
+      ctx.tx.update(entity, (e) => {
+        (e as WallEntity).setJog(params.which, params.offset);
+      });
+      count += 1;
+    }
+    return count;
+  },
+};
+
 export interface SetOpeningPropsParams {
   ids: EntityId[];
   width?: number;
@@ -518,5 +594,6 @@ export function registerArchitectureCommands(registry: CommandRegistry): void {
   registry.register(ResizeOpeningCommand);
   registry.register(SetOpeningPropsCommand);
   registry.register(SetWallPropsCommand);
+  registry.register(SetWallJogCommand);
   registry.register(SetDoorHangCommand);
 }

@@ -1,6 +1,7 @@
 # Wall Joins / Corner Cleanup
 
-Status: **Decided** (V1 + V2 T-junctions shipped 2026-07-12)
+Status: **Decided** (V1 + V2 T-junctions shipped 2026-07-12; per-corner jogs
+shipped 2026-09-05)
 
 Walls whose baseline endpoints coincide clean up their shared corner
 automatically — the plan shows a mitered corner instead of two overlapping
@@ -130,8 +131,48 @@ that wall's **near face**; the continuous wall is untouched.
 - **Crossing (+) junctions**: interior-crossing-interior is not detected —
   detection is endpoint-driven only.
 
-## Deferred beyond V2
+## Per-corner jogs (V3)
 
-Per-corner overrides (join opt-out, butt vs miter choice — become stored wall
-properties read by the resolver), crossing junctions, vertical seam
-resolution, boolean cleanup of overlapping plan fills.
+A JOG is the small sideways step where two runs of wall meet out of line: one
+face carries on past the corner while the other steps in. It is the first
+per-corner override, and it arrived in the shape this document predicted — a
+stored wall property read by the resolver.
+
+`WallEntity` keeps `jogs: { start, end }`, a signed offset in meters along the
+wall's own +normal, zero meaning no jog. `WALL.SETJOG` sets it. It is written
+to the file only when non-zero, so a drawing with no jogs saves exactly what it
+always saved.
+
+Three rules make it fit without disturbing anything derived:
+
+- **The baseline never moves.** A jog changes only how the wall is DRAWN, so
+  join discovery, length, snapping, dimensions and grips all keep reading the
+  same two points. A junction whose walls jog is still a junction.
+- **A jogged end takes no cap.** Stating a jog states what that corner does, so
+  `capsForEnds` skips the miter there rather than letting both try to place the
+  same two points — which is the join opt-out named above, seen from the
+  geometry side. The wall's OTHER end still miters normally.
+- **The step is as deep as the wall is thick.** Taken from the wall rather than
+  asked for: a step is a corner detail and is always about that deep, and a
+  second number per corner would be a form where a switch was wanted. It is
+  clamped to the span so a short one cannot fold the outline through itself.
+
+The cost is that `spanQuadJoined` and `getOutline` return `Point[]` rather than
+a fixed quad — a jogged end trades its square corner for the three points of a
+riser on each face, so the ring is 8 points with one end jogged and 12 with
+both. Everything downstream already walked the boundary rather than indexing
+it; only `toMesh` needed a branch, taking `extrudePolygon` when the ring is not
+a quad.
+
+## Deferred beyond V3
+
+The remaining per-corner override (butt vs miter CHOICE at an un-jogged
+corner), crossing junctions, vertical seam resolution, boolean cleanup of
+overlapping plan fills.
+
+Also still open, and now visible because jogs made it worth naming: two in-line
+walls whose baselines are laterally offset report no join at all — the corner
+between them is never resolved, and it only looks passable because the
+neighbouring miter happens to overlap the gap. A jog states that step on one
+wall instead, which covers the drawing case; detecting the offset pair
+automatically does not exist.

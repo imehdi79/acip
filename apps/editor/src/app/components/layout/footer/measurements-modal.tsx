@@ -5,6 +5,7 @@ import {
   Input,
   Label,
   Modal,
+  Switch,
   TextField,
 } from '@heroui/react';
 import { IconRulerMeasure } from '@tabler/icons-react';
@@ -14,12 +15,77 @@ import { useRuntime } from '@/editor/runtime';
 import {
   applyMeasurements,
   commonValue,
+  jogPrefill,
   prefill,
   selectedWalls,
   wallLength,
+  type JogEdits,
+  type JogSide,
   type MeasurementField,
   type MeasureView,
 } from './measurements';
+
+/**
+ * One corner of the wall: whether it steps, and by how much.
+ *
+ * A jog is the small sideways offset where two runs of wall meet out of line —
+ * one face carries on past the corner while the other steps in. It is stated
+ * rather than drawn because it is a decision about the corner, and there is
+ * nothing on a phone-sized plan to grab that would say it.
+ *
+ * The size box only appears once the switch is on. An always-visible box next
+ * to an off switch reads as a thing you can fill in, and filling it in would
+ * do nothing.
+ */
+function JogField({
+  side,
+  label,
+  unit,
+  value,
+  onChange,
+  isInvalid,
+}: {
+  side: JogSide;
+  label: string;
+  unit: string;
+  value: JogEdits[JogSide];
+  onChange: (next: JogEdits[JogSide]) => void;
+  isInvalid: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Switch
+        isSelected={value.on}
+        onChange={(on: boolean) => onChange({ ...value, on })}
+        className="w-full py-1"
+      >
+        {/* Switch.Content IS the pressable element; the label rides inside it
+            so the words toggle too, which on a phone is most of the target */}
+        <Switch.Content className="w-full justify-between gap-2">
+          <Label>{label}</Label>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+        </Switch.Content>
+      </Switch>
+      {value.on && (
+        <TextField
+          fullWidth
+          value={value.size}
+          onChange={(size: string) => onChange({ ...value, size })}
+          inputMode="decimal"
+          isInvalid={isInvalid}
+          aria-label={`${label} step (${unit})`}
+        >
+          <Input placeholder={`Step (${unit})`} />
+          <FieldError>
+            Enter a step greater than zero, or turn the corner off.
+          </FieldError>
+        </TextField>
+      )}
+    </div>
+  );
+}
 
 /**
  * The form itself, deliberately a child of the dialog rather than of the
@@ -61,6 +127,13 @@ function Fields({
     prefill(commonValue(walls, (wall) => wall.getThickness())),
   );
   const [invalid, setInvalid] = useState<MeasurementField[]>([]);
+  // read at mount like every other field, so the switches show what this wall
+  // already does rather than what the last wall did
+  const [jogs, setJogs] = useState<JogEdits>(() =>
+    single
+      ? jogPrefill(single)
+      : { start: { on: false, size: '' }, end: { on: false, size: '' } },
+  );
 
   const unit = unitLabel();
   const mixed = walls.length > 1 ? 'Mixed' : unit;
@@ -75,6 +148,7 @@ function Fields({
       // whether a resize carries the rooms beyond it: linked pushes them along
       // intact, separate makes them absorb the change and stay put
       ui.detachedMove.get() ? 'absorb' : 'push',
+      jogs,
     );
     setInvalid(bad);
     if (bad.length === 0) close();
@@ -127,6 +201,28 @@ function Fields({
           <Input placeholder={mixed} />
           <FieldError>Enter a thickness greater than zero.</FieldError>
         </TextField>
+
+        {single && (
+          <div className="flex flex-col gap-3 border-t border-separator pt-3">
+            <p className="text-xs text-muted">
+              Corner steps — where this wall meets the next one out of line.
+              Enter a negative step to turn it the other way.
+            </p>
+            {(['start', 'end'] as const).map((side) => (
+              <JogField
+                key={side}
+                side={side}
+                label={side === 'start' ? 'Step at start' : 'Step at end'}
+                unit={unit}
+                value={jogs[side]}
+                onChange={(next) => setJogs({ ...jogs, [side]: next })}
+                isInvalid={invalid.includes(
+                  side === 'start' ? 'jogStart' : 'jogEnd',
+                )}
+              />
+            ))}
+          </div>
+        )}
 
         {/* the missing Length field is the first thing anyone notices here, so
             it says why rather than leaving the form looking broken */}

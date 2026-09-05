@@ -23,7 +23,11 @@ import {
 } from '../../geometry/curves/segment.js';
 import type { Geometry, RegionShape } from '../../geometry/shapes.js';
 import type { Mesh3D, MeshDetail } from '../../geometry/mesh/index.js';
-import { extrudeQuad, mergeMeshes } from '../../geometry/mesh/index.js';
+import {
+  extrudePolygon,
+  extrudeQuad,
+  mergeMeshes,
+} from '../../geometry/mesh/index.js';
 import type { Interval } from '../../topology/intervals.js';
 import { subtractIntervals } from '../../topology/intervals.js';
 import type { EndCap, WallEnd } from '../../topology/junctions.js';
@@ -82,6 +86,22 @@ export class WallEntity
 
   private a: Point = point(0, 0);
   private b: Point = point(1, 0);
+  /**
+   * Per-corner JOG: how far this end steps sideways, in meters, signed along
+   * the wall's +normal. Zero — the default — means no jog and nothing about
+   * the wall changes.
+   *
+   * This is the per-corner override wall-joins.md deferred beyond V2: a
+   * stored wall property read by the resolver. It is the one piece of a
+   * junction the user states rather than the drawing deriving, and it is
+   * stored on the END rather than on the junction because a junction is
+   * derived and has nowhere to keep anything.
+   *
+   * The BASELINE never moves. A jog changes only how the wall is drawn, so
+   * join discovery, snapping, dimensions and grips all keep working off the
+   * same two points they always did.
+   */
+  private jogs: { start: number; end: number } = { start: 0, end: 0 };
   thickness = 0.3;
   baseLevelId: LevelId | null = null;
   vertical: { height: number } = { height: 3 };
@@ -94,6 +114,19 @@ export class WallEntity
   setBaseline(a: Point, b: Point): void {
     this.a = a;
     this.b = b;
+  }
+
+  /** how far this end steps sideways; 0 when it does not */
+  getJog(which: WallEndSide): number {
+    return this.jogs[which];
+  }
+
+  /**
+   * Step this end sideways, or pass 0 to take the jog off and let the corner
+   * go back to mitering.
+   */
+  setJog(which: WallEndSide, offset: number): void {
+    this.jogs[which] = Number.isFinite(offset) ? offset : 0;
   }
 
   getLength(): number {
@@ -265,30 +298,111 @@ export class WallEntity
     return null;
   }
 
+  /**
+   * A JOGGED end takes no cap.
+   *
+   * Stating a jog is stating what this corner does, so the miter steps aside
+   * rather than fighting it: the two would otherwise both be trying to shape
+   * the same two points, and the answer would depend on which ran last. It is
+   * also the join opt-out the docs pair with per-corner overrides — the same
+   * switch, seen from the geometry side.
+   */
   private capsForEnds(): { start: EndCap | null; end: EndCap | null } {
-    return { start: this.junctionCap('start'), end: this.junctionCap('end') };
+    return {
+      start: this.jogs.start === 0 ? this.junctionCap('start') : null,
+      end: this.jogs.end === 0 ? this.junctionCap('end') : null,
+    };
   }
 
   /**
-   * Span quad with junction caps swapped in at terminal spans. The start cap
+   * Span outline with junction caps swapped in at terminal spans. The start cap
    * maps left→+normal directly; the end cap's direction points backwards, so
    * its left/right land on the −/+ normal corners.
+   *
+   * Four points for the ordinary wall, which is every wall that has not been
+   * given a jog. A jogged end adds the two corners of its step, so the ring
+   * grows to six, or eight when both ends step. Returning a list rather than a
+   * fixed quad is the whole cost of jogs in this file — everything downstream
+   * already walks the boundary rather than indexing it.
+   *
+   * Ring order is unchanged and is what the step points slot into:
+   * start+normal, end+normal, end−normal, start−normal.
    */
   private spanQuadJoined(
     s0: number,
     s1: number,
     caps: { start: EndCap | null; end: EndCap | null },
-  ): [Point, Point, Point, Point] {
+  ): Point[] {
     const quad = this.spanQuad(s0, s1);
-    if (caps.start && s0 <= JOIN_TOLERANCE) {
+    const atStart = s0 <= JOIN_TOLERANCE;
+    const atEnd = s1 >= this.getLength() - JOIN_TOLERANCE;
+    if (caps.start && atStart) {
       quad[0] = caps.start.left;
       quad[3] = caps.start.right;
     }
-    if (caps.end && s1 >= this.getLength() - JOIN_TOLERANCE) {
+    if (caps.end && atEnd) {
       quad[1] = caps.end.right;
       quad[2] = caps.end.left;
     }
-    return quad;
+
+    // a jog belongs to an END of the wall, so an interior span between two
+    // openings is never stepped even though it shares the baseline
+    const jogStart = atStart ? this.jogs.start : 0;
+    const jogEnd = atEnd ? this.jogs.end : 0;
+    if (jogStart === 0 && jogEnd === 0) return quad;
+
+    const len = this.getLength();
+    const half = this.getThickness() / 2;
+    const n = this.normal();
+    const on = (s: number) => lerp(this.a, this.b, s / len);
+    const off = (p: Point, d: number) => add(p, scale(n, d));
+
+    /*
+     * How far back from the end the wall steps across. Taken from the wall's
+     * own thickness rather than asked for: a step is a corner detail, it is
+     * always about as deep as the wall is thick, and a second number to fill
+     * in for every corner would be a form where a switch was wanted.
+     *
+     * Clamped to the span so a short one — an opening sitting near the end —
+     * cannot fold the outline back through itself.
+     */
+    const step = Math.min(this.getThickness(), (s1 - s0) / 2);
+
+    const qStart = on(s0 + step);
+    const qEnd = on(s1 - step);
+
+    // each face is walked in ring order, and a stepped end contributes its
+    // riser as two extra points instead of the single square corner
+    return [
+      ...(jogStart !== 0
+        ? [
+            off(on(s0), half + jogStart),
+            off(qStart, half + jogStart),
+            off(qStart, half),
+          ]
+        : [quad[0]]),
+      ...(jogEnd !== 0
+        ? [
+            off(qEnd, half),
+            off(qEnd, half + jogEnd),
+            off(on(s1), half + jogEnd),
+          ]
+        : [quad[1]]),
+      ...(jogEnd !== 0
+        ? [
+            off(on(s1), -half + jogEnd),
+            off(qEnd, -half + jogEnd),
+            off(qEnd, -half),
+          ]
+        : [quad[2]]),
+      ...(jogStart !== 0
+        ? [
+            off(qStart, -half),
+            off(qStart, -half + jogStart),
+            off(on(s0), -half + jogStart),
+          ]
+        : [quad[3]]),
+    ];
   }
 
   private spanRegion(s0: number, s1: number): RegionShape {
@@ -328,7 +442,7 @@ export class WallEntity
    * corner), and getEffectiveGeometry() is split into solid spans, so an
    * opening reaching an end would shorten it.
    */
-  getOutline(): [Point, Point, Point, Point] {
+  getOutline(): Point[] {
     return this.spanQuadJoined(0, this.getLength(), this.capsForEnds());
   }
 
@@ -449,6 +563,7 @@ export class WallEntity
     copy.thickness = this.thickness;
     copy.baseLevelId = this.baseLevelId;
     copy.vertical = { height: this.vertical.height };
+    copy.jogs = { ...this.jogs };
     return copy;
   }
 
@@ -459,12 +574,13 @@ export class WallEntity
     const caps = this.capsForEnds();
     const meshes: Mesh3D[] = [];
     for (const span of this.getSolidSpans()) {
+      const ring = this.spanQuadJoined(span.start, span.end, caps);
+      // the quad path stays the common one; only a stepped end needs the
+      // general lofter, and it is the same prism either way
       meshes.push(
-        extrudeQuad(
-          this.spanQuadJoined(span.start, span.end, caps),
-          z0,
-          z0 + height,
-        ),
+        ring.length === 4
+          ? extrudeQuad(ring as [Point, Point, Point, Point], z0, z0 + height)
+          : extrudePolygon(ring, z0, z0 + height),
       );
     }
     // opening sill/lintel bands keep square ends — a band flush against a
@@ -502,6 +618,10 @@ export class WallEntity
       thickness: this.thickness,
       height: this.vertical.height,
       baseLevelId: this.baseLevelId,
+      // written only when there is one, so every wall drawn before jogs
+      // existed saves byte-for-byte as it did
+      ...(this.jogs.start !== 0 ? { jogStart: this.jogs.start } : {}),
+      ...(this.jogs.end !== 0 ? { jogEnd: this.jogs.end } : {}),
     };
   }
 
@@ -525,6 +645,12 @@ export class WallEntity
       typeof props['baseLevelId'] === 'string'
         ? (props['baseLevelId'] as LevelId)
         : null;
+    // absent means no jog, which is what every file written before this
+    // existed says by saying nothing
+    this.jogs = {
+      start: typeof props['jogStart'] === 'number' ? props['jogStart'] : 0,
+      end: typeof props['jogEnd'] === 'number' ? props['jogEnd'] : 0,
+    };
   }
 }
 
