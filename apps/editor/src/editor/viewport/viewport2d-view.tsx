@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { InputModifiers, ViewDefinition } from '@acip/editor-core';
+import type { InputModifiers, Point, ViewDefinition } from '@acip/editor-core';
 import { isEntityVisible } from '@acip/editor-core';
 import { useSession } from '../session-context';
 import { useRuntime } from '../runtime';
@@ -18,13 +18,13 @@ import {
   overlayAnimates,
 } from './scene-renderer';
 import { lengthUnit } from '../units';
+import { magneticSnap, touchSnapOptions } from '../snap-policy';
 
 const PICK_PIXELS = 8;
 const SNAP_PIXELS = 10;
 /* fingers are blunter than cursors: wider pick/snap radii, and a movement
    budget below which a touch still counts as a tap rather than a pan */
 const TOUCH_PICK_PIXELS = 20;
-const TOUCH_SNAP_PIXELS = 24;
 const TAP_SLOP_PIXELS = 8;
 /* the band at the bottom the footer sits over, which the loupe stays clear of
    so it never covers the bar it is trying not to be in the way of */
@@ -270,11 +270,27 @@ export function Viewport2DView() {
       return { point: snap ? snap.point : raw, snapped: !!snap };
     };
 
-    /* snapped world point for a touch, using client coords + a wider radius */
+    /** where the finger picked something up, so it can be put back exactly */
+    let dragOrigin: Point | null = null;
+
+    /**
+     * Snapped world point for a touch.
+     *
+     * Through the magnetic policy rather than straight at the engine: the
+     * engine picks the CLOSEST candidate, which on a phone is the wrong
+     * question — a thumb lands within a centimetre of what it meant, so what
+     * matters is which candidate was being reached for. Corners pull from
+     * further, coming back to the start snaps home, and the net narrows once
+     * something is in hand.
+     */
     const touchWorld = (e: PointerEvent) => {
       const rect = overlay.getBoundingClientRect();
       const raw = viewport.toWorld(e.clientX - rect.left, e.clientY - rect.top);
-      const snap = session.snap.snap(raw, TOUCH_SNAP_PIXELS / viewport.scale);
+      const snap = magneticSnap(
+        session.snap,
+        raw,
+        touchSnapOptions(viewport.scale, touchMode === 'tool-drag', dragOrigin),
+      );
       ui.setSnap(snap);
       return { point: snap ? snap.point : raw, snapped: !!snap };
     };
@@ -291,6 +307,9 @@ export function Viewport2DView() {
         const { point, snapped } = touchWorld(e);
         if (tools.hitDraggable(point, tools.worldTolerance)) {
           touchMode = 'tool-drag';
+          // recorded BEFORE the tool sees the press, so "home" is where the
+          // thing actually was rather than wherever the first move put it
+          dragOrigin = point;
           lastToolPoint = point;
           forward(() =>
             tools.pointerDown({ point, modifiers: modifiersOf(e), snapped }),
@@ -379,6 +398,7 @@ export function Viewport2DView() {
       // the finger is off the glass, so there is nothing under it to see —
       // FIRST, so an early return below cannot leave the loupe up forever
       hideLoupe();
+      dragOrigin = null;
       if (touchMode === 'tool-drag') {
         const modifiers = modifiersOf(e);
         if (cancelled) forward(() => tools.key('Escape'));
