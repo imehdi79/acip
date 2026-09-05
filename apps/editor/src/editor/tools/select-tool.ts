@@ -6,6 +6,7 @@ import type {
   ToolContext,
   ToolInputEvent,
 } from '@acip/editor-core';
+import { dimensionedSpan } from '../viewport/wall-dimensions';
 import {
   detectRectRoom,
   planStickyWallMove,
@@ -29,6 +30,7 @@ import {
   distance,
   hasGrips,
   FinishEntity,
+  WallEntity,
   isEntityInteractive,
   pointInLoop,
   sub,
@@ -248,10 +250,24 @@ export class SelectTool implements Tool {
         const to = this.resolveGrip(m, e);
         // dragged wall = dashed HUD line (its length + angle); the other walls
         // stuck to the corner = ghosts; live angle arcs at the affected corners
+        // the number the LANE would show for this wall, not the raw span
+        // between the band's ends — the band is the baseline, and a wall is
+        // dimensioned half a thickness past each end (or short of it)
+        const dragged = ctx.doc.get(m.entityId);
+        const from = m.fixed ?? m.anchor;
+        const baseline = Math.hypot(to.point.x - from.x, to.point.y - from.y);
         this.ui.setRubber({
-          a: m.fixed ?? m.anchor,
+          a: from,
           b: to.point,
           angleLocked: to.locked,
+          measure:
+            dragged instanceof WallEntity
+              ? dimensionedSpan(
+                  baseline,
+                  dragged.getThickness(),
+                  this.ui.measureMode.get(),
+                )
+              : undefined,
         });
         const ghost = this.gripGhost(m, to.point, m.entityId);
         this.ui.setGhost(ghost.length > 0 ? ghost : null);

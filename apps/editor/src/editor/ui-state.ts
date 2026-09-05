@@ -58,7 +58,19 @@ export interface SelectionBox {
 export interface OverlayState {
   readonly snap: SnapPoint | null;
   /** live rubber-band line; angleLocked = its bearing is snapped to a clean angle */
-  readonly rubber: { a: Point; b: Point; angleLocked?: boolean } | null;
+  readonly rubber: {
+    a: Point;
+    b: Point;
+    angleLocked?: boolean;
+    /**
+     * What to PRINT, when the band's own length is not what is being
+     * measured. A wall's dimension reaches half a thickness past each end
+     * (outside) or stops half short (inside), so the raw distance between the
+     * band's points is the baseline and not the number the lane shows.
+     * Absent = the band is its own measurement.
+     */
+    measure?: number;
+  } | null;
   /** translated preview geometry while drag-moving */
   readonly ghost: readonly Geometry[] | null;
   readonly box: SelectionBox | null;

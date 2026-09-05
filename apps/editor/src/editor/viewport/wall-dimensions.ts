@@ -64,6 +64,34 @@ const THROUGH_TOLERANCE = 0.01;
  * the user drew as one wall do not obstruct each other. The largest setback
  * wins — a span stops at the first thing it runs into, not the last.
  */
+/**
+ * What a wall MEASURES, given the span between its endpoints.
+ *
+ * The dimension lane and the drag readout used to answer this differently, so
+ * the same wall read 4.30 in the lane and 4.00 under the finger — and neither
+ * number was wrong, they were two conventions with nothing saying which was
+ * being used. A baseline runs centreline to centreline; what gets dimensioned
+ * is the wall's own extent, which reaches half a thickness FURTHER at each end
+ * on the outside and stops half a thickness SHORTER at each end on the inside.
+ *
+ * Half at each end is a whole thickness either way, which is why a 4.00 m
+ * baseline through 0.30 m walls dimensions as 4.30 outside and 3.70 inside.
+ *
+ * Stated once, as arithmetic over two numbers, so a drag and a lane cannot
+ * drift apart again — and so the drag needs nothing from the junctions, which
+ * are themselves moving while it happens.
+ */
+export function dimensionedSpan(
+  baseline: number,
+  thickness: number,
+  mode: MeasureMode,
+): number {
+  const span = mode === 'inside' ? baseline - thickness : baseline + thickness;
+  // a wall shorter than it is thick has no clear span to report; the drawn
+  // extent beats a negative number
+  return Math.max(0, span);
+}
+
 export function setbackAt(wall: WallEntity, which: 'start' | 'end'): number {
   const { a, b } = wall.getBaseline();
   const len = Math.hypot(b.x - a.x, b.y - a.y);

@@ -830,7 +830,10 @@ export function drawOverlay(
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = COLORS.measure;
-      ctx.fillText(formatLength(worldLen), cx, cy);
+      // the wall's DIMENSION where the tool worked one out, the band's own
+      // length otherwise — a drag that disagreed with the lane above it was
+      // two conventions on one screen with nothing saying which was which
+      ctx.fillText(formatLength(overlay.rubber.measure ?? worldLen), cx, cy);
       ctx.fillStyle = locked ? COLORS.angleLock : COLORS.rubber;
       ctx.fillText(`${deg.toFixed(0)}°`, cx, cy + 14);
     }
