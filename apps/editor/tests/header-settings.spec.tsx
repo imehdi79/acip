@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import {
-  EditorUi,
-  type MeasureMode,
-  type ResizeReach,
-} from '@/editor/ui-state';
+import { EditorUi, type MeasureMode } from '@/editor/ui-state';
 import { moreItems } from '@/app/components/layout/header/more';
 import { SettingsPanel } from '@/app/components/layout/header/settings';
 import { can, type User } from '@/app/stores/global/settings.store';
@@ -28,24 +24,10 @@ const itemsFor = (user: User) =>
   moreItems(can(user, 'header.settings')).map((item) => item.id);
 
 /** the panel with the editor sitting in `mode` */
-const panel = (mode: MeasureMode, reach: ResizeReach = 'linked') => {
+const panel = (mode: MeasureMode) => {
   const ui = new EditorUi();
   ui.measureMode.set(mode);
-  ui.resizeReach.set(reach);
   return renderToStaticMarkup(<SettingsPanel ui={ui} />);
-};
-
-/**
- * One toggle group's markup, by position.
- *
- * The sheet holds more than one now, and every assertion about "which option
- * is on" has to name WHICH question it is asking about — counting checked
- * buttons across the whole panel would pass no matter how the groups were
- * wired to each other.
- */
-const groupAt = (html: string, index: number) => {
-  const parts = html.split('<div data-slot="toggle-button-group"');
-  return parts[index + 1] ?? '';
 };
 
 /** the label of the option the markup says is on */
@@ -119,39 +101,10 @@ describe('the settings panel', () => {
     // an empty answer is not an answer here — every dimension on the plan is
     // measured from somewhere
     for (const mode of ['outside', 'inside'] as const) {
-      const group = groupAt(panel(mode), 0);
-      expect(group.match(/aria-checked="true"/g)).toHaveLength(1);
-      expect(group.match(/aria-checked="false"/g)).toHaveLength(1);
+      const html = panel(mode);
+      expect(html.match(/aria-checked="true"/g)).toHaveLength(1);
+      expect(html.match(/aria-checked="false"/g)).toHaveLength(1);
     }
-  });
-
-  it('answers the length question on its own, one option on', () => {
-    for (const reach of ['linked', 'alone'] as const) {
-      const group = groupAt(panel('outside', reach), 1);
-      expect(group.match(/aria-checked="true"/g)).toHaveLength(1);
-      expect(group.match(/aria-checked="false"/g)).toHaveLength(1);
-    }
-  });
-
-  it('shows which way a typed length reaches', () => {
-    // the guard against a control wired for reading but rendering the same
-    // either way, which looks live and is not
-    expect(groupAt(panel('outside', 'linked'), 1)).not.toEqual(
-      groupAt(panel('outside', 'alone'), 1),
-    );
-  });
-
-  it('keeps the two questions independent', () => {
-    // they are settings that happen to share a sheet, not one setting with
-    // four positions
-    const html = panel('inside', 'alone');
-    expect(groupAt(html, 0)).toContain('Inside');
-    expect(groupAt(html, 1)).toContain('This wall only');
-  });
-
-  it('leaves connected walls following until told otherwise', () => {
-    // a setting must not change the drawing the moment it exists
-    expect(new EditorUi().resizeReach.get()).toBe('linked');
   });
 
   it('renders differently in the two modes at all', () => {

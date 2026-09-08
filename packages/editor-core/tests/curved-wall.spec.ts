@@ -147,95 +147,15 @@ describe('a curved wall', () => {
 });
 
 describe('bending it by hand', () => {
-  test('offers the apex and the centre, on top of the two ends', () => {
+  test('offers the apex as a third grip', () => {
     const s = session();
     const id = unitWall(s);
     curve(s, id, QUARTER);
     const grips = wallOf(s, id).getGrips();
-    expect(grips).toHaveLength(4);
-    expect(grips.map((g) => g.kind)).toEqual([
-      'endpoint',
-      'endpoint',
-      'midpoint',
-      'center',
-    ]);
-    // the apex is ON the wall, where a finger can always reach it
+    expect(grips).toHaveLength(3);
+    expect(grips[2].index).toBe(2);
+    // and it is ON the wall, where a finger can reach it, unlike the centre
     expect(grips[2].point.y).toBeGreaterThan(0);
-    // the centre is across the chord, on the far side from the bow
-    expect(grips[3].point.y).toBeLessThan(0);
-  });
-
-  test('drops both extra grips when the wall is straightened', () => {
-    const s = session();
-    const id = unitWall(s);
-    curve(s, id, QUARTER);
-    curve(s, id, 0);
-    expect(wallOf(s, id).getGrips()).toHaveLength(2);
-  });
-
-  test('dragging the centre away flattens the wall', () => {
-    // pulling the centre back makes the radius bigger and the bow gentler,
-    // which is how a curve is struck on paper
-    const s = session();
-    const id = unitWall(s);
-    curve(s, id, QUARTER);
-    s.dispatch('GRIP.MOVE', { id, index: 3, to: point(0.5, -5) });
-    expect(Math.abs(wallOf(s, id).getSweep())).toBeLessThan(QUARTER);
-  });
-
-  test('dragging the centre closer tightens the wall', () => {
-    const s = session();
-    const id = unitWall(s);
-    curve(s, id, 0.4);
-    s.dispatch('GRIP.MOVE', { id, index: 3, to: point(0.5, -0.2) });
-    expect(Math.abs(wallOf(s, id).getSweep())).toBeGreaterThan(0.4);
-  });
-
-  test('the centre lands where it was dragged, on the bisector', () => {
-    const s = session();
-    const id = unitWall(s);
-    curve(s, id, QUARTER);
-    s.dispatch('GRIP.MOVE', { id, index: 3, to: point(0.5, -1) });
-    const centre = wallOf(s, id).getGrips()[3].point;
-    expect(centre.x).toBeCloseTo(0.5, 6);
-    expect(centre.y).toBeCloseTo(-1, 6);
-  });
-
-  test('dragging the centre along the chord does nothing', () => {
-    // a circle through two fixed points can only have its centre on the
-    // perpendicular bisector, so the rest of the drag is a request the
-    // geometry cannot honour
-    const s = session();
-    const id = unitWall(s);
-    curve(s, id, QUARTER);
-    const before = wallOf(s, id).getSweep();
-    const centre = wallOf(s, id).getGrips()[3].point;
-    s.dispatch('GRIP.MOVE', {
-      id,
-      index: 3,
-      to: point(centre.x + 3, centre.y),
-    });
-    expect(wallOf(s, id).getSweep()).toBeCloseTo(before, 9);
-  });
-
-  test('dragging the centre keeps the wall bowing the way it already did', () => {
-    // every centre carries two arcs through the same two points, one bowing
-    // each way; the centre cannot say which, so the wall does
-    const s = session();
-    const id = unitWall(s);
-    curve(s, id, -0.6);
-    s.dispatch('GRIP.MOVE', { id, index: 3, to: point(0.5, 2) });
-    expect(wallOf(s, id).getSweep()).toBeLessThan(0);
-  });
-
-  test('pushing the centre past the chord turns it more than half way', () => {
-    // rather than flipping the wall inside out, which is what happens if the
-    // bow direction is read off the centre
-    const s = session();
-    const id = unitWall(s);
-    curve(s, id, 0.6);
-    s.dispatch('GRIP.MOVE', { id, index: 3, to: point(0.5, 0.2) });
-    expect(wallOf(s, id).getSweep()).toBeGreaterThan(Math.PI);
   });
 
   test('dragging the apex bends the wall to pass under it', () => {

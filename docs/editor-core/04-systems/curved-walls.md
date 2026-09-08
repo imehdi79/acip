@@ -65,36 +65,18 @@ Tessellation follows CURVATURE, not length: at most 7.5° per piece, so a tight
 little arc is as smooth as a long sweeping one and a nearly straight wall costs
 almost nothing.
 
-## Two handles, both derived
+## The apex is the handle
 
-Grips 2 and 3 exist only on a curved wall. Neither is a point the wall stores —
-both are produced by the sweep — so dragging either works backwards to the
-sweep that would put it under the finger.
+Grip 2 exists only on a curved wall and sits at the apex. Not the centre — the
+centre of a gentle curve is hundreds of meters off the plan and cannot be
+dragged at all. The apex is on the wall, under the finger, and moves the way
+the wall moves. Dragging it runs `sweepFromApex` backwards to the sweep that
+puts the curve under the finger; dragging across the chord flips the bow rather
+than sticking or jumping.
 
-**Grip 2, the APEX.** On the wall, under the finger, always reachable. Dragging
-it across the chord flips the bow rather than sticking or jumping. Only the
-across-chord part of the drag counts: an arc through two points has its apex at
-the middle, so sliding along the wall says nothing and must not be invented
-into a different curve.
-
-**Grip 3, the CENTRE** — the point the wall turns about, and how a curve is
-struck on paper. It is the second handle, not the first, because on a gentle
-curve it is hundreds of meters off the plan; on a tight one it is right there.
-
-The centre is constrained twice over, and both constraints are geometry rather
-than choices:
-
-- It can only travel the **perpendicular bisector** of the chord, because that
-  is the only line a circle through both endpoints can be centred on. The rest
-  of the drag asks for a circle that does not exist, and nothing happens.
-- It cannot say **which way** the wall bows. Every centre on the bisector
-  carries two arcs through the same two points, one bulging each way, so the
-  bow direction is taken from the wall as it already is and only the amount of
-  turn comes from the drag.
-
-That second rule is also what keeps the wall from flipping inside out as the
-centre is pulled through the chord. Instead the turn grows smoothly past a half
-circle — which is exactly what pushing the centre toward the wall looks like.
+Only the across-chord part of the drag counts. A circular arc through two
+points has its apex at the middle, so sliding along the wall says nothing and
+must not be invented into a different curve.
 
 ## Known limitations
 
@@ -105,9 +87,6 @@ circle — which is exactly what pushing the centre toward the wall looks like.
   the only useful pair, but the line does not follow the wall.
 - **No tangent continuity between walls** — two curved walls meeting are
   mitered, not blended; there is no arc-to-arc fillet.
-- **A gentle curve's centre is off the plan** — the centre grip is real but can
-  be unreachable at a shallow sweep. The apex always works; that is why it is
-  the first handle.
 - **`transform` moves endpoints only** — mirroring a curved wall does not flip
   the sign of its sweep, so a mirrored curve bows the same way.
 
