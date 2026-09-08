@@ -546,6 +546,21 @@ export function drawScene(
 
 /** dimension line stand-off from the wall, and the minimum length worth labelling */
 const DIM_OFFSET_PX = 18;
+
+/**
+ * How far off the wall's AXIS a dimension line stands, in screen pixels.
+ *
+ * The half-thickness term is the whole point. Measurement anchors sit on the
+ * wall's axis, so a flat pixel stand-off walks straight into the wall as soon
+ * as the plan is zoomed in far enough for half a thickness to exceed it — at
+ * 200 px/m a 0.30 m wall is 30 px across the axis and an 18 px stand-off drew
+ * the dimension 12 px INSIDE its own wall. The line has to clear the thing it
+ * is measuring at every zoom, so the clearance is measured from the FACE and
+ * the gap beyond it is what stays constant on screen.
+ */
+export function dimensionStandoff(halfWidthPx: number, lane: number): number {
+  return Math.max(0, halfWidthPx) + DIM_OFFSET_PX + lane * DIM_LANE_PX;
+}
 const DIM_MIN_PX = 44;
 /** gap between lanes — a line plus its label has to fit in here */
 const DIM_LANE_PX = 22;
@@ -601,7 +616,11 @@ export function drawPlanDimensions(
     // +y is down, so the normal's y flips on the way in.
     const nx = dim.side.x;
     const ny = -dim.side.y;
-    const standOff = DIM_OFFSET_PX + dim.lane * DIM_LANE_PX;
+    // the wall's own half-thickness, on screen — what the line has to clear
+    const standOff = dimensionStandoff(
+      (dim.halfWidth ?? 0) * viewport.scale,
+      dim.lane,
+    );
 
     const da = { x: sa.x + nx * standOff, y: sa.y + ny * standOff };
     const db = { x: sb.x + nx * standOff, y: sb.y + ny * standOff };

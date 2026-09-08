@@ -142,6 +142,16 @@ export interface PlanExtent {
    */
   readonly base?: { readonly a: Point; readonly b: Point };
   /**
+   * Half the thickness of the wall this measures, in METERS.
+   *
+   * Carried because `a` and `b` sit on the wall's AXIS, and a dimension line
+   * standing a fixed number of pixels off that axis walks into the wall as
+   * soon as the plan is zoomed in far enough for half a thickness to exceed
+   * it. The line has to clear the thing it is measuring, and only the wall
+   * knows how wide that is.
+   */
+  readonly halfWidth?: number;
+  /**
    * The same thing measured along each of its two faces, for whoever wants the
    * inner clear width instead of the overall extent. Present only when there
    * ARE two sides to choose between: an opening carries none, because a hole is
@@ -269,6 +279,7 @@ export function wallExtent(wall: WallEntity): PlanExtent | null {
     // chord length is a number nobody can buy material against.
     length: wall.isCurved() ? wall.getLength() : max - min,
     base: { a, b },
+    halfWidth: wall.getThickness() / 2,
     faces: [faceSpan(plus, 1), faceSpan(minus, -1)].filter(
       (face): face is FaceExtent => face !== null,
     ),
@@ -295,7 +306,10 @@ export function wallExtent(wall: WallEntity): PlanExtent | null {
  * Returns null for an opening with no host to hang on, or one collapsed to
  * nothing — neither has a span to measure.
  */
-export function openingExtent(opening: HostedOpeningEntity): PlanExtent | null {
+export function openingExtent(
+  opening: HostedOpeningEntity,
+  hostHalfWidth = 0,
+): PlanExtent | null {
   const [, low, high] = opening.getGrips();
   if (!low || !high) return null;
   const length = Math.hypot(
@@ -309,6 +323,9 @@ export function openingExtent(opening: HostedOpeningEntity): PlanExtent | null {
     a: low.point,
     b: high.point,
     length,
+    // an opening is cut INTO a wall, so its width is quoted from that wall's
+    // axis too and has the same wall to clear
+    halfWidth: hostHalfWidth,
   };
 }
 
@@ -615,7 +632,7 @@ export function planDimensions(
       const hosted = doc.get(hostedId);
       if (!(hosted instanceof HostedOpeningEntity)) continue;
       if (!isEntityVisible(doc, hosted)) continue;
-      const span = openingExtent(hosted);
+      const span = openingExtent(hosted, entity.getThickness() / 2);
       if (span) openings.push({ ...span, selected: selection.has(hostedId) });
     }
   }
