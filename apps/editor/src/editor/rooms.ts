@@ -109,9 +109,16 @@ export function resizeRectRoomTo(
  * the difference by getting shorter, and the far side of the plan stays where
  * it is; the footprint is unchanged.
  *
- * Neither ever rotates a wall it did not have to, which is the point of both.
+ * `alone` — nothing else moves at all. The junction at the growing end simply
+ * comes apart, which is the honest result of lengthening one wall of a room
+ * and telling the others to stay put. It is the only one of the three that
+ * leaves the drawing open, and it is chosen deliberately: a plan is often
+ * corrected one wall at a time, and having the rest of the room chase every
+ * typed number is worse than a corner to close afterwards.
+ *
+ * None of them ever rotates a wall it did not have to, which is the point.
  */
-export type ResizeSpread = 'push' | 'absorb';
+export type ResizeSpread = 'push' | 'absorb' | 'alone';
 
 /** which end of a wall a resize holds still */
 export interface WallResizePlan {
@@ -221,6 +228,23 @@ export function planWallResize(
    * square and another two thirds shorter.
    */
   const along = (p: Point) => (p.x - moved.x) * out.x + (p.y - moved.y) * out.y;
+
+  if (spread === 'alone') {
+    // one grip, and nothing else in the drawing is consulted — not even the
+    // walls welded to this one. Deliberately BEFORE the cluster is gathered,
+    // so "leave the others alone" cannot become "leave the others alone,
+    // mostly".
+    return {
+      anchorIndex,
+      moves: [
+        {
+          id: wallId,
+          index: anchorIndex === 0 ? 1 : 0,
+          to: { x: moved.x + delta.x, y: moved.y + delta.y },
+        },
+      ],
+    };
+  }
 
   const carries =
     spread === 'push'

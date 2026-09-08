@@ -8,7 +8,7 @@ import { formatLengthValue, lengthUnit, parseLength } from '@/editor/units';
 import { planWallResize, resizeWallLength } from '@/editor/rooms';
 import type { ResizeSpread } from '@/editor/rooms';
 import { labelledWallLength } from '@/editor/viewport/wall-dimensions';
-import type { MeasureMode } from '@/editor/ui-state';
+import type { MeasureMode, ResizeReach } from '@/editor/ui-state';
 
 /** the three plain sizes, which are the only things with a text box each */
 export type SizeField = 'length' | 'height' | 'thickness';
@@ -43,6 +43,27 @@ export type MeasurementEdits = Record<SizeField, string>;
 export interface MeasureView {
   readonly levelId: LevelId | null;
   readonly mode: MeasureMode;
+}
+
+/**
+ * The two controls that decide what a typed length does to the rest of the
+ * plan, resolved into the one answer the geometry takes.
+ *
+ * SETTINGS is the outer question: does anything else move at all? Only when it
+ * does does the footer's move-separately toggle get to answer the inner one:
+ * are the walls beyond pushed along intact, or made to absorb the change and
+ * stay put.
+ *
+ * A function rather than a ternary at the call site because the ORDER of the
+ * two matters and is not obvious — read the other way round, "move separately"
+ * would silently override a setting the user went into a sheet to choose.
+ */
+export function resizeSpreadFor(
+  reach: ResizeReach,
+  detachedMove: boolean,
+): ResizeSpread {
+  if (reach === 'alone') return 'alone';
+  return detachedMove ? 'absorb' : 'push';
 }
 
 /** the selected walls, in selection order */

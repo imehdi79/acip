@@ -30,6 +30,7 @@ import {
   arcTangentAt,
   clampSweep,
   sweepFromApex,
+  sweepFromCenter,
   tessellateArc,
 } from '../../geometry/curves/arc.js';
 import type { Geometry, RegionShape } from '../../geometry/shapes.js';
@@ -711,21 +712,35 @@ export class WallEntity
         point: arcPointAt(arc, arc.length / 2),
         kind: 'midpoint',
       });
+      // the CENTRE the wall turns about. Off the plan entirely on a gentle
+      // curve, which is why it is the second handle and not the first — but on
+      // a tight one it is right there, and setting the radius by its centre is
+      // how a curve is drawn on paper.
+      grips.push({ index: 3, point: arc.center, kind: 'center' });
     }
     return grips;
   }
 
   /** stretch the baseline — hosted openings keep their parametric t and follow */
   /**
-   * Index 2 BENDS rather than moves: the apex is not a point the wall stores,
-   * it is a point the sweep produces, so dragging it works backwards to the
-   * sweep that would put the curve under the finger.
+   * Indexes 2 and 3 BEND rather than move. Neither the apex nor the centre is a
+   * point the wall stores — both are produced by the sweep — so dragging either
+   * works backwards to the sweep that would put it under the finger.
+   *
+   * They are two ways to say the same thing and they meet in the middle: the
+   * apex is direct and always reachable, the centre sets the radius the way a
+   * curve is struck on paper. The centre can only travel the perpendicular
+   * bisector, since that is the only line a circle through both endpoints can
+   * have its centre on.
    */
   moveGrip(index: number, to: Point, tx: Transaction): void {
     tx.update(this, (wall) => {
       if (index === 0) wall.a = to;
       else if (index === 1) wall.b = to;
       else if (index === 2) wall.sweep = sweepFromApex(wall.a, wall.b, to);
+      else if (index === 3) {
+        wall.sweep = sweepFromCenter(wall.a, wall.b, to, wall.sweep);
+      }
     });
   }
 
