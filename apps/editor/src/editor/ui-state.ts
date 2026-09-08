@@ -24,26 +24,7 @@ export type StarterMode = 'replace' | 'add';
  * A drawing setting, not document content: nothing is stored, so switching it
  * costs no edit and no undo step.
  */
-/**
- * Which reference the automatic plan dimensions are measured against.
- *
- * `outside` — the overall drawn extent, outer corner to outer corner.
- * `inside`  — the clear width, face to face, what a tape reads in a room.
- * `center`  — the centrelines, which is how a surveyed plan is usually
- *             quoted and the only one that is independent of wall thickness.
- */
-export type MeasureMode = 'outside' | 'inside' | 'center';
-
-/**
- * What a typed length does to the walls joined to the one being edited.
- *
- * `linked` — they follow, so a room stays a room and its corners stay welded.
- * `alone` — only the edited wall changes, and the junction comes apart.
- *
- * Two words rather than a boolean because neither is the off position: they
- * are two answers to "what is being resized here, the wall or the room?"
- */
-export type ResizeReach = 'linked' | 'alone';
+export type MeasureMode = 'outside' | 'inside';
 
 export interface FitBounds {
   minX: number;
@@ -206,16 +187,6 @@ export class EditorUi {
    * the moment it exists.
    */
   readonly measureMode = new ValueStore<MeasureMode>('outside');
-  /**
-   * Whether a typed length carries the walls joined to this one.
-   *
-   * `linked` is the default because it is what the editor already did before
-   * there was a choice — a setting must not change the drawing the moment it
-   * exists. It sits in Settings rather than the footer because it is a habit,
-   * not a per-drag decision: a plan is either being reshaped as rooms or
-   * corrected wall by wall, and that rarely changes mid-session.
-   */
-  readonly resizeReach = new ValueStore<ResizeReach>('linked');
   /** starter modal (preset picker) — shown on first empty load and on New */
   readonly starterOpen = new ValueStore<boolean>(false);
   /** side panels open as a drawer on mobile (desktop always shows them) */

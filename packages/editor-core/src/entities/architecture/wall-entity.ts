@@ -21,18 +21,6 @@ import {
   closestPointOnSegment,
   distanceToSegment,
 } from '../../geometry/curves/segment.js';
-import { distanceToPolyline } from '../../geometry/curves/polyline.js';
-import type { Arc } from '../../geometry/curves/arc.js';
-import {
-  arcFromChord,
-  arcNormalAt,
-  arcPointAt,
-  arcTangentAt,
-  clampSweep,
-  sweepFromApex,
-  sweepFromCenter,
-  tessellateArc,
-} from '../../geometry/curves/arc.js';
 import type { Geometry, RegionShape } from '../../geometry/shapes.js';
 import type { Mesh3D, MeshDetail } from '../../geometry/mesh/index.js';
 import {
@@ -114,19 +102,6 @@ export class WallEntity
    * same two points they always did.
    */
   private jogs: { start: number; end: number } = { start: 0, end: 0 };
-  /**
-   * How far this wall TURNS between its two endpoints, in radians, signed
-   * toward `face+`. Zero — the default — is a straight wall and costs nothing.
-   *
-   * Chord-and-sweep rather than centre-and-radius, for the same reason a jog
-   * does not move the baseline: the two endpoints stay the fixed, stored truth
-   * of where this wall begins and ends, so joins, grips, snapping and the
-   * neighbours welded to it all keep working off exactly the points they
-   * always did. The centre is derived, and a gentle curve has one hundreds of
-   * meters off the plan — not something to store, and not something to hold on
-   * to while the endpoints move.
-   */
-  private sweep = 0;
   thickness = 0.3;
   baseLevelId: LevelId | null = null;
   vertical: { height: number } = { height: 3 };
@@ -154,87 +129,8 @@ export class WallEntity
     this.jogs[which] = Number.isFinite(offset) ? offset : 0;
   }
 
-  /** how far the wall turns, in radians; 0 when it is straight */
-  getSweep(): number {
-    return this.sweep;
-  }
-
-  /** curve the wall, or pass 0 to straighten it back out */
-  setSweep(sweep: number): void {
-    this.sweep = clampSweep(sweep);
-  }
-
-  /**
-   * The arc this wall runs along, or null when it is straight.
-   *
-   * Derived on every read rather than stored, exactly like a join: the arc is
-   * a consequence of the two endpoints and the sweep, and the moment an
-   * endpoint is dragged the old centre is wrong. Cheap trigonometry, and the
-   * alternative is a cached centre that is right until it silently is not.
-   */
-  private arc(): Arc | null {
-    return arcFromChord(this.a, this.b, this.sweep);
-  }
-
-  /** does this wall curve at all? */
-  isCurved(): boolean {
-    return this.arc() !== null;
-  }
-
-  /**
-   * The centreline as a polyline: two points when straight, a tessellated run
-   * when curved.
-   *
-   * Public because the things that reason about a plan's TOPOLOGY — room
-   * detection above all — work in straight segments and should keep doing so.
-   * Handing them the curve already broken into segments is what lets a curved
-   * wall bound a room without the arrangement ever learning what an arc is.
-   */
-  getCentreline(): Point[] {
-    const arc = this.arc();
-    if (!arc) return [this.a, this.b];
-    return tessellateArc(arc, 0, arc.length);
-  }
-
-  /**
-   * ARC length when curved, which is what the wall is actually made of: it is
-   * the number the takeoff prices, the number a dimension prints, and the
-   * number openings are placed along.
-   */
   getLength(): number {
-    return this.arc()?.length ?? distance(this.a, this.b);
-  }
-
-  /** the centreline point at distance `s` from the start */
-  private pointAt(s: number): Point {
-    const arc = this.arc();
-    if (arc) return arcPointAt(arc, s);
-    const len = distance(this.a, this.b);
-    return len === 0 ? this.a : lerp(this.a, this.b, s / len);
-  }
-
-  /** the outward (`face+`) normal at distance `s`, which turns along a curve */
-  private normalAt(s: number): Vector {
-    const arc = this.arc();
-    return arc ? arcNormalAt(arc, s) : this.normal();
-  }
-
-  /**
-   * Where to sample the centreline across [s0, s1].
-   *
-   * Two points when straight — the ends, and nothing in between, so a straight
-   * wall produces the very same four-cornered quad it always did. A curve gets
-   * as many as its curvature asks for.
-   */
-  private samplesAcross(s0: number, s1: number): number[] {
-    const arc = this.arc();
-    if (!arc) return [s0, s1];
-    const turned = Math.abs(arc.sweep) * (Math.abs(s1 - s0) / arc.length);
-    const steps = Math.max(1, Math.ceil(turned / (Math.PI / 24)));
-    return Array.from(
-      { length: steps + 1 },
-      (_, i) => s0 + ((s1 - s0) * i) / steps,
-    );
+    return distance(this.a, this.b);
   }
 
   getHeight(): number {
@@ -256,33 +152,24 @@ export class WallEntity
     return perpendicular(normalize(sub(this.b, this.a)));
   }
 
-  /** the point and outward direction of one end, as the resolvers want it */
-  private endDescriptor(which: WallEndSide): WallEnd {
-    return {
-      point: which === 'start' ? this.a : this.b,
-      direction: this.endDirection(which),
-      halfWidth: this.getThickness() / 2,
-    };
+  /** plan rectangle for the [s0, s1] stretch (in meters along the baseline) */
+  private spanQuad(s0: number, s1: number): [Point, Point, Point, Point] {
+    const len = this.getLength();
+    const pa = len === 0 ? this.a : lerp(this.a, this.b, s0 / len);
+    const pb = len === 0 ? this.b : lerp(this.a, this.b, s1 / len);
+    const half = scale(this.normal(), this.getThickness() / 2);
+    return [add(pa, half), add(pb, half), sub(pb, half), sub(pa, half)];
   }
 
-  /**
-   * Which way the wall LEAVES one of its ends, pointing away from the junction
-   * and into the wall.
-   *
-   * The tangent on a curve, not the chord. The miter is cut against the
-   * direction the wall actually arrives from, and on a curved wall those are
-   * different by half the sweep — enough that a corner cut to the chord would
-   * visibly miss.
-   */
-  private endDirection(which: WallEndSide): Vector {
-    const arc = this.arc();
-    if (arc) {
-      return which === 'start'
-        ? arcTangentAt(arc, 0)
-        : scale(arcTangentAt(arc, arc.length), -1);
-    }
+  /** the point and outward direction of one end, as the resolvers want it */
+  private endDescriptor(which: WallEndSide): WallEnd {
+    const p = which === 'start' ? this.a : this.b;
     const away = which === 'start' ? sub(this.b, this.a) : sub(this.a, this.b);
-    return normalize(away);
+    return {
+      point: p,
+      direction: normalize(away),
+      halfWidth: this.getThickness() / 2,
+    };
   }
 
   /**
@@ -375,14 +262,14 @@ export class WallEntity
       const ends: WallEnd[] = [selfEnd];
       for (const { wall } of joins) {
         const bl = wall.getBaseline();
-        // direction points AWAY from the junction, into the neighbour — asked
-        // of the neighbour so a curved one contributes its tangent, not its
-        // chord
-        const side: WallEndSide =
-          distance(bl.a, selfEnd.point) <= JOIN_TOLERANCE ? 'start' : 'end';
+        // direction points AWAY from the junction, into the neighbour
+        const dir =
+          distance(bl.a, selfEnd.point) <= JOIN_TOLERANCE
+            ? normalize(sub(bl.b, bl.a))
+            : normalize(sub(bl.a, bl.b));
         ends.push({
           point: selfEnd.point,
-          direction: wall.endDirection(side),
+          direction: dir,
           halfWidth: wall.getThickness() / 2,
         });
       }
@@ -428,17 +315,17 @@ export class WallEntity
   }
 
   /**
-   * The plan outline of the [s0, s1] stretch: junction caps, corner jogs and
-   * curvature all at once.
+   * Span outline with junction caps swapped in at terminal spans. The start cap
+   * maps left→+normal directly; the end cap's direction points backwards, so
+   * its left/right land on the −/+ normal corners.
    *
-   * Built as two FACES walked along the centreline rather than as a quad with
-   * corners poked into it. That is what lets three features share one path: a
-   * cap replaces a face's end point, a jog trades that end point for the three
-   * of a riser, and a curve simply puts more points in between. None of them
-   * has to know about the others.
+   * Four points for the ordinary wall, which is every wall that has not been
+   * given a jog. A jogged end adds the two corners of its step, so the ring
+   * grows to six, or eight when both ends step. Returning a list rather than a
+   * fixed quad is the whole cost of jogs in this file — everything downstream
+   * already walks the boundary rather than indexing it.
    *
-   * A straight wall with no jog samples exactly its two ends and comes out as
-   * the identical four-cornered quad it always was — ring order unchanged:
+   * Ring order is unchanged and is what the step points slot into:
    * start+normal, end+normal, end−normal, start−normal.
    */
   private spanQuadJoined(
@@ -446,77 +333,80 @@ export class WallEntity
     s1: number,
     caps: { start: EndCap | null; end: EndCap | null },
   ): Point[] {
-    const half = this.getThickness() / 2;
+    const quad = this.spanQuad(s0, s1);
     const atStart = s0 <= JOIN_TOLERANCE;
     const atEnd = s1 >= this.getLength() - JOIN_TOLERANCE;
+    if (caps.start && atStart) {
+      quad[0] = caps.start.left;
+      quad[3] = caps.start.right;
+    }
+    if (caps.end && atEnd) {
+      quad[1] = caps.end.right;
+      quad[2] = caps.end.left;
+    }
+
     // a jog belongs to an END of the wall, so an interior span between two
     // openings is never stepped even though it shares the baseline
     const jogStart = atStart ? this.jogs.start : 0;
     const jogEnd = atEnd ? this.jogs.end : 0;
+    if (jogStart === 0 && jogEnd === 0) return quad;
+
+    const len = this.getLength();
+    const half = this.getThickness() / 2;
+    const n = this.normal();
+    const on = (s: number) => lerp(this.a, this.b, s / len);
+    const off = (p: Point, d: number) => add(p, scale(n, d));
 
     /*
-     * How far back from an end the wall steps across. Taken from the wall own
-     * thickness rather than asked for: a step is a corner detail, it is always
-     * about as deep as the wall is thick, and a second number to fill in for
-     * every corner would be a form where a switch was wanted.
+     * How far back from the end the wall steps across. Taken from the wall's
+     * own thickness rather than asked for: a step is a corner detail, it is
+     * always about as deep as the wall is thick, and a second number to fill
+     * in for every corner would be a form where a switch was wanted.
      *
      * Clamped to the span so a short one — an opening sitting near the end —
      * cannot fold the outline back through itself.
      */
     const step = Math.min(this.getThickness(), (s1 - s0) / 2);
-    const innerStart = jogStart !== 0 ? s0 + step : s0;
-    const innerEnd = jogEnd !== 0 ? s1 - step : s1;
 
-    const off = (s: number, d: number) =>
-      add(this.pointAt(s), scale(this.normalAt(s), d));
+    const qStart = on(s0 + step);
+    const qEnd = on(s1 - step);
 
-    const samples = this.samplesAcross(innerStart, innerEnd);
-    const face = (d: number) => samples.map((s) => off(s, d));
-    let plus = face(half);
-    let minus = face(-half);
-
-    // Caps only ever land on an UNJOGGED end — capsForEnds already returns
-    // null for a jogged one, so the two can never fight over the same point.
-    if (caps.start && atStart) {
-      plus[0] = caps.start.left;
-      minus[0] = caps.start.right;
-    }
-    if (caps.end && atEnd) {
-      plus[plus.length - 1] = caps.end.right;
-      minus[minus.length - 1] = caps.end.left;
-    }
-
-    // a stepped face trades its one square corner for the three of a riser
-    if (jogStart !== 0) {
-      plus = [
-        off(s0, half + jogStart),
-        off(innerStart, half + jogStart),
-        ...plus,
-      ];
-      minus = [
-        off(s0, -half + jogStart),
-        off(innerStart, -half + jogStart),
-        ...minus,
-      ];
-    }
-    if (jogEnd !== 0) {
-      plus = [...plus, off(innerEnd, half + jogEnd), off(s1, half + jogEnd)];
-      minus = [
-        ...minus,
-        off(innerEnd, -half + jogEnd),
-        off(s1, -half + jogEnd),
-      ];
-    }
-
-    return [...plus, ...minus.reverse()];
+    // each face is walked in ring order, and a stepped end contributes its
+    // riser as two extra points instead of the single square corner
+    return [
+      ...(jogStart !== 0
+        ? [
+            off(on(s0), half + jogStart),
+            off(qStart, half + jogStart),
+            off(qStart, half),
+          ]
+        : [quad[0]]),
+      ...(jogEnd !== 0
+        ? [
+            off(qEnd, half),
+            off(qEnd, half + jogEnd),
+            off(on(s1), half + jogEnd),
+          ]
+        : [quad[1]]),
+      ...(jogEnd !== 0
+        ? [
+            off(on(s1), -half + jogEnd),
+            off(qEnd, -half + jogEnd),
+            off(qEnd, -half),
+          ]
+        : [quad[2]]),
+      ...(jogStart !== 0
+        ? [
+            off(qStart, -half),
+            off(qStart, -half + jogStart),
+            off(on(s0), -half + jogStart),
+          ]
+        : [quad[3]]),
+    ];
   }
 
   private spanRegion(s0: number, s1: number): RegionShape {
-    return {
-      kind: 'region',
-      boundary: this.spanQuadJoined(s0, s1, { start: null, end: null }),
-      holes: [],
-    };
+    return { kind: 'region', boundary: this.spanQuad(s0, s1), holes: [] };
   }
 
   getOpeningSpecs(): OpeningSpec[] {
@@ -590,61 +480,30 @@ export class WallEntity
     return { kind: 'group', children: regions };
   }
 
-  /**
-   * Where things attach: the centreline and the two faces.
-   *
-   * A curved wall offers the same three as polylines along the curve rather
-   * than segments across the chord, so anything that measures to a face or
-   * rides the axis follows the wall instead of cutting the corner.
-   */
   getAnchors(): Anchor[] {
-    const half = this.getThickness() / 2;
-    const arc = this.arc();
-    if (!arc) {
-      const off = scale(this.normal(), half);
-      return [
-        {
-          kind: 'curve',
-          geometry: { kind: 'segment', a: this.a, b: this.b },
-          name: 'axis',
-        },
-        {
-          kind: 'face',
-          geometry: {
-            kind: 'segment',
-            a: add(this.a, off),
-            b: add(this.b, off),
-          },
-          name: 'face+',
-        },
-        {
-          kind: 'face',
-          geometry: {
-            kind: 'segment',
-            a: sub(this.a, off),
-            b: sub(this.b, off),
-          },
-          name: 'face-',
-        },
-      ];
-    }
-    const samples = this.samplesAcross(0, arc.length);
-    const along = (d: number) =>
-      samples.map((s) => add(this.pointAt(s), scale(this.normalAt(s), d)));
+    const half = scale(this.normal(), this.getThickness() / 2);
     return [
       {
         kind: 'curve',
-        geometry: { kind: 'polyline', points: along(0), closed: false },
+        geometry: { kind: 'segment', a: this.a, b: this.b },
         name: 'axis',
       },
       {
         kind: 'face',
-        geometry: { kind: 'polyline', points: along(half), closed: false },
+        geometry: {
+          kind: 'segment',
+          a: add(this.a, half),
+          b: add(this.b, half),
+        },
         name: 'face+',
       },
       {
         kind: 'face',
-        geometry: { kind: 'polyline', points: along(-half), closed: false },
+        geometry: {
+          kind: 'segment',
+          a: sub(this.a, half),
+          b: sub(this.b, half),
+        },
         name: 'face-',
       },
     ];
@@ -659,13 +518,9 @@ export class WallEntity
       result.push({ kind: 'endpoint', point: this.b, entityId: this.id });
     }
     if (wanted('midpoint')) {
-      // the middle OF THE WALL, which on a curve is the apex and not the
-      // middle of the chord — snapping to a point the wall does not pass
-      // through would be worse than not offering it
-      const arc = this.arc();
       result.push({
         kind: 'midpoint',
-        point: arc ? arcPointAt(arc, arc.length / 2) : midpoint(this.a, this.b),
+        point: midpoint(this.a, this.b),
         entityId: this.id,
       });
     }
@@ -673,13 +528,9 @@ export class WallEntity
   }
 
   hitTest(pt: Point, tolerance: number): boolean {
-    const reach = this.getThickness() / 2 + tolerance;
-    const arc = this.arc();
-    if (!arc) return distanceToSegment(pt, this.a, this.b) <= reach;
-    // measured against the curve, so the inside of a bend is not tappable and
-    // the wall itself is — the chord would have both backwards
     return (
-      distanceToPolyline(pt, tessellateArc(arc, 0, arc.length), false) <= reach
+      distanceToSegment(pt, this.a, this.b) <=
+      this.getThickness() / 2 + tolerance
     );
   }
 
@@ -689,58 +540,18 @@ export class WallEntity
     });
   }
 
-  /**
-   * The two ends, plus — on a curved wall — the APEX.
-   *
-   * The apex rather than the centre, because the centre of a gentle curve is
-   * hundreds of meters off the plan and cannot be dragged at all. The apex is
-   * on the wall, under the finger, and moves the way the wall moves.
-   *
-   * Only when curved: a straight wall showing a bend handle would be a third
-   * thing to hit on a phone where the two endpoints are already close
-   * together.
-   */
   getGrips(): GripPoint[] {
-    const grips: GripPoint[] = [
+    return [
       { index: 0, point: this.a, kind: 'endpoint' },
       { index: 1, point: this.b, kind: 'endpoint' },
     ];
-    const arc = this.arc();
-    if (arc) {
-      grips.push({
-        index: 2,
-        point: arcPointAt(arc, arc.length / 2),
-        kind: 'midpoint',
-      });
-      // the CENTRE the wall turns about. Off the plan entirely on a gentle
-      // curve, which is why it is the second handle and not the first — but on
-      // a tight one it is right there, and setting the radius by its centre is
-      // how a curve is drawn on paper.
-      grips.push({ index: 3, point: arc.center, kind: 'center' });
-    }
-    return grips;
   }
 
   /** stretch the baseline — hosted openings keep their parametric t and follow */
-  /**
-   * Indexes 2 and 3 BEND rather than move. Neither the apex nor the centre is a
-   * point the wall stores — both are produced by the sweep — so dragging either
-   * works backwards to the sweep that would put it under the finger.
-   *
-   * They are two ways to say the same thing and they meet in the middle: the
-   * apex is direct and always reachable, the centre sets the radius the way a
-   * curve is struck on paper. The centre can only travel the perpendicular
-   * bisector, since that is the only line a circle through both endpoints can
-   * have its centre on.
-   */
   moveGrip(index: number, to: Point, tx: Transaction): void {
     tx.update(this, (wall) => {
       if (index === 0) wall.a = to;
-      else if (index === 1) wall.b = to;
-      else if (index === 2) wall.sweep = sweepFromApex(wall.a, wall.b, to);
-      else if (index === 3) {
-        wall.sweep = sweepFromCenter(wall.a, wall.b, to, wall.sweep);
-      }
+      else wall.b = to;
     });
   }
 
@@ -753,7 +564,6 @@ export class WallEntity
     copy.baseLevelId = this.baseLevelId;
     copy.vertical = { height: this.vertical.height };
     copy.jogs = { ...this.jogs };
-    copy.sweep = this.sweep;
     return copy;
   }
 
@@ -780,15 +590,13 @@ export class WallEntity
       const s0 = Math.max(0, center - spec.width / 2);
       const s1 = Math.min(len, center + spec.width / 2);
       if (s1 - s0 <= 0) continue;
-      // the band under and over an opening curves with the wall it is cut
-      // into, so it is the same band the solid spans use
-      const band = this.spanQuadJoined(s0, s1, { start: null, end: null });
+      const quad = this.spanQuad(s0, s1);
       if (spec.sill > 0) {
-        meshes.push(extrudePolygon(band, z0, z0 + Math.min(spec.sill, height)));
+        meshes.push(extrudeQuad(quad, z0, z0 + Math.min(spec.sill, height)));
       }
       const head = spec.sill + spec.height;
       if (head < height) {
-        meshes.push(extrudePolygon(band, z0 + head, z0 + height));
+        meshes.push(extrudeQuad(quad, z0 + head, z0 + height));
       }
     }
     return mergeMeshes(meshes);
@@ -814,7 +622,6 @@ export class WallEntity
       // existed saves byte-for-byte as it did
       ...(this.jogs.start !== 0 ? { jogStart: this.jogs.start } : {}),
       ...(this.jogs.end !== 0 ? { jogEnd: this.jogs.end } : {}),
-      ...(this.sweep !== 0 ? { sweep: this.sweep } : {}),
     };
   }
 
@@ -844,8 +651,6 @@ export class WallEntity
       start: typeof props['jogStart'] === 'number' ? props['jogStart'] : 0,
       end: typeof props['jogEnd'] === 'number' ? props['jogEnd'] : 0,
     };
-    this.sweep =
-      typeof props['sweep'] === 'number' ? clampSweep(props['sweep']) : 0;
   }
 }
 

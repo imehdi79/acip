@@ -9,7 +9,6 @@ import {
   IconSignature,
   IconStack2,
   IconTrash,
-  IconVector,
 } from '@tabler/icons-react';
 import type { EditorUi } from '@/editor/ui-state';
 import type { ToolManager } from '@/editor/tools/tool-manager';
@@ -24,7 +23,6 @@ import { WallMeasurements } from './measurements-modal';
 import { OpeningMeasurements } from './opening-measurements-modal';
 import { RoomName } from './room-name';
 import { MoveMode } from './move-mode';
-import { toggleCurve } from '@/editor/curve';
 import { Modes } from './modes';
 import { Floors } from './floors';
 import { cycleDoorHang } from './door-hang';
@@ -188,22 +186,6 @@ export const FOOTER_ITEMS: readonly FooterItem[] = [
     // one press, one visible change: the swing flips, then the hinge moves,
     // and four presses bring the door back where it started
     run: ({ session }) => cycleDoorHang(session),
-  },
-  {
-    id: 'curve-wall',
-    label: 'Curve wall',
-    icon: <IconVector />,
-    slot: 'end',
-    group: 'selection',
-    permission: 'footer.curveWall',
-    // a room is walls too, and bowing one side of a room is the commonest
-    // reason to want a curve at all
-    visible: (ctx) => ctx.selection === 'wall' || ctx.selection === 'room',
-    // One press, one visible change: the wall bows, and pressing again puts it
-    // back. The size of the bow is then dragged by the handle that appears on
-    // the wall, or typed into Measurements — this button only decides whether
-    // the wall is the kind of thing that curves.
-    run: ({ session }) => toggleCurve(session),
   },
   {
     id: 'move-mode',

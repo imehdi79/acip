@@ -27,41 +27,17 @@ export interface AngleResult {
 }
 
 /**
- * How close a bearing has to be to a SQUARE one to be pulled onto it.
- *
- * Generous, because square is what most walls are and being a couple of
- * degrees off square is almost always a slip rather than a decision.
- */
-export const SQUARE_TOL = 6;
-
-/**
- * And how close it has to be to one of the in-between 15° marks.
- *
- * Much tighter, and this is the number that matters on a real survey. At the
- * old ±6° every 15° step captured 12° of the 15 — four fifths of every bearing
- * a finger could ask for was rewritten, so a plan full of 23° and 67° walls
- * simply could not be drawn. There is no Shift key on a phone to escape with
- * either, so the magnet has to leave room rather than offer a way out of it.
- */
-export const STEP_TOL = 1.5;
-
-/**
  * Pull the direction from → to onto a clean bearing. `ortho` (Shift) forces 90°
  * steps; otherwise the bearing snaps to the nearest `step`° only when within
- * tolerance, and is left exactly as drawn past that — so intentional diagonals
+ * `tol`°, and is left exactly as drawn past that — so intentional diagonals
  * still draw freely. Distance to the cursor is preserved along the bearing.
- *
- * The tolerance is not one number: square bearings hold wide, the 15° marks
- * between them hold narrowly. That asymmetry is the whole point — it keeps the
- * help where walls really are square without rewriting the angles on a plan
- * that is not.
  */
 export function constrainAngle(
   from: Point,
   to: Point,
   ortho: boolean,
   step = 15,
-  tol?: number,
+  tol = 6,
 ): AngleResult {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -71,10 +47,7 @@ export function constrainAngle(
 
   const snapStep = ortho ? 90 : step;
   const nearest = Math.round(ang / snapStep) * snapStep;
-  // a square bearing keeps the generous pull; everything else gets the tight one
-  const square = Math.abs(nearest % 90) < 1e-9;
-  const reach = tol ?? (square ? SQUARE_TOL : STEP_TOL);
-  if (ortho || Math.abs(ang - nearest) <= reach) {
+  if (ortho || Math.abs(ang - nearest) <= tol) {
     const a = nearest * RAD;
     return {
       point: { x: from.x + len * Math.cos(a), y: from.y + len * Math.sin(a) },

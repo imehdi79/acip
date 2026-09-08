@@ -12,17 +12,3 @@ export {
 export { distanceToPolyline } from './polyline.js';
 export type { WallSegment, RecognizeWallsOptions } from './sketch.js';
 export { simplifyStroke, recognizeWalls } from './sketch.js';
-export type { Arc } from './arc.js';
-export {
-  arcFromChord,
-  arcNormalAt,
-  arcPointAt,
-  arcSagitta,
-  arcTangentAt,
-  clampSweep,
-  sweepFromApex,
-  sweepFromCenter,
-  tessellateArc,
-  MIN_SWEEP,
-  MAX_SWEEP,
-} from './arc.js';

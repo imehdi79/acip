@@ -1,10 +1,5 @@
 import type { DrawingDocument, EntityId, Point } from '@acip/editor-core';
-import {
-  JOIN_TOLERANCE,
-  WallEntity,
-  distance,
-  isEntityInteractive,
-} from '@acip/editor-core';
+import { WallEntity, distance, isEntityInteractive } from '@acip/editor-core';
 
 const TOL = 1e-3;
 
@@ -114,16 +109,9 @@ export function resizeRectRoomTo(
  * the difference by getting shorter, and the far side of the plan stays where
  * it is; the footprint is unchanged.
  *
- * `alone` — nothing else moves at all. The junction at the growing end simply
- * comes apart, which is the honest result of lengthening one wall of a room
- * and telling the others to stay put. It is the only one of the three that
- * leaves the drawing open, and it is chosen deliberately: a plan is often
- * corrected one wall at a time, and having the rest of the room chase every
- * typed number is worse than a corner to close afterwards.
- *
- * None of them ever rotates a wall it did not have to, which is the point.
+ * Neither ever rotates a wall it did not have to, which is the point of both.
  */
-export type ResizeSpread = 'push' | 'absorb' | 'alone';
+export type ResizeSpread = 'push' | 'absorb';
 
 /** which end of a wall a resize holds still */
 export interface WallResizePlan {
@@ -234,23 +222,6 @@ export function planWallResize(
    */
   const along = (p: Point) => (p.x - moved.x) * out.x + (p.y - moved.y) * out.y;
 
-  if (spread === 'alone') {
-    // one grip, and nothing else in the drawing is consulted — not even the
-    // walls welded to this one. Deliberately BEFORE the cluster is gathered,
-    // so "leave the others alone" cannot become "leave the others alone,
-    // mostly".
-    return {
-      anchorIndex,
-      moves: [
-        {
-          id: wallId,
-          index: anchorIndex === 0 ? 1 : 0,
-          to: { x: moved.x + delta.x, y: moved.y + delta.y },
-        },
-      ],
-    };
-  }
-
   const carries =
     spread === 'push'
       ? // everything from the moving corner outward travels together, so a
@@ -349,148 +320,6 @@ export function resizeWallLength(
   spread: ResizeSpread = 'push',
 ): void {
   const plan = planWallResize(doc, wallId, newLength, spread);
-  if (plan) dispatch('GRIP.MOVEMANY', { moves: plan.moves });
-}
-
-/**
- * The wall's bearing, in degrees, measured from its start to its end.
- *
- * Always a → b, whichever end the drawing happens to hold still. The
- * alternative — reporting the bearing from the anchored end — makes the same
- * wall read 23° or 203° depending on a join it did not ask for, and a surveyed
- * plan quotes one of those, not either.
- */
-export function wallBearing(wall: WallEntity): number {
-  const { a, b } = wall.getBaseline();
-  const deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
-  return (deg + 360) % 360;
-}
-
-/**
- * Turn a wall to an exact bearing, holding whichever end is joined.
- *
- * The companion to setting a length, and the other half of what it takes to
- * reproduce a surveyed plan: a wall is a length and a direction, and dragging
- * on a phone can land neither. Together they place the far end exactly.
- *
- * The anchor is chosen the way a resize chooses it — by what is joined, not by
- * which way the wall happens to point — so setting a length and then a bearing
- * pivots about the same corner both times, and the wall does not walk across
- * the plan between two edits that were meant to be one.
- *
- * `spread` carries the same meaning it does for a resize: `alone` turns this
- * wall and nothing else, anything else takes the corner's welded neighbours
- * with it so a room stays a room.
- */
-export function planWallRotate(
-  doc: DrawingDocument,
-  wallId: EntityId,
-  degrees: number,
-  spread: ResizeSpread = 'push',
-): { moves: { id: EntityId; index: number; to: Point }[] } | null {
-  const wall = doc.get(wallId);
-  if (!(wall instanceof WallEntity) || !Number.isFinite(degrees)) return null;
-  const { a, b } = wall.getBaseline();
-  const len = Math.hypot(b.x - a.x, b.y - a.y);
-  if (len < TOL) return null;
-
-  const rad = (degrees * Math.PI) / 180;
-  const dir = { x: Math.cos(rad), y: Math.sin(rad) };
-
-  const joins = {
-    start: wall.getJoinsAt('start'),
-    end: wall.getJoinsAt('end'),
-  };
-  let anchorIndex: 0 | 1 | null;
-  if (joins.start.length > 0 && joins.end.length > 0) anchorIndex = 0;
-  else if (joins.start.length > 0) anchorIndex = 0;
-  else if (joins.end.length > 0) anchorIndex = 1;
-  else anchorIndex = null;
-
-  if (anchorIndex === null) {
-    // nothing joined to hold, so it turns about its own middle and stays put
-    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const half = { x: (dir.x * len) / 2, y: (dir.y * len) / 2 };
-    return {
-      moves: [
-        { id: wallId, index: 0, to: { x: mid.x - half.x, y: mid.y - half.y } },
-        { id: wallId, index: 1, to: { x: mid.x + half.x, y: mid.y + half.y } },
-      ],
-    };
-  }
-
-  // the anchor stays; the free end swings to where the bearing puts it. Solved
-  // from a → b either way, so the number typed is the number that comes back.
-  const movingIndex = anchorIndex === 0 ? 1 : 0;
-  const moved = anchorIndex === 0 ? b : a;
-  const to =
-    anchorIndex === 0
-      ? { x: a.x + dir.x * len, y: a.y + dir.y * len }
-      : { x: b.x - dir.x * len, y: b.y - dir.y * len };
-
-  const moves = [{ id: wallId, index: movingIndex, to }];
-  if (spread === 'alone') return { moves };
-
-  // the corner is welded, so everything on it swings together — the same rule
-  // dragging that corner by hand already follows
-  for (const member of joinedCluster(doc, wall)) {
-    if (member.id === wallId || !isEntityInteractive(doc, member)) continue;
-    for (const grip of member.getGrips()) {
-      if (grip.index > 1) continue; // an apex or a centre is not a corner
-      if (distance(grip.point, moved) <= JOIN_TOLERANCE) {
-        moves.push({ id: member.id, index: grip.index, to });
-      }
-    }
-  }
-  return { moves };
-}
-
-/**
- * Put a wall's START corner at an exact point, carrying the whole wall.
- *
- * A TRANSLATION, not a stretch: the wall keeps the length and bearing it was
- * given and simply goes where it was told. That is what makes the three
- * numeric edits compose — length says how big, angle says which way, position
- * says where — and why position is applied last of the three: it is the only
- * one that can preserve the other two.
- *
- * The start corner rather than a chosen one, because a wall's own a → b is
- * already how its bearing is reported, and one fixed end keeps the two
- * readings talking about the same corner.
- *
- * `spread` means what it does everywhere else: `alone` takes the wall out of
- * its junctions and leaves them behind, anything else stretches the walls
- * welded to it so the corners stay shut.
- */
-export function moveWallStartTo(
-  dispatch: Dispatch,
-  doc: DrawingDocument,
-  wallId: EntityId,
-  to: Point,
-  spread: ResizeSpread = 'push',
-): void {
-  const wall = doc.get(wallId);
-  if (!(wall instanceof WallEntity)) return;
-  const { a } = wall.getBaseline();
-  const delta = { x: to.x - a.x, y: to.y - a.y };
-  if (Math.abs(delta.x) < TOL && Math.abs(delta.y) < TOL) return;
-  // the same two paths a DRAG takes, so typing a position and dragging to it
-  // cannot leave the plan in different states
-  const plan =
-    spread === 'alone' ? null : planStickyWallMove(doc, [wallId], delta);
-  if (plan) dispatch('GRIP.MOVEMANY', { moves: plan.moves });
-  else dispatch('ENTITY.MOVE', { ids: [wallId], delta });
-}
-
-/** turn a wall to an exact bearing; one undo step */
-export function rotateWallTo(
-  dispatch: Dispatch,
-  doc: DrawingDocument,
-  wallId: EntityId,
-  degrees: number,
-  spread: ResizeSpread = 'push',
-): void {
-  const plan = planWallRotate(doc, wallId, degrees, spread);
   if (plan) dispatch('GRIP.MOVEMANY', { moves: plan.moves });
 }
 

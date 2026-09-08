@@ -14,7 +14,6 @@ export type Permission =
   | 'footer.delete'
   | 'footer.insert'
   | 'footer.measure'
-  | 'footer.curveWall'
   | 'footer.measureOpening'
   | 'footer.rename'
   | 'footer.moveMode'
@@ -44,7 +43,6 @@ const EDITING_PERMISSIONS: Permission[] = [
   'footer.delete',
   'footer.insert',
   'footer.measure',
-  'footer.curveWall',
   'footer.measureOpening',
   'footer.rename',
   'footer.moveMode',

@@ -38,7 +38,6 @@ export {
   AddDoorCommand,
   SetWallPropsCommand,
   SetWallJogCommand,
-  SetWallArcCommand,
   registerArchitectureCommands,
 } from './architecture.js';
 export type { AddSlabParams, AutoSlabParams } from './slabs.js';

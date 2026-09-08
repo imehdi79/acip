@@ -2,39 +2,19 @@ import type {
   DrawingDocument,
   EditorSession,
   LevelId,
-  Point,
 } from '@acip/editor-core';
 import { WallEntity, distance } from '@acip/editor-core';
 import { formatLengthValue, lengthUnit, parseLength } from '@/editor/units';
-import {
-  moveWallStartTo,
-  planWallResize,
-  resizeWallLength,
-  rotateWallTo,
-  wallBearing,
-} from '@/editor/rooms';
+import { planWallResize, resizeWallLength } from '@/editor/rooms';
 import type { ResizeSpread } from '@/editor/rooms';
 import { labelledWallLength } from '@/editor/viewport/wall-dimensions';
-import type { MeasureMode, ResizeReach } from '@/editor/ui-state';
+import type { MeasureMode } from '@/editor/ui-state';
 
 /** the three plain sizes, which are the only things with a text box each */
 export type SizeField = 'length' | 'height' | 'thickness';
 
 /** everything the dialog can report as unusable, jogs included */
-export type MeasurementField =
-  | SizeField
-  | 'jogStart'
-  | 'jogEnd'
-  | 'sweep'
-  | 'angle'
-  | 'startX'
-  | 'startY';
-
-/** where the wall's start corner sits, as the dialog holds it */
-export interface StartEdit {
-  readonly x: string;
-  readonly y: string;
-}
+export type MeasurementField = SizeField | 'jogStart' | 'jogEnd';
 
 /** which corner of the wall a jog belongs to */
 export type JogSide = 'start' | 'end';
@@ -63,27 +43,6 @@ export type MeasurementEdits = Record<SizeField, string>;
 export interface MeasureView {
   readonly levelId: LevelId | null;
   readonly mode: MeasureMode;
-}
-
-/**
- * The two controls that decide what a typed length does to the rest of the
- * plan, resolved into the one answer the geometry takes.
- *
- * SETTINGS is the outer question: does anything else move at all? Only when it
- * does does the footer's move-separately toggle get to answer the inner one:
- * are the walls beyond pushed along intact, or made to absorb the change and
- * stay put.
- *
- * A function rather than a ternary at the call site because the ORDER of the
- * two matters and is not obvious — read the other way round, "move separately"
- * would silently override a setting the user went into a sheet to choose.
- */
-export function resizeSpreadFor(
-  reach: ResizeReach,
-  detachedMove: boolean,
-): ResizeSpread {
-  if (reach === 'alone') return 'alone';
-  return detachedMove ? 'absorb' : 'push';
 }
 
 /** the selected walls, in selection order */
@@ -147,78 +106,6 @@ export function commonValue<T>(
 /** prefill text for a field: the shared value, or blank when they disagree */
 export const prefill = (value: number | null): string =>
   value === null ? '' : formatLengthValue(value);
-
-/**
- * Where the wall's start corner sits, in the active unit.
- *
- * The last piece of placing a wall by number. Length and angle put the far end
- * exactly once the near one is right — this is what makes the near one right,
- * and without it the first wall of a traced plan still had to be dragged into
- * place by hand.
- */
-export function startPrefill(wall: WallEntity): StartEdit {
-  const { a } = wall.getBaseline();
-  return { x: formatLengthValue(a.x), y: formatLengthValue(a.y) };
-}
-
-/**
- * A typed coordinate in meters, or null when the text cannot be one.
- *
- * Unlike every length here it may be NEGATIVE and it may be zero: a coordinate
- * is a position on the plan, not a size, and the origin is a perfectly good
- * place for a corner to be.
- */
-function coordinate(text: string): number | null {
-  if (text.trim() === '') return null;
-  return parseLength(text, lengthUnit.get());
-}
-
-/**
- * The wall's bearing as the dialog shows it: degrees, always start to end.
- *
- * Two decimals, because a surveyed plan is drawn to the centimetre and a wall
- * of six metres swings by more than a centimetre for a hundredth of a degree.
- */
-export function anglePrefill(wall: WallEntity): string {
-  return wallBearing(wall).toFixed(2);
-}
-
-/** a typed bearing in degrees, or null when the text cannot be one */
-function bearing(text: string): number | null {
-  if (text.trim() === '') return null;
-  const deg = Number(text.trim());
-  return Number.isFinite(deg) ? ((deg % 360) + 360) % 360 : null;
-}
-
-/**
- * The wall's curvature as the dialog shows it: degrees, blank when straight.
- *
- * DEGREES, not radians, and not the radius. Radians are the storage unit and
- * nobody types them; the radius of a gentle curve is a number in the hundreds
- * that changes wildly for a small change in shape. How far the wall turns is
- * the thing a person can picture, and it is what was asked for.
- */
-export function sweepPrefill(wall: WallEntity): string {
-  const sweep = wall.getSweep();
-  return sweep === 0 ? '' : ((sweep * 180) / Math.PI).toFixed(1);
-}
-
-/**
- * A typed turn in radians, or null when the text cannot be one.
- *
- * Signed, so a negative bows the wall the other way. Blank means "leave the
- * curvature alone" and is not an instruction to straighten — the footer button
- * is how a wall is straightened, and a blank box quietly undoing a curve would
- * be a trap.
- */
-function sweepRadians(text: string): number | null {
-  if (text.trim() === '') return null;
-  const degrees = Number(text.trim());
-  if (!Number.isFinite(degrees)) return null;
-  // a full turn has no chord left to draw between, and 0 is the footer's job
-  if (Math.abs(degrees) < 1e-6 || Math.abs(degrees) >= 360) return null;
-  return (degrees * Math.PI) / 180;
-}
 
 /**
  * The two corners of a wall as the dialog shows them: on when the wall
@@ -295,9 +182,6 @@ export function applyMeasurements(
   view: MeasureView,
   spread: ResizeSpread = 'push',
   jogs?: JogEdits,
-  sweep?: string,
-  angle?: string,
-  start?: StartEdit,
 ): MeasurementField[] {
   // length belongs to one baseline; there is no sensible way to give six
   // walls the same length at once, so it is a single-wall edit only
@@ -320,54 +204,6 @@ export function applyMeasurements(
    * catching. Switching one OFF is a real instruction — remove the step —
    * so it needs no size at all and is written as a zero.
    */
-  /*
-   * Curvature is a single-wall edit for the same reason Length is: it is a
-   * shape, and there is no one shape six walls share.
-   *
-   * Blank leaves it alone. Only text that cannot be an angle is an error —
-   * which is what stops a typo silently straightening a curved wall.
-   */
-  /*
-   * A bearing is a single-wall edit for the same reason a length is: six walls
-   * pointing one way is a different operation, and not one anybody asked for.
-   *
-   * Blank leaves it alone. Unchanged is left alone too, so re-applying a
-   * dialog that was only opened to fix a height does not quietly re-seat a
-   * wall on the rounded version of its own angle.
-   */
-  /*
-   * A position is a single-wall edit, and both boxes have to be readable
-   * before either is used: moving a wall to a good x and a broken y would put
-   * it somewhere the user never asked for, on an axis they were not editing.
-   */
-  let wantedStart: Point | null = null;
-  if (single && start && (start.x.trim() !== '' || start.y.trim() !== '')) {
-    const here = single.getBaseline().a;
-    const x = start.x.trim() === '' ? here.x : coordinate(start.x);
-    const y = start.y.trim() === '' ? here.y : coordinate(start.y);
-    if (x === null) invalid.push('startX');
-    if (y === null) invalid.push('startY');
-    if (x !== null && y !== null && (x !== here.x || y !== here.y)) {
-      wantedStart = { x, y };
-    }
-  }
-
-  let wantedAngle: number | null = null;
-  if (single && angle !== undefined && angle.trim() !== '') {
-    const deg = bearing(angle);
-    if (deg === null) invalid.push('angle');
-    else if (Math.abs(deg - wallBearing(single)) > 1e-6) wantedAngle = deg;
-  }
-
-  let wantedSweep: number | null = null;
-  if (single && sweep !== undefined && sweep.trim() !== '') {
-    const radians = sweepRadians(sweep);
-    if (radians === null) invalid.push('sweep');
-    else if (Math.abs(radians - single.getSweep()) > 1e-9) {
-      wantedSweep = radians;
-    }
-  }
-
   const wantedJogs: { side: JogSide; offset: number }[] = [];
   if (single && jogs) {
     for (const side of ['start', 'end'] as const) {
@@ -414,10 +250,7 @@ export function applyMeasurements(
     height === null &&
     thickness === null &&
     baseline === null &&
-    wantedJogs.length === 0 &&
-    wantedSweep === null &&
-    wantedAngle === null &&
-    wantedStart === null
+    wantedJogs.length === 0
   ) {
     return [];
   }
@@ -444,35 +277,6 @@ export function applyMeasurements(
         baseline,
         spread,
       );
-    }
-    // After the length, so the wall is the right size before it is aimed —
-    // both pivot about the same anchored corner, so the far end lands where
-    // the two numbers together say it should.
-    if (single && wantedAngle !== null) {
-      rotateWallTo(
-        (name, params) => session.dispatch(name, params),
-        session.doc,
-        single.id,
-        wantedAngle,
-        spread,
-      );
-    }
-    // LAST of the three placements, and the only order that composes: length
-    // says how big, angle says which way, and a translation is the one edit
-    // that can honour both while putting the corner where it was asked for.
-    if (single && wantedStart !== null) {
-      moveWallStartTo(
-        (name, params) => session.dispatch(name, params),
-        session.doc,
-        single.id,
-        wantedStart,
-        spread,
-      );
-    }
-    // before the corners, so a step is measured against the curved wall the
-    // user will actually be looking at
-    if (single && wantedSweep !== null) {
-      session.dispatch('WALL.SETARC', { ids: [single.id], sweep: wantedSweep });
     }
     // last, so a corner steps from wherever the length edit left it
     for (const { side, offset } of wantedJogs) {

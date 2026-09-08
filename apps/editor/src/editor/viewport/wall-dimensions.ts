@@ -86,14 +86,7 @@ export function dimensionedSpan(
   thickness: number,
   mode: MeasureMode,
 ): number {
-  const span =
-    mode === 'inside'
-      ? baseline - thickness
-      : mode === 'center'
-        ? // the centreline is the baseline: it is what the wall IS, before any
-          // decision about which face to measure from
-          baseline
-        : baseline + thickness;
+  const span = mode === 'inside' ? baseline - thickness : baseline + thickness;
   // a wall shorter than it is thick has no clear span to report; the drawn
   // extent beats a negative number
   return Math.max(0, span);
@@ -148,16 +141,6 @@ export interface PlanExtent {
    * even when the walls sit exactly on top of one another.
    */
   readonly base?: { readonly a: Point; readonly b: Point };
-  /**
-   * Half the thickness of the wall this measures, in METERS.
-   *
-   * Carried because `a` and `b` sit on the wall's AXIS, and a dimension line
-   * standing a fixed number of pixels off that axis walks into the wall as
-   * soon as the plan is zoomed in far enough for half a thickness to exceed
-   * it. The line has to clear the thing it is measuring, and only the wall
-   * knows how wide that is.
-   */
-  readonly halfWidth?: number;
   /**
    * The same thing measured along each of its two faces, for whoever wants the
    * inner clear width instead of the overall extent. Present only when there
@@ -217,15 +200,6 @@ export interface PlanDimension extends PlanExtent {
  * Returns null for a degenerate wall, which has no direction to measure along.
  */
 export function wallExtent(wall: WallEntity): PlanExtent | null {
-  /*
-   * A CURVED wall is dimensioned on its chord and LABELLED with its arc
-   * length — which is the drafting convention, and the only pair that is any
-   * use: the chord is where a dimension line can actually be drawn straight,
-   * and the arc is how much wall there is.
-   *
-   * Projecting the bow onto the chord instead would print a number no
-   * tradesman could buy material against.
-   */
   const { a, b } = wall.getBaseline();
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -281,12 +255,8 @@ export function wallExtent(wall: WallEntity): PlanExtent | null {
     kind: 'wall',
     a: { x: a.x + ux * min, y: a.y + uy * min },
     b: { x: a.x + ux * max, y: a.y + uy * max },
-    // The line is drawn on the chord; the NUMBER is how much wall there is.
-    // On a curve those differ, and the arc is the one worth printing — a
-    // chord length is a number nobody can buy material against.
-    length: wall.isCurved() ? wall.getLength() : max - min,
+    length: max - min,
     base: { a, b },
-    halfWidth: wall.getThickness() / 2,
     faces: [faceSpan(plus, 1), faceSpan(minus, -1)].filter(
       (face): face is FaceExtent => face !== null,
     ),
@@ -313,10 +283,7 @@ export function wallExtent(wall: WallEntity): PlanExtent | null {
  * Returns null for an opening with no host to hang on, or one collapsed to
  * nothing — neither has a span to measure.
  */
-export function openingExtent(
-  opening: HostedOpeningEntity,
-  hostHalfWidth = 0,
-): PlanExtent | null {
+export function openingExtent(opening: HostedOpeningEntity): PlanExtent | null {
   const [, low, high] = opening.getGrips();
   if (!low || !high) return null;
   const length = Math.hypot(
@@ -330,9 +297,6 @@ export function openingExtent(
     a: low.point,
     b: high.point,
     length,
-    // an opening is cut INTO a wall, so its width is quoted from that wall's
-    // axis too and has the same wall to clear
-    halfWidth: hostHalfWidth,
   };
 }
 
@@ -466,27 +430,6 @@ function clear(dim: PlanExtent, face: FaceExtent): FaceExtent {
  * drawing of it flips. Lanes are still assigned from the baselines, so the same
  * plan still lays out deterministically in both modes.
  */
-/**
- * The wall measured along its own baseline, ignoring caps entirely.
- *
- * Miters and butts are decisions about how a corner is DRAWN; a centreline
- * dimension is the one that predates them. It is what a survey quotes, and the
- * only reading that does not move when a wall is made thicker.
- */
-function centreRun(dim: PlanExtent): {
-  a: Point;
-  b: Point;
-  length: number;
-} | null {
-  const base = dim.base;
-  if (!base) return null;
-  return {
-    a: base.a,
-    b: base.b,
-    length: Math.hypot(base.b.x - base.a.x, base.b.y - base.a.y),
-  };
-}
-
 export function layOutDimensions(
   dims: readonly PlanExtent[],
   centre: Point,
@@ -523,12 +466,7 @@ export function layOutDimensions(
     // length move together, from the same two points, because the drawn line
     // and the printed number are one thing: a face's span with the extent's
     // number against it would be a dimension lying about what it spans.
-    const inner =
-      mode === 'inside'
-        ? innerFace(dim, outward)
-        : mode === 'center'
-          ? centreRun(dim)
-          : null;
+    const inner = mode === 'inside' ? innerFace(dim, outward) : null;
     // and it is drawn on that same side. Outside rings the drawing so the
     // dimensions do not fall across the rooms; inside deliberately does fall
     // across them, because that is where the width being quoted is.
@@ -665,7 +603,7 @@ export function planDimensions(
       const hosted = doc.get(hostedId);
       if (!(hosted instanceof HostedOpeningEntity)) continue;
       if (!isEntityVisible(doc, hosted)) continue;
-      const span = openingExtent(hosted, entity.getThickness() / 2);
+      const span = openingExtent(hosted);
       if (span) openings.push({ ...span, selected: selection.has(hostedId) });
     }
   }

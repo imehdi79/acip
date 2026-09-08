@@ -561,10 +561,7 @@ export class SelectTool implements Tool {
       const entity = ctx.doc.get(id);
       if (!entity || !hasGrips(entity)) continue;
       const gs = entity.getGrips();
-      // grips 0 and 1 are the two ENDS; anything past them shapes the entity
-      // rather than stretching it — a curved wall's apex bends it, and there
-      // is no "fixed end" to draw a stretch line from
-      if (index > 1 || gs.length < 2) continue;
+      if (gs.length !== 2) continue; // walls, lines — a clean single stretch
       const fixed = gs[index === 0 ? 1 : 0].point;
       ghost.push({ kind: 'segment', a: fixed, b: cursor });
     }

@@ -65,8 +65,6 @@ describe('resolveFooter', () => {
       'modes',
       'floors',
       'measure',
-      // only walls can bow, so this sits with the wall-only set
-      'curve-wall',
       'move-mode',
       'duplicate',
       'delete',
@@ -83,8 +81,6 @@ describe('resolveFooter', () => {
       // a room IS a wall-only selection, so the wall dialog applies to all of it
       'measure',
       'rename',
-      // bowing one side of a room is the commonest reason to want a curve
-      'curve-wall',
       'move-mode',
       'duplicate',
       'delete',
