@@ -21,6 +21,7 @@ export {
   arcTangentAt,
   clampSweep,
   sweepFromApex,
+  sweepFromCenter,
   tessellateArc,
   MIN_SWEEP,
   MAX_SWEEP,

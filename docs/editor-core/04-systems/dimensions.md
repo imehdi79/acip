@@ -150,3 +150,30 @@ Relation-backed references (dirty propagation + cascade delete);
 dimension style table; grips (drag the offset); chained/baseline dimension
 runs; door/window opening dimensions; associative auto-dims (regeneration
 covers the need until then).
+
+
+## Typing a length: what else moves (app-side, 2026-09-08)
+
+Setting one wall's length is a geometry edit, and the plan has three coherent
+answers to "what happens to everything joined to it". The choice lives in the
+app (`apps/editor/src/editor/rooms.ts`), not here — core only ever moves the
+grips it is told to.
+
+- **push** — everything beyond the growing corner travels with it, keeping
+  every length and angle it had. The building gets bigger.
+- **absorb** — only the corner moves; whatever is immediately beyond gives up
+  the difference by getting shorter. The footprint is unchanged.
+- **alone** — nothing else moves at all and the junction comes apart. The
+  honest outcome of lengthening one wall of a room and telling the others to
+  stay put, and what a plan being CORRECTED wall by wall actually wants.
+
+Which one applies is resolved by `resizeSpreadFor(reach, detachedMove)`. The
+Settings toggle asks the outer question — does anything else move at all — and
+only when it does does the footer's move-separately toggle answer the inner
+one. The order matters: read the other way round, a footer toggle would
+silently override a setting the user went into a sheet to choose.
+
+None of the three ever rotates a wall it did not have to. Carrying is decided
+by GEOMETRY — how far a point sits along the growth direction — never by
+distance through the join graph, which is a property of the traversal rather
+than of the drawing and sheared any room that straddled the boundary.

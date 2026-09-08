@@ -160,6 +160,49 @@ export function sweepFromApex(a: Point, b: Point, apex: Point): number {
 }
 
 /**
+ * The sweep that puts the arc's CENTRE at `center`, keeping both endpoints.
+ *
+ * A circle through two fixed points cannot have its centre just anywhere: it
+ * must sit on the perpendicular bisector of the chord. So only the across-chord
+ * part of the drag is read, and the rest is dropped — dragging the centre along
+ * the chord asks for a circle that does not exist, and the honest answer is
+ * that nothing happens.
+ *
+ * Which WAY the wall bows is not something the centre can say. Every centre on
+ * the bisector carries two arcs through the same two points, one bulging each
+ * way — so the bow direction is taken from the wall as it already is, and only
+ * the amount of turn comes from the drag. That is also what keeps the wall from
+ * flipping inside out as the centre is pulled through the chord: instead the
+ * turn grows smoothly past a half circle, which is exactly what pushing the
+ * centre toward the wall looks like.
+ */
+export function sweepFromCenter(
+  a: Point,
+  b: Point,
+  center: Point,
+  currentSweep: number,
+): number {
+  const chord = distance(a, b);
+  if (chord < MIN_SWEEP) return 0;
+  const n = perpendicular(normalize(sub(b, a)));
+  const toCenter = sub(center, midpoint(a, b));
+  // the bisector component; everything else is a drag the geometry cannot honour
+  const c = toCenter.x * n.x + toCenter.y * n.y;
+  const radius = Math.hypot(chord / 2, c);
+  if (radius < MIN_SWEEP) return 0;
+  /*
+   * cos(turn/2) = 1 - sagitta/radius, solved for each of the two arcs. The
+   * +normal one has sagitta c + radius, the other radius - c; both reduce to
+   * an arccosine of c over the radius, differing only in sign.
+   */
+  const bowsPositive = currentSweep >= 0;
+  const ratio = Math.max(-1, Math.min(1, c / radius));
+  return clampSweep(
+    bowsPositive ? 2 * Math.acos(-ratio) : -2 * Math.acos(ratio),
+  );
+}
+
+/**
  * Points along [s0, s1] of the arc, close enough together that the result
  * reads as a curve rather than a fan.
  *

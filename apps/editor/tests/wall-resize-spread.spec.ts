@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { EditorSession, WallEntity, point } from '@acip/editor-core';
 import type { EntityId, Point } from '@acip/editor-core';
 import { planWallResize, resizeWallLength } from '@/editor/rooms';
+import { resizeSpreadFor } from '@/app/components/layout/footer/measurements';
 
 /**
  * What a length edit does to the REST of the plan.
@@ -21,7 +22,11 @@ const room = (x0: number, y0: number, x1: number, y1: number) => {
   return c.map((a, i) => addWall(a, c[(i + 1) % c.length]));
 };
 
-const resize = (id: EntityId, length: number, spread?: 'push' | 'absorb') =>
+const resize = (
+  id: EntityId,
+  length: number,
+  spread?: 'push' | 'absorb' | 'alone',
+) =>
   resizeWallLength(
     (name, params) => session.dispatch(name, params),
     session.doc,
@@ -134,6 +139,73 @@ describe('the room next door', () => {
   });
 });
 
+describe('changing one wall and nothing else', () => {
+  /*
+   * The third answer, and the one a plan being CORRECTED wants: a drawing is
+   * often fixed a wall at a time, and having the rest of the room chase every
+   * typed number is worse than a corner left open to close afterwards.
+   */
+  it('grows the wall it was asked about', () => {
+    const r = twoRooms();
+    resize(r.bottom, 6, 'alone');
+    expect(of(r.bottom).length).toBeCloseTo(6, 6);
+  });
+
+  it('leaves its own room untouched', () => {
+    const r = twoRooms();
+    resize(r.bottom, 6, 'alone');
+    expect(of(r.right).a).toEqual({ x: 4, y: 0 });
+    expect(of(r.top).length).toBeCloseTo(4, 6);
+    expect(of(r.left).length).toBeCloseTo(3, 6);
+  });
+
+  it('leaves the room next door untouched too', () => {
+    const r = twoRooms();
+    resize(r.bottom, 6, 'alone');
+    for (const wall of [r.farBottom, r.farRight, r.farTop]) {
+      expect(of(wall).length).toBeCloseTo(3, 6);
+    }
+    expect(of(r.farRight).a).toEqual({ x: 7, y: 0 });
+  });
+
+  it('holds the same end still as the other two do', () => {
+    // only what FOLLOWS changes between the three; which end anchors is a
+    // property of the drawing and must not move with a setting
+    const r = twoRooms();
+    resize(r.bottom, 6, 'alone');
+    expect(of(r.bottom).a).toEqual({ x: 0, y: 0 });
+    expect(of(r.bottom).b).toEqual({ x: 6, y: 0 });
+  });
+
+  it('opens the corner, which is the honest outcome', () => {
+    // said plainly rather than hidden: the wall now runs past its neighbour
+    const r = twoRooms();
+    resize(r.bottom, 6, 'alone');
+    expect(of(r.bottom).b.x).toBeGreaterThan(of(r.right).a.x);
+  });
+
+  it('shortens without dragging anything back either', () => {
+    const r = twoRooms();
+    resize(r.bottom, 2, 'alone');
+    expect(of(r.bottom).length).toBeCloseTo(2, 6);
+    expect(of(r.right).a).toEqual({ x: 4, y: 0 });
+  });
+
+  it('can shorten past what absorbing would refuse', () => {
+    // nothing is being squeezed, so there is no neighbour to protect
+    const r = twoRooms();
+    expect(planWallResize(session.doc, r.bottom, 7, 'absorb')).toBeNull();
+    expect(planWallResize(session.doc, r.bottom, 7, 'alone')).not.toBeNull();
+  });
+
+  it('is one grip move and no more', () => {
+    const r = twoRooms();
+    expect(
+      planWallResize(session.doc, r.bottom, 6, 'alone')?.moves,
+    ).toHaveLength(1);
+  });
+});
+
 describe('what a resize refuses to do', () => {
   it('will not shorten a neighbour out of existence', () => {
     // R2 is 3 m wide; absorbing a 3 m growth would leave it nothing at all
@@ -167,5 +239,30 @@ describe('a wall on its own', () => {
     resize(lone, 6);
     expect(of(lone).a).toEqual({ x: -1, y: 0 });
     expect(of(lone).b).toEqual({ x: 5, y: 0 });
+  });
+});
+
+describe('which answer the two controls add up to', () => {
+  /*
+   * Settings asks the outer question — does anything else move at all — and
+   * only when it does does the footer toggle get to answer the inner one. Read
+   * the other way round, "move separately" would quietly override a setting
+   * the user went into a sheet to choose.
+   */
+  it('pushes when nothing is turned on', () => {
+    expect(resizeSpreadFor('linked', false)).toBe('push');
+  });
+
+  it('absorbs when only move-separately is on', () => {
+    expect(resizeSpreadFor('linked', true)).toBe('absorb');
+  });
+
+  it('changes one wall when Settings says so', () => {
+    expect(resizeSpreadFor('alone', false)).toBe('alone');
+  });
+
+  it('lets Settings win over the footer toggle', () => {
+    // the case the ordering exists for
+    expect(resizeSpreadFor('alone', true)).toBe('alone');
   });
 });

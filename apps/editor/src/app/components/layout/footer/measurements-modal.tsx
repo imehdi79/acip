@@ -17,6 +17,7 @@ import {
   commonValue,
   jogPrefill,
   prefill,
+  resizeSpreadFor,
   selectedWalls,
   sweepPrefill,
   wallLength,
@@ -148,10 +149,7 @@ function Fields({
       walls,
       { length, height, thickness },
       view,
-      // the same toggle that decides whether a DRAG carries its joins decides
-      // whether a resize carries the rooms beyond it: linked pushes them along
-      // intact, separate makes them absorb the change and stay put
-      ui.detachedMove.get() ? 'absorb' : 'push',
+      resizeSpreadFor(ui.resizeReach.get(), ui.detachedMove.get()),
       jogs,
       sweep,
     );
