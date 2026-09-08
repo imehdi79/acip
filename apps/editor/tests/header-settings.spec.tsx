@@ -117,11 +117,21 @@ describe('the settings panel', () => {
 
   it('puts exactly one of them on', () => {
     // an empty answer is not an answer here — every dimension on the plan is
-    // measured from somewhere
-    for (const mode of ['outside', 'inside'] as const) {
+    // measured from somewhere. Counted rather than compared to a fixed number
+    // of unchecked ones, so adding a third reference does not break the rule
+    // it is checking.
+    for (const mode of ['outside', 'inside', 'center'] as const) {
       const group = groupAt(panel(mode), 0);
       expect(group.match(/aria-checked="true"/g)).toHaveLength(1);
-      expect(group.match(/aria-checked="false"/g)).toHaveLength(1);
+    }
+  });
+
+  it('offers the centreline as well as the two faces', () => {
+    // what a survey quotes, and the only reading that does not move when a
+    // wall is made thicker
+    const group = groupAt(panel('outside'), 0);
+    for (const label of ['Outside', 'Inside', 'Centre']) {
+      expect(group).toContain(label);
     }
   });
 

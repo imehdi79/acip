@@ -16,6 +16,9 @@ import type { EditorUi, MeasureMode, ResizeReach } from '@/editor/ui-state';
 const MEASURE_OPTIONS: readonly { id: MeasureMode; label: string }[] = [
   { id: 'outside', label: 'Outside (overall)' },
   { id: 'inside', label: 'Inside (clear)' },
+  // how a surveyed plan is quoted, and the only reading that does not move
+  // when a wall is made thicker
+  { id: 'center', label: 'Centre' },
 ];
 
 /**

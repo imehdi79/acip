@@ -1,5 +1,10 @@
 import type { DrawingDocument, EntityId, Point } from '@acip/editor-core';
-import { WallEntity, distance, isEntityInteractive } from '@acip/editor-core';
+import {
+  JOIN_TOLERANCE,
+  WallEntity,
+  distance,
+  isEntityInteractive,
+} from '@acip/editor-core';
 
 const TOL = 1e-3;
 
@@ -344,6 +349,111 @@ export function resizeWallLength(
   spread: ResizeSpread = 'push',
 ): void {
   const plan = planWallResize(doc, wallId, newLength, spread);
+  if (plan) dispatch('GRIP.MOVEMANY', { moves: plan.moves });
+}
+
+/**
+ * The wall's bearing, in degrees, measured from its start to its end.
+ *
+ * Always a → b, whichever end the drawing happens to hold still. The
+ * alternative — reporting the bearing from the anchored end — makes the same
+ * wall read 23° or 203° depending on a join it did not ask for, and a surveyed
+ * plan quotes one of those, not either.
+ */
+export function wallBearing(wall: WallEntity): number {
+  const { a, b } = wall.getBaseline();
+  const deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+  return (deg + 360) % 360;
+}
+
+/**
+ * Turn a wall to an exact bearing, holding whichever end is joined.
+ *
+ * The companion to setting a length, and the other half of what it takes to
+ * reproduce a surveyed plan: a wall is a length and a direction, and dragging
+ * on a phone can land neither. Together they place the far end exactly.
+ *
+ * The anchor is chosen the way a resize chooses it — by what is joined, not by
+ * which way the wall happens to point — so setting a length and then a bearing
+ * pivots about the same corner both times, and the wall does not walk across
+ * the plan between two edits that were meant to be one.
+ *
+ * `spread` carries the same meaning it does for a resize: `alone` turns this
+ * wall and nothing else, anything else takes the corner's welded neighbours
+ * with it so a room stays a room.
+ */
+export function planWallRotate(
+  doc: DrawingDocument,
+  wallId: EntityId,
+  degrees: number,
+  spread: ResizeSpread = 'push',
+): { moves: { id: EntityId; index: number; to: Point }[] } | null {
+  const wall = doc.get(wallId);
+  if (!(wall instanceof WallEntity) || !Number.isFinite(degrees)) return null;
+  const { a, b } = wall.getBaseline();
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len < TOL) return null;
+
+  const rad = (degrees * Math.PI) / 180;
+  const dir = { x: Math.cos(rad), y: Math.sin(rad) };
+
+  const joins = {
+    start: wall.getJoinsAt('start'),
+    end: wall.getJoinsAt('end'),
+  };
+  let anchorIndex: 0 | 1 | null;
+  if (joins.start.length > 0 && joins.end.length > 0) anchorIndex = 0;
+  else if (joins.start.length > 0) anchorIndex = 0;
+  else if (joins.end.length > 0) anchorIndex = 1;
+  else anchorIndex = null;
+
+  if (anchorIndex === null) {
+    // nothing joined to hold, so it turns about its own middle and stays put
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const half = { x: (dir.x * len) / 2, y: (dir.y * len) / 2 };
+    return {
+      moves: [
+        { id: wallId, index: 0, to: { x: mid.x - half.x, y: mid.y - half.y } },
+        { id: wallId, index: 1, to: { x: mid.x + half.x, y: mid.y + half.y } },
+      ],
+    };
+  }
+
+  // the anchor stays; the free end swings to where the bearing puts it. Solved
+  // from a → b either way, so the number typed is the number that comes back.
+  const movingIndex = anchorIndex === 0 ? 1 : 0;
+  const moved = anchorIndex === 0 ? b : a;
+  const to =
+    anchorIndex === 0
+      ? { x: a.x + dir.x * len, y: a.y + dir.y * len }
+      : { x: b.x - dir.x * len, y: b.y - dir.y * len };
+
+  const moves = [{ id: wallId, index: movingIndex, to }];
+  if (spread === 'alone') return { moves };
+
+  // the corner is welded, so everything on it swings together — the same rule
+  // dragging that corner by hand already follows
+  for (const member of joinedCluster(doc, wall)) {
+    if (member.id === wallId || !isEntityInteractive(doc, member)) continue;
+    for (const grip of member.getGrips()) {
+      if (grip.index > 1) continue; // an apex or a centre is not a corner
+      if (distance(grip.point, moved) <= JOIN_TOLERANCE) {
+        moves.push({ id: member.id, index: grip.index, to });
+      }
+    }
+  }
+  return { moves };
+}
+
+/** turn a wall to an exact bearing; one undo step */
+export function rotateWallTo(
+  dispatch: Dispatch,
+  doc: DrawingDocument,
+  wallId: EntityId,
+  degrees: number,
+  spread: ResizeSpread = 'push',
+): void {
+  const plan = planWallRotate(doc, wallId, degrees, spread);
   if (plan) dispatch('GRIP.MOVEMANY', { moves: plan.moves });
 }
 

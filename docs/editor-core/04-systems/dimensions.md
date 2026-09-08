@@ -177,3 +177,34 @@ None of the three ever rotates a wall it did not have to. Carrying is decided
 by GEOMETRY — how far a point sits along the growth direction — never by
 distance through the join graph, which is a property of the traversal rather
 than of the drawing and sheared any room that straddled the boundary.
+
+
+## Reproducing a surveyed plan (app-side, 2026-09-08)
+
+Tracing a measured drawing is a different job from sketching one, and it needs
+three things a sketch does not.
+
+**A third reference: `center`.** Outside and inside both move when a wall's
+thickness changes — and not only its OWN thickness: a wall's drawn extent is
+lengthened by the miters at its ends, which are cut against the walls it meets,
+so an outside dimension shifts when a wall you did not touch is made thicker.
+The centreline is immune to all of it, which is why a survey quotes it. Typing
+6.00 in centre mode puts the centreline at exactly 6.00; the same 6.00 in
+outside mode means the drawn extent, and the centreline comes out at 5.85 with
+a miter eating the difference. Both are right; only one is what a plan
+dimensioned to the centimetre is asking for.
+
+**A typed bearing.** `planWallRotate` turns a wall to an exact angle, holding
+whichever end is joined — the same anchor a resize picks, so setting a length
+and then an angle pivots about the same corner and the far end lands where the
+two numbers together say. The bearing is always reported start → end: reporting
+it from the anchored end would make the same wall read 23° or 203° depending on
+a join it did not ask for, and a survey quotes one of those, not either.
+
+**An angle magnet that gets out of the way.** The bearing snap used to be ±6°
+around every 15°, capturing 12° of every 15 — four fifths of every bearing a
+finger could ask for was rewritten, and a building with 23° and 67° walls could
+not be drawn at all. There is no Shift key on a phone to escape with, so the
+tolerance is now asymmetric: square bearings keep the generous 6°, the 15°
+marks between them hold within 1.5°. Help where walls really are square,
+without rewriting the angles on a plan that is not.

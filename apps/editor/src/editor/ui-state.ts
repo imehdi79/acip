@@ -24,7 +24,15 @@ export type StarterMode = 'replace' | 'add';
  * A drawing setting, not document content: nothing is stored, so switching it
  * costs no edit and no undo step.
  */
-export type MeasureMode = 'outside' | 'inside';
+/**
+ * Which reference the automatic plan dimensions are measured against.
+ *
+ * `outside` — the overall drawn extent, outer corner to outer corner.
+ * `inside`  — the clear width, face to face, what a tape reads in a room.
+ * `center`  — the centrelines, which is how a surveyed plan is usually
+ *             quoted and the only one that is independent of wall thickness.
+ */
+export type MeasureMode = 'outside' | 'inside' | 'center';
 
 /**
  * What a typed length does to the walls joined to the one being edited.

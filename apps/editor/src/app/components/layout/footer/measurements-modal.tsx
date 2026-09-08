@@ -13,6 +13,7 @@ import type { EditorSession } from '@acip/editor-core';
 import { unitLabel } from '@/editor/units';
 import { useRuntime } from '@/editor/runtime';
 import {
+  anglePrefill,
   applyMeasurements,
   commonValue,
   jogPrefill,
@@ -131,6 +132,9 @@ function Fields({
   const [invalid, setInvalid] = useState<MeasurementField[]>([]);
   // read at mount like every other field, so the switches show what this wall
   // already does rather than what the last wall did
+  const [angle, setAngle] = useState(() =>
+    single ? anglePrefill(single) : '',
+  );
   const [sweep, setSweep] = useState(() =>
     single ? sweepPrefill(single) : '',
   );
@@ -152,6 +156,7 @@ function Fields({
       resizeSpreadFor(ui.resizeReach.get(), ui.detachedMove.get()),
       jogs,
       sweep,
+      angle,
     );
     setInvalid(bad);
     if (bad.length === 0) close();
@@ -204,6 +209,23 @@ function Fields({
           <Input placeholder={mixed} />
           <FieldError>Enter a thickness greater than zero.</FieldError>
         </TextField>
+
+        {/* A wall is a length and a direction, and a phone can drag neither
+            accurately. Together these two place the far end exactly, which is
+            what reproducing a surveyed plan actually needs. */}
+        {single && (
+          <TextField
+            fullWidth
+            value={angle}
+            onChange={setAngle}
+            inputMode="decimal"
+            isInvalid={invalid.includes('angle')}
+          >
+            <Label>Angle (degrees)</Label>
+            <Input placeholder="degrees" />
+            <FieldError>Enter a bearing in degrees.</FieldError>
+          </TextField>
+        )}
 
         {/* Only for a wall that is already curved: the footer button decides
             whether a wall curves at all, and an angle box on a straight wall

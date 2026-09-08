@@ -86,7 +86,14 @@ export function dimensionedSpan(
   thickness: number,
   mode: MeasureMode,
 ): number {
-  const span = mode === 'inside' ? baseline - thickness : baseline + thickness;
+  const span =
+    mode === 'inside'
+      ? baseline - thickness
+      : mode === 'center'
+        ? // the centreline is the baseline: it is what the wall IS, before any
+          // decision about which face to measure from
+          baseline
+        : baseline + thickness;
   // a wall shorter than it is thick has no clear span to report; the drawn
   // extent beats a negative number
   return Math.max(0, span);
@@ -459,6 +466,27 @@ function clear(dim: PlanExtent, face: FaceExtent): FaceExtent {
  * drawing of it flips. Lanes are still assigned from the baselines, so the same
  * plan still lays out deterministically in both modes.
  */
+/**
+ * The wall measured along its own baseline, ignoring caps entirely.
+ *
+ * Miters and butts are decisions about how a corner is DRAWN; a centreline
+ * dimension is the one that predates them. It is what a survey quotes, and the
+ * only reading that does not move when a wall is made thicker.
+ */
+function centreRun(dim: PlanExtent): {
+  a: Point;
+  b: Point;
+  length: number;
+} | null {
+  const base = dim.base;
+  if (!base) return null;
+  return {
+    a: base.a,
+    b: base.b,
+    length: Math.hypot(base.b.x - base.a.x, base.b.y - base.a.y),
+  };
+}
+
 export function layOutDimensions(
   dims: readonly PlanExtent[],
   centre: Point,
@@ -495,7 +523,12 @@ export function layOutDimensions(
     // length move together, from the same two points, because the drawn line
     // and the printed number are one thing: a face's span with the extent's
     // number against it would be a dimension lying about what it spans.
-    const inner = mode === 'inside' ? innerFace(dim, outward) : null;
+    const inner =
+      mode === 'inside'
+        ? innerFace(dim, outward)
+        : mode === 'center'
+          ? centreRun(dim)
+          : null;
     // and it is drawn on that same side. Outside rings the drawing so the
     // dimensions do not fall across the rooms; inside deliberately does fall
     // across them, because that is where the width being quoted is.

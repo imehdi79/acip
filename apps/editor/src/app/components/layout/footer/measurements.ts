@@ -5,7 +5,12 @@ import type {
 } from '@acip/editor-core';
 import { WallEntity, distance } from '@acip/editor-core';
 import { formatLengthValue, lengthUnit, parseLength } from '@/editor/units';
-import { planWallResize, resizeWallLength } from '@/editor/rooms';
+import {
+  planWallResize,
+  resizeWallLength,
+  rotateWallTo,
+  wallBearing,
+} from '@/editor/rooms';
 import type { ResizeSpread } from '@/editor/rooms';
 import { labelledWallLength } from '@/editor/viewport/wall-dimensions';
 import type { MeasureMode, ResizeReach } from '@/editor/ui-state';
@@ -14,7 +19,12 @@ import type { MeasureMode, ResizeReach } from '@/editor/ui-state';
 export type SizeField = 'length' | 'height' | 'thickness';
 
 /** everything the dialog can report as unusable, jogs included */
-export type MeasurementField = SizeField | 'jogStart' | 'jogEnd' | 'sweep';
+export type MeasurementField =
+  | SizeField
+  | 'jogStart'
+  | 'jogEnd'
+  | 'sweep'
+  | 'angle';
 
 /** which corner of the wall a jog belongs to */
 export type JogSide = 'start' | 'end';
@@ -129,6 +139,23 @@ export const prefill = (value: number | null): string =>
   value === null ? '' : formatLengthValue(value);
 
 /**
+ * The wall's bearing as the dialog shows it: degrees, always start to end.
+ *
+ * Two decimals, because a surveyed plan is drawn to the centimetre and a wall
+ * of six metres swings by more than a centimetre for a hundredth of a degree.
+ */
+export function anglePrefill(wall: WallEntity): string {
+  return wallBearing(wall).toFixed(2);
+}
+
+/** a typed bearing in degrees, or null when the text cannot be one */
+function bearing(text: string): number | null {
+  if (text.trim() === '') return null;
+  const deg = Number(text.trim());
+  return Number.isFinite(deg) ? ((deg % 360) + 360) % 360 : null;
+}
+
+/**
  * The wall's curvature as the dialog shows it: degrees, blank when straight.
  *
  * DEGREES, not radians, and not the radius. Radians are the storage unit and
@@ -234,6 +261,7 @@ export function applyMeasurements(
   spread: ResizeSpread = 'push',
   jogs?: JogEdits,
   sweep?: string,
+  angle?: string,
 ): MeasurementField[] {
   // length belongs to one baseline; there is no sensible way to give six
   // walls the same length at once, so it is a single-wall edit only
@@ -263,6 +291,21 @@ export function applyMeasurements(
    * Blank leaves it alone. Only text that cannot be an angle is an error —
    * which is what stops a typo silently straightening a curved wall.
    */
+  /*
+   * A bearing is a single-wall edit for the same reason a length is: six walls
+   * pointing one way is a different operation, and not one anybody asked for.
+   *
+   * Blank leaves it alone. Unchanged is left alone too, so re-applying a
+   * dialog that was only opened to fix a height does not quietly re-seat a
+   * wall on the rounded version of its own angle.
+   */
+  let wantedAngle: number | null = null;
+  if (single && angle !== undefined && angle.trim() !== '') {
+    const deg = bearing(angle);
+    if (deg === null) invalid.push('angle');
+    else if (Math.abs(deg - wallBearing(single)) > 1e-6) wantedAngle = deg;
+  }
+
   let wantedSweep: number | null = null;
   if (single && sweep !== undefined && sweep.trim() !== '') {
     const radians = sweepRadians(sweep);
@@ -319,7 +362,8 @@ export function applyMeasurements(
     thickness === null &&
     baseline === null &&
     wantedJogs.length === 0 &&
-    wantedSweep === null
+    wantedSweep === null &&
+    wantedAngle === null
   ) {
     return [];
   }
@@ -344,6 +388,18 @@ export function applyMeasurements(
         session.doc,
         single.id,
         baseline,
+        spread,
+      );
+    }
+    // After the length, so the wall is the right size before it is aimed —
+    // both pivot about the same anchored corner, so the far end lands where
+    // the two numbers together say it should.
+    if (single && wantedAngle !== null) {
+      rotateWallTo(
+        (name, params) => session.dispatch(name, params),
+        session.doc,
+        single.id,
+        wantedAngle,
         spread,
       );
     }
