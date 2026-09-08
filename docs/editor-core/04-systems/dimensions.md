@@ -201,6 +201,20 @@ two numbers together say. The bearing is always reported start → end: reportin
 it from the anchored end would make the same wall read 23° or 203° depending on
 a join it did not ask for, and a survey quotes one of those, not either.
 
+**A typed position.** `moveWallStartTo` puts a wall's start corner at an exact
+point by TRANSLATING the wall — it keeps the length and bearing it was given
+and simply goes where it was told. That is what makes the three compose, and
+why position is applied LAST of the three: length says how big, angle says
+which way, and a translation is the only edit that can honour both while
+putting the corner where it was asked for. Both boxes must read before either
+is used, so a good x and a broken y cannot move a wall on an axis nobody was
+editing.
+
+Coordinates go through the same `parseLength` as every other field, so they
+take the active unit, accept an explicit suffix that overrides it, and — unlike
+every length here — may be negative or zero. A coordinate is a position, not a
+size, and the origin is a perfectly good place for a corner.
+
 **An angle magnet that gets out of the way.** The bearing snap used to be ±6°
 around every 15°, capturing 12° of every 15 — four fifths of every bearing a
 finger could ask for was rewritten, and a building with 23° and 67° walls could

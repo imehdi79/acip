@@ -445,6 +445,43 @@ export function planWallRotate(
   return { moves };
 }
 
+/**
+ * Put a wall's START corner at an exact point, carrying the whole wall.
+ *
+ * A TRANSLATION, not a stretch: the wall keeps the length and bearing it was
+ * given and simply goes where it was told. That is what makes the three
+ * numeric edits compose — length says how big, angle says which way, position
+ * says where — and why position is applied last of the three: it is the only
+ * one that can preserve the other two.
+ *
+ * The start corner rather than a chosen one, because a wall's own a → b is
+ * already how its bearing is reported, and one fixed end keeps the two
+ * readings talking about the same corner.
+ *
+ * `spread` means what it does everywhere else: `alone` takes the wall out of
+ * its junctions and leaves them behind, anything else stretches the walls
+ * welded to it so the corners stay shut.
+ */
+export function moveWallStartTo(
+  dispatch: Dispatch,
+  doc: DrawingDocument,
+  wallId: EntityId,
+  to: Point,
+  spread: ResizeSpread = 'push',
+): void {
+  const wall = doc.get(wallId);
+  if (!(wall instanceof WallEntity)) return;
+  const { a } = wall.getBaseline();
+  const delta = { x: to.x - a.x, y: to.y - a.y };
+  if (Math.abs(delta.x) < TOL && Math.abs(delta.y) < TOL) return;
+  // the same two paths a DRAG takes, so typing a position and dragging to it
+  // cannot leave the plan in different states
+  const plan =
+    spread === 'alone' ? null : planStickyWallMove(doc, [wallId], delta);
+  if (plan) dispatch('GRIP.MOVEMANY', { moves: plan.moves });
+  else dispatch('ENTITY.MOVE', { ids: [wallId], delta });
+}
+
 /** turn a wall to an exact bearing; one undo step */
 export function rotateWallTo(
   dispatch: Dispatch,

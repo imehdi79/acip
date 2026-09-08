@@ -20,12 +20,14 @@ import {
   prefill,
   resizeSpreadFor,
   selectedWalls,
+  startPrefill,
   sweepPrefill,
   wallLength,
   type JogEdits,
   type JogSide,
   type MeasurementField,
   type MeasureView,
+  type StartEdit,
 } from './measurements';
 
 /**
@@ -132,6 +134,9 @@ function Fields({
   const [invalid, setInvalid] = useState<MeasurementField[]>([]);
   // read at mount like every other field, so the switches show what this wall
   // already does rather than what the last wall did
+  const [start, setStart] = useState<StartEdit>(() =>
+    single ? startPrefill(single) : { x: '', y: '' },
+  );
   const [angle, setAngle] = useState(() =>
     single ? anglePrefill(single) : '',
   );
@@ -157,6 +162,7 @@ function Fields({
       jogs,
       sweep,
       angle,
+      start,
     );
     setInvalid(bad);
     if (bad.length === 0) close();
@@ -209,6 +215,38 @@ function Fields({
           <Input placeholder={mixed} />
           <FieldError>Enter a thickness greater than zero.</FieldError>
         </TextField>
+
+        {/* Where the wall BEGINS. Length and angle place the far end exactly
+            once the near one is right; this is what makes the near one right,
+            and without it the first wall of a traced plan still had to be
+            dragged into place by hand. Side by side because they are one
+            answer — a position — not two settings. */}
+        {single && (
+          <div className="flex gap-2">
+            <TextField
+              className="flex-1"
+              value={start.x}
+              onChange={(x: string) => setStart({ ...start, x })}
+              inputMode="decimal"
+              isInvalid={invalid.includes('startX')}
+            >
+              <Label>Start X ({unit})</Label>
+              <Input placeholder={unit} />
+              <FieldError>Enter a position.</FieldError>
+            </TextField>
+            <TextField
+              className="flex-1"
+              value={start.y}
+              onChange={(y: string) => setStart({ ...start, y })}
+              inputMode="decimal"
+              isInvalid={invalid.includes('startY')}
+            >
+              <Label>Start Y ({unit})</Label>
+              <Input placeholder={unit} />
+              <FieldError>Enter a position.</FieldError>
+            </TextField>
+          </div>
+        )}
 
         {/* A wall is a length and a direction, and a phone can drag neither
             accurately. Together these two place the far end exactly, which is

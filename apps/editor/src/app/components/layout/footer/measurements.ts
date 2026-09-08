@@ -2,10 +2,12 @@ import type {
   DrawingDocument,
   EditorSession,
   LevelId,
+  Point,
 } from '@acip/editor-core';
 import { WallEntity, distance } from '@acip/editor-core';
 import { formatLengthValue, lengthUnit, parseLength } from '@/editor/units';
 import {
+  moveWallStartTo,
   planWallResize,
   resizeWallLength,
   rotateWallTo,
@@ -24,7 +26,15 @@ export type MeasurementField =
   | 'jogStart'
   | 'jogEnd'
   | 'sweep'
-  | 'angle';
+  | 'angle'
+  | 'startX'
+  | 'startY';
+
+/** where the wall's start corner sits, as the dialog holds it */
+export interface StartEdit {
+  readonly x: string;
+  readonly y: string;
+}
 
 /** which corner of the wall a jog belongs to */
 export type JogSide = 'start' | 'end';
@@ -137,6 +147,31 @@ export function commonValue<T>(
 /** prefill text for a field: the shared value, or blank when they disagree */
 export const prefill = (value: number | null): string =>
   value === null ? '' : formatLengthValue(value);
+
+/**
+ * Where the wall's start corner sits, in the active unit.
+ *
+ * The last piece of placing a wall by number. Length and angle put the far end
+ * exactly once the near one is right — this is what makes the near one right,
+ * and without it the first wall of a traced plan still had to be dragged into
+ * place by hand.
+ */
+export function startPrefill(wall: WallEntity): StartEdit {
+  const { a } = wall.getBaseline();
+  return { x: formatLengthValue(a.x), y: formatLengthValue(a.y) };
+}
+
+/**
+ * A typed coordinate in meters, or null when the text cannot be one.
+ *
+ * Unlike every length here it may be NEGATIVE and it may be zero: a coordinate
+ * is a position on the plan, not a size, and the origin is a perfectly good
+ * place for a corner to be.
+ */
+function coordinate(text: string): number | null {
+  if (text.trim() === '') return null;
+  return parseLength(text, lengthUnit.get());
+}
 
 /**
  * The wall's bearing as the dialog shows it: degrees, always start to end.
@@ -262,6 +297,7 @@ export function applyMeasurements(
   jogs?: JogEdits,
   sweep?: string,
   angle?: string,
+  start?: StartEdit,
 ): MeasurementField[] {
   // length belongs to one baseline; there is no sensible way to give six
   // walls the same length at once, so it is a single-wall edit only
@@ -299,6 +335,23 @@ export function applyMeasurements(
    * dialog that was only opened to fix a height does not quietly re-seat a
    * wall on the rounded version of its own angle.
    */
+  /*
+   * A position is a single-wall edit, and both boxes have to be readable
+   * before either is used: moving a wall to a good x and a broken y would put
+   * it somewhere the user never asked for, on an axis they were not editing.
+   */
+  let wantedStart: Point | null = null;
+  if (single && start && (start.x.trim() !== '' || start.y.trim() !== '')) {
+    const here = single.getBaseline().a;
+    const x = start.x.trim() === '' ? here.x : coordinate(start.x);
+    const y = start.y.trim() === '' ? here.y : coordinate(start.y);
+    if (x === null) invalid.push('startX');
+    if (y === null) invalid.push('startY');
+    if (x !== null && y !== null && (x !== here.x || y !== here.y)) {
+      wantedStart = { x, y };
+    }
+  }
+
   let wantedAngle: number | null = null;
   if (single && angle !== undefined && angle.trim() !== '') {
     const deg = bearing(angle);
@@ -363,7 +416,8 @@ export function applyMeasurements(
     baseline === null &&
     wantedJogs.length === 0 &&
     wantedSweep === null &&
-    wantedAngle === null
+    wantedAngle === null &&
+    wantedStart === null
   ) {
     return [];
   }
@@ -400,6 +454,18 @@ export function applyMeasurements(
         session.doc,
         single.id,
         wantedAngle,
+        spread,
+      );
+    }
+    // LAST of the three placements, and the only order that composes: length
+    // says how big, angle says which way, and a translation is the one edit
+    // that can honour both while putting the corner where it was asked for.
+    if (single && wantedStart !== null) {
+      moveWallStartTo(
+        (name, params) => session.dispatch(name, params),
+        session.doc,
+        single.id,
+        wantedStart,
         spread,
       );
     }
