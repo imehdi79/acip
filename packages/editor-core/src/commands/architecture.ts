@@ -434,6 +434,73 @@ export const SetWallJogCommand: Command<SetWallJogParams, number> = {
   },
 };
 
+export interface SetWallArcParams {
+  ids: EntityId[];
+  /** how far the wall turns between its ends, in radians; 0 straightens it */
+  sweep: number;
+}
+
+/**
+ * Curve a wall, or straighten it back out.
+ *
+ * The wall keeps its two endpoints and gains a SWEEP: how far it turns between
+ * them. Chord-and-sweep rather than centre-and-radius, because the endpoints
+ * are what the rest of the drawing is holding on to - the walls welded to
+ * them, the grips, the snapping, the room they bound. A stored centre would
+ * let all of that drift the moment an end was dragged.
+ *
+ * Signed toward face+, so the sign says which way the wall bows. Zero
+ * straightens it, and a straight wall is byte-for-byte the wall it was before
+ * curves existed.
+ *
+ * What follows from the sweep rather than being set separately: the radius,
+ * the centre, and the LENGTH - a curved wall is as long as its arc, which is
+ * the length its takeoff prices and its dimension prints. Openings ride along
+ * for free, because they were already placed by distance along the wall
+ * rather than by position along a line.
+ *
+ * Clamped short of a full turn: at a full turn the chord vanishes and the
+ * radius runs away, so dragging past it stops rather than exploding.
+ */
+export const SetWallArcCommand: Command<SetWallArcParams, number> = {
+  name: 'WALL.SETARC',
+  description:
+    'Curve one or more walls by a sweep angle in radians, signed toward ' +
+    'face+, keeping their endpoints. Pass 0 to straighten. The wall length ' +
+    'becomes the arc length. Returns how many walls changed.',
+  params: paramsSchema(
+    (input) => {
+      const raw = (input ?? {}) as Record<string, unknown>;
+      return {
+        ids: asIdArray(raw['ids'], 'ids'),
+        sweep: asNumber(raw['sweep'], 'sweep'),
+      };
+    },
+    () =>
+      S.object(
+        {
+          ids: S.array(S.id('wall id'), 'walls to curve'),
+          sweep: S.number(
+            'sweep angle in radians, signed toward face+; 0 straightens',
+          ),
+        },
+        ['ids', 'sweep'],
+      ),
+  ),
+  execute(ctx, params) {
+    let count = 0;
+    for (const id of params.ids) {
+      const entity = ctx.doc.get(id);
+      if (!(entity instanceof WallEntity)) continue;
+      ctx.tx.update(entity, (e) => {
+        (e as WallEntity).setSweep(params.sweep);
+      });
+      count += 1;
+    }
+    return count;
+  },
+};
+
 export interface SetOpeningPropsParams {
   ids: EntityId[];
   width?: number;
@@ -595,5 +662,6 @@ export function registerArchitectureCommands(registry: CommandRegistry): void {
   registry.register(SetOpeningPropsCommand);
   registry.register(SetWallPropsCommand);
   registry.register(SetWallJogCommand);
+  registry.register(SetWallArcCommand);
   registry.register(SetDoorHangCommand);
 }

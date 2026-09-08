@@ -129,8 +129,17 @@ widths, the other measures outer overall extents.
 - **Gap tolerance is JOIN_TOLERANCE only** (1e-4 m). Walls left 5 cm apart do
   not bound a room — rooms merge through the gap, exactly as they would
   through a real 5 cm slot. No gap-healing heuristic; snapping is the tool.
-- **Straight baselines only** — curved walls don't exist yet; when they do,
-  the arrangement needs curve–curve splitting.
+- ~~**Straight baselines only**~~ — RESOLVED 2026-09-08, and not the way this
+  note expected. Curved walls do not need curve–curve splitting: a wall enters
+  the arrangement as `getCentreline()`, which is two points when straight and a
+  tessellated run when curved, all under the wall's own id. The arrangement
+  stays entirely segment-based and never learns what an arc is, while the room
+  gets the area the curve really encloses. Faces dedupe by id, so a curved wall
+  is still ONE bounding wall and is billed once. See
+  [curved-walls.md](curved-walls.md).
+- **A curve past a half turn picks its room face by chord** — `boundaryFaces`
+  compares the edge direction against the wall's chord, which is right for any
+  sweep under 180° and can flip beyond it. Rare enough to name rather than fix.
 - **Overlapping collinear walls** are deduplicated per node pair, not
   boolean-merged; pathological overlaps can produce sliver faces (filtered
   by a minimum-area threshold of 0.01 m²).

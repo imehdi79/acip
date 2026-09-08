@@ -299,6 +299,7 @@ export {
   AddDoorCommand,
   SetWallPropsCommand,
   SetWallJogCommand,
+  SetWallArcCommand,
   registerArchitectureCommands,
   AddLevelCommand,
   UpdateLevelCommand,

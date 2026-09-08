@@ -18,6 +18,7 @@ import {
   jogPrefill,
   prefill,
   selectedWalls,
+  sweepPrefill,
   wallLength,
   type JogEdits,
   type JogSide,
@@ -129,6 +130,9 @@ function Fields({
   const [invalid, setInvalid] = useState<MeasurementField[]>([]);
   // read at mount like every other field, so the switches show what this wall
   // already does rather than what the last wall did
+  const [sweep, setSweep] = useState(() =>
+    single ? sweepPrefill(single) : '',
+  );
   const [jogs, setJogs] = useState<JogEdits>(() =>
     single
       ? jogPrefill(single)
@@ -149,6 +153,7 @@ function Fields({
       // intact, separate makes them absorb the change and stay put
       ui.detachedMove.get() ? 'absorb' : 'push',
       jogs,
+      sweep,
     );
     setInvalid(bad);
     if (bad.length === 0) close();
@@ -201,6 +206,26 @@ function Fields({
           <Input placeholder={mixed} />
           <FieldError>Enter a thickness greater than zero.</FieldError>
         </TextField>
+
+        {/* Only for a wall that is already curved: the footer button decides
+            whether a wall curves at all, and an angle box on a straight wall
+            would be a second, quieter way to do the same thing. */}
+        {single && single.isCurved() && (
+          <TextField
+            fullWidth
+            value={sweep}
+            onChange={setSweep}
+            inputMode="decimal"
+            isInvalid={invalid.includes('sweep')}
+          >
+            <Label>Curve (degrees)</Label>
+            <Input placeholder="degrees" />
+            <FieldError>
+              Enter a turn between 0 and 360 degrees, or use the curve button to
+              straighten the wall.
+            </FieldError>
+          </TextField>
+        )}
 
         {single && (
           <div className="flex flex-col gap-3 border-t border-separator pt-3">

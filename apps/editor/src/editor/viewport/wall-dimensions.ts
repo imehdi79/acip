@@ -200,6 +200,15 @@ export interface PlanDimension extends PlanExtent {
  * Returns null for a degenerate wall, which has no direction to measure along.
  */
 export function wallExtent(wall: WallEntity): PlanExtent | null {
+  /*
+   * A CURVED wall is dimensioned on its chord and LABELLED with its arc
+   * length — which is the drafting convention, and the only pair that is any
+   * use: the chord is where a dimension line can actually be drawn straight,
+   * and the arc is how much wall there is.
+   *
+   * Projecting the bow onto the chord instead would print a number no
+   * tradesman could buy material against.
+   */
   const { a, b } = wall.getBaseline();
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -255,7 +264,10 @@ export function wallExtent(wall: WallEntity): PlanExtent | null {
     kind: 'wall',
     a: { x: a.x + ux * min, y: a.y + uy * min },
     b: { x: a.x + ux * max, y: a.y + uy * max },
-    length: max - min,
+    // The line is drawn on the chord; the NUMBER is how much wall there is.
+    // On a curve those differ, and the arc is the one worth printing — a
+    // chord length is a number nobody can buy material against.
+    length: wall.isCurved() ? wall.getLength() : max - min,
     base: { a, b },
     faces: [faceSpan(plus, 1), faceSpan(minus, -1)].filter(
       (face): face is FaceExtent => face !== null,
