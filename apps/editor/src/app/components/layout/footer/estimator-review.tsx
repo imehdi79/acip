@@ -8,7 +8,7 @@ import {
   type FinishRow,
 } from './estimator-finishes';
 import { formatQuantity, layerTotal, sidesFor } from './estimator-layers';
-import { DEMO_RATES, formatMoney } from '@/data/rates';
+import { currentRates, formatMoney } from '@/data/rates';
 
 /** one surface of one shape, and what ended up on it */
 export interface ReviewSurface {
@@ -133,7 +133,7 @@ export function ReviewSheet({
               {layers === 1 ? 'layer' : 'layers'}
             </p>
             <Modal.Heading>
-              {formatMoney(total, DEMO_RATES.currency)}
+              {formatMoney(total, currentRates().currency)}
             </Modal.Heading>
             {/* what the total does NOT include, said next to it. A total with
                 unquoted work silently left out of it is the most expensive
@@ -163,7 +163,7 @@ export function ReviewSheet({
                       </p>
                       {step.amount > 0 && (
                         <p className="shrink-0 tabular-nums">
-                          {formatMoney(step.amount, DEMO_RATES.currency)}
+                          {formatMoney(step.amount, currentRates().currency)}
                         </p>
                       )}
                     </div>
@@ -190,7 +190,7 @@ export function ReviewSheet({
                                     <span className="shrink-0 text-muted tabular-nums">
                                       {formatQuantity(row.quantity, row.unit)}
                                       {row.priced
-                                        ? ` · ${formatMoney(row.priced.amount, DEMO_RATES.currency)}`
+                                        ? ` · ${formatMoney(row.priced.amount, currentRates().currency)}`
                                         : ' · no rate'}
                                     </span>
                                   </span>
@@ -208,7 +208,7 @@ export function ReviewSheet({
                                       <span className="shrink-0 text-muted tabular-nums">
                                         {row.demolition.quantity.toFixed(2)} m²
                                         {row.demolition.priced
-                                          ? ` · ${formatMoney(row.demolition.priced.amount, DEMO_RATES.currency)}`
+                                          ? ` · ${formatMoney(row.demolition.priced.amount, currentRates().currency)}`
                                           : ' · no rate'}
                                       </span>
                                     </span>

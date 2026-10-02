@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Checkbox, Label, Switch } from '@heroui/react';
 import { coverBounds, coverPatch, type FinishRow } from './estimator-finishes';
-import { DEMO_RATES, formatMoney } from '@/data/rates';
+import { currentRates, formatMoney } from '@/data/rates';
 import type { OpeningRow } from './estimator-openings';
 
 /**
@@ -249,7 +249,7 @@ export function FinishFields({
               {row.demolition.quantity <= 0
                 ? 'Nothing being taken off yet.'
                 : row.demolition.priced
-                  ? `${row.demolition.quantity.toFixed(2)} m² · ${formatMoney(row.demolition.priced.amount, DEMO_RATES.currency)}`
+                  ? `${row.demolition.quantity.toFixed(2)} m² · ${formatMoney(row.demolition.priced.amount, currentRates().currency)}`
                   : `${row.demolition.quantity.toFixed(2)} m² · no rate for ${row.demolition.costCode} yet`}
             </p>
           </>

@@ -124,6 +124,7 @@ function list({
       onToggleDetail={noop}
       onRemove={noop}
       onEdit={noop}
+      onEditMaterial={noop}
       onDeduct={noop}
       openings={[]}
       onDemolish={noop}

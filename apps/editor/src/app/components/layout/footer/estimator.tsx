@@ -11,6 +11,7 @@ import type {
   DrawingDocument,
   EntityId,
   Material,
+  MaterialId,
 } from '@acip/editor-core';
 import { WallEntity } from '@acip/editor-core';
 import { useSession } from '@/editor/session-context';
@@ -30,8 +31,13 @@ import {
   type StepSide,
 } from './estimator-finishes';
 import { openingsAt, type OpeningRow } from './estimator-openings';
-import { AddLayersSheet } from './estimator-add-layers';
+import {
+  AddLayersSheet,
+  LayerSheet,
+  type ManualLayer,
+} from './estimator-add-layers';
 import { ReviewSheet, reviewSteps } from './estimator-review';
+import { currentRates, demoCodeFor, setManualRate } from '@/data/rates';
 
 /**
  * The share of the plan left CLEAR by the sheet at the bottom.
@@ -222,6 +228,15 @@ function ShapeWizard({ close }: { close: () => void }) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   /** whether the fullscreen add sheet is up over the wizard */
   const [adding, setAdding] = useState(false);
+  /**
+   * The material being corrected, or null when nothing is.
+   *
+   * The material itself and not a row id: what the edit sheet writes is a
+   * material, and holding the row would mean re-resolving it on every render
+   * of a list that is re-read from the document on every transaction — right
+   * as the edit commits and the list changes under it.
+   */
+  const [editing, setEditing] = useState<Material | null>(null);
   /**
    * Whether the walk has run off its end into the summary.
    *
@@ -421,6 +436,27 @@ function ShapeWizard({ close }: { close: () => void }) {
               // row that no longer exists
               setOpened((rows) => without(rows, rowKey(at, finishId)));
             }}
+            /**
+             * Resolved to the MATERIAL here, out of the catalogue the view
+             * already read, rather than passed down as a material the row
+             * could hold.
+             *
+             * A row is a finish and a finish is not the thing being edited: it
+             * references a material by id, and that material is the drawing's.
+             * Resolving at the moment of the tap also means the sheet opens on
+             * the material as it stands now, not as it stood when the row was
+             * last rendered.
+             *
+             * A row whose material has gone missing opens nothing. The button
+             * is already hidden for a finish with no material at all, so this
+             * only catches the material being removed out from under a row
+             * between the render and the tap.
+             */
+            onEditMaterial={(row) =>
+              setEditing(
+                view.materials.find((one) => one.id === row.materialId) ?? null,
+              )
+            }
             /**
              * One dispatch per committed field, which is one undo entry per
              * edit — the fields commit on blur rather than per keystroke for
@@ -624,7 +660,58 @@ function ShapeWizard({ close }: { close: () => void }) {
                 .filter((id): id is string => id !== null),
             )
           }
+          currency={currentRates().currency}
           onOpenChange={setAdding}
+          /**
+           * A hand-written layer, written to BOTH sides of the seam.
+           *
+           * The material goes into the document, where it belongs: a finish
+           * references a material id, the drawing saves its own catalogue, and
+           * `MATERIAL.ADD` is undoable like every other edit. The PRICE does
+           * not — core stores a `costCode` and never a figure, so the rate
+           * goes to the app's own table, which is where `priceOf` and the
+           * office's published rates already meet.
+           *
+           * The rate lands FIRST. Adding a material commits a transaction, and
+           * that re-reads the whole view; putting the price in beforehand means
+           * there is no render in which the new layer exists unpriced.
+           *
+           * Nothing is dispatched inside a try for decoration: the command
+           * validates its own params and throws on a name it will not take,
+           * and a throw in a tap handler takes the sheet down with it. Null
+           * says "not added" and the catalogue is left as it was.
+           */
+          onCreate={(layer: ManualLayer) => {
+            setManualRate(
+              layer.costCode,
+              { unit: layer.unit, unitCost: layer.unitCost },
+              window.localStorage,
+            );
+            // the strip-out as its own line at its own rate, which is what
+            // `demo-` codes are for: tearing tile off a wall costs a fraction
+            // of laying it and has nothing to do with what the tile was worth.
+            // Always m², never the layer's own unit — a surface comes off by
+            // the area, which is how `boq.ts` measures a demolished finish.
+            if (layer.demoCost !== undefined) {
+              setManualRate(
+                demoCodeFor(layer.costCode),
+                { unit: 'm2', unitCost: layer.demoCost },
+                window.localStorage,
+              );
+            }
+            try {
+              return session.dispatch<MaterialId>('MATERIAL.ADD', {
+                name: layer.name,
+                unit: layer.unit,
+                costCode: layer.costCode,
+                ...(layer.coverage !== undefined
+                  ? { coverage: layer.coverage }
+                  : {}),
+              });
+            } catch {
+              return null;
+            }
+          }}
           /**
            * One dispatch per material, in catalogue order, because the list is
            * a build-up and its numbers are the order things went on.
@@ -674,6 +761,62 @@ function ShapeWizard({ close }: { close: () => void }) {
                   materialId,
                 });
               }
+            }
+          }}
+        />
+      )}
+      {/* Keyed by the material, so opening a second one REMOUNTS the body and
+          re-seeds its draft. Without the key the sheet would reopen still
+          holding the last material's name and prices, because the draft is
+          deliberately seeded once and never re-synced. */}
+      {editing && (
+        <LayerSheet
+          key={editing.id}
+          isOpen
+          material={editing}
+          currency={currentRates().currency}
+          onOpenChange={(open) => {
+            if (!open) setEditing(null);
+          }}
+          /**
+           * The same two writes as adding one, against an existing id.
+           *
+           * The rate goes in under whatever code the draft ENDED on. Renaming
+           * a material can move its cost code, and the price has to follow it
+           * or the layer would come back unpriced under its new key — which
+           * looks exactly like somebody having deleted the rate.
+           *
+           * What is deliberately NOT done is deleting the old code's rate. It
+           * costs nothing to leave, it is what a drawing already saved against
+           * that code still prices by, and a rename is not evidence that
+           * nobody quoted the old thing.
+           */
+          onCommit={(layer: ManualLayer) => {
+            setManualRate(
+              layer.costCode,
+              { unit: layer.unit, unitCost: layer.unitCost },
+              window.localStorage,
+            );
+            if (layer.demoCost !== undefined) {
+              setManualRate(
+                demoCodeFor(layer.costCode),
+                { unit: 'm2', unitCost: layer.demoCost },
+                window.localStorage,
+              );
+            }
+            try {
+              session.dispatch('MATERIAL.UPDATE', {
+                id: editing.id,
+                name: layer.name,
+                unit: layer.unit,
+                costCode: layer.costCode,
+                ...(layer.coverage !== undefined
+                  ? { coverage: layer.coverage }
+                  : {}),
+              });
+            } catch {
+              // the command validates its own params and throws on a name it
+              // will not take; a throw here would take the sheet with it
             }
           }}
         />

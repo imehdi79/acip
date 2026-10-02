@@ -14,7 +14,7 @@ import {
 } from '@acip/editor-core';
 import { computeFinishTakeoff } from '@acip/estimator';
 import { setbackAt } from '@/editor/viewport/wall-dimensions';
-import { DEMO_RATES, demoCodeFor, priceOf, type Priced } from '@/data/rates';
+import { currentRates, demoCodeFor, priceOf, type Priced } from '@/data/rates';
 import type { EstimatorStep } from './estimator-steps';
 import {
   ensureSlabUnder,
@@ -453,7 +453,9 @@ function finishesAtAnchor(
         on: partner !== null,
         costCode: demoCode,
         quantity: partner?.area ?? 0,
-        priced: partner ? priceOf(DEMO_RATES, demoCode, partner.area) : null,
+        priced: partner
+          ? priceOf(currentRates(), demoCode, partner.area)
+          : null,
         width: stripped
           ? hostIsWall
             ? Math.max(0, (stripped.t1 - stripped.t0) * hostLength)
@@ -484,7 +486,7 @@ function finishesAtAnchor(
         quantity: finish.area,
         phase: finish.phase,
         unpriced: true,
-        priced: priceOf(DEMO_RATES, 'finish-area', finish.area),
+        priced: priceOf(currentRates(), 'finish-area', finish.area),
       });
       continue;
     }
@@ -513,7 +515,7 @@ function finishesAtAnchor(
       quantity,
       phase: finish.phase,
       unpriced: false,
-      priced: priceOf(DEMO_RATES, layer.costCode, quantity),
+      priced: priceOf(currentRates(), layer.costCode, quantity),
     });
   }
   return rows;
