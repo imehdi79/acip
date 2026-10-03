@@ -331,6 +331,23 @@ describe('reaching the edit sheet from the catalogue', () => {
       />,
     );
 
+  it('points at the New layer button when the drawing has none', () => {
+    // the STARTING state now that nothing is seeded, so it has to name the way
+    // out rather than report an absence
+    const empty = renderToStaticMarkup(
+      <LayerChoices
+        materials={[]}
+        query=""
+        picked={new Set()}
+        alreadyIn={new Set()}
+        onPick={() => undefined}
+        onEdit={() => undefined}
+      />,
+    );
+    expect(empty).toContain('Nothing to build up from yet');
+    expect(empty).toContain('Add the first layer');
+  });
+
   it('offers every row for editing, by name', () => {
     const shown = html();
     expect(shown).toContain('Edit Plaster');

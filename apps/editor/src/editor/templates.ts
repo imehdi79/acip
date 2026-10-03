@@ -1,5 +1,4 @@
 import type { EditorSession, Point } from '@acip/editor-core';
-import { seedMaterials } from '@/data/materials';
 
 /**
  * Starter plans offered by the project selector. The ids double as the
@@ -64,10 +63,13 @@ export function generatePlan(
 ): void {
   session.newDocument();
 
-  // before the walls, because a fresh document's material library is empty and
-  // the estimator prices a wall face by picking one — a plan with no materials
-  // opens the add sheet onto nothing at all
-  seedMaterials(session);
+  // No material catalogue is seeded with it. A starter plan used to arrive
+  // carrying ten of them — block, plaster, paint — on the reasoning that the
+  // add sheet would otherwise open onto nothing. It opens onto a NEW LAYER
+  // button instead, and that is the better empty: a shipped catalogue is a
+  // guess at somebody else's trades, and every one of those guesses had to be
+  // scrolled past, or worse, half-matched to the thing actually being priced.
+  // What the estimate is built from is now entirely the estimator's to say.
 
   for (const { a, b } of TEMPLATE_WALLS[template]) {
     session.dispatch('WALL.ADD', { a, b });

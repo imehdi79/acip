@@ -289,12 +289,16 @@ export function LayerChoices({
   onEdit: (material: Material) => void;
 }) {
   if (materials.length === 0) {
-    // An empty library is a real state, not a bug: a drawing that arrived from
-    // a file brings its own materials and a generated plan is seeded, but a
-    // document could still have had them all removed.
+    // The STARTING state now, not an edge case: nothing is seeded, so this is
+    // what every new plan opens on. It points at the one thing to do rather
+    // than reporting an absence — the old wording ("nothing to build up from")
+    // read as a dead end on the screen whose whole purpose is the way out of
+    // it. A drawing that arrived from a file brings its own and never sees it.
     return (
       <p className="text-sm text-muted">
-        This drawing has no materials yet, so there is nothing to build up from.
+        Nothing to build up from yet. Add the first layer with
+        <span className="whitespace-nowrap"> ＋ </span>
+        above — give it a name, what it is measured by, and what it costs.
       </p>
     );
   }

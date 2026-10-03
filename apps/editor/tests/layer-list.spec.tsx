@@ -346,11 +346,14 @@ describe('the add sheet', () => {
         picked={picked}
         alreadyIn={alreadyIn}
         onPick={noop}
+        onEdit={noop}
       />,
     );
 
-  it('says so when the drawing has no materials at all', () => {
-    expect(choices({ materials: [] })).toContain('no materials yet');
+  it('points at the way out when the drawing has no materials at all', () => {
+    // the starting state now that nothing is seeded: it names the one thing to
+    // do rather than reporting an absence
+    expect(choices({ materials: [] })).toContain('Add the first layer');
   });
 
   it('tells each row what it will be measured and priced by', () => {

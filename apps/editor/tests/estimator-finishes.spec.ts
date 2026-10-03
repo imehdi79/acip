@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { EditorSession, point } from '@acip/editor-core';
 import type { EntityId, MaterialId } from '@acip/editor-core';
 import { assembleBoq } from '@acip/estimator';
-import { STARTER_MATERIALS, seedMaterials } from '@/data/materials';
 import { DEMO_RATES } from '@/data/rates';
+import { generatePlan } from '@/editor/templates';
 import { WallEntity } from '@acip/editor-core';
 import {
   anchorForSide,
@@ -28,10 +28,36 @@ import { reviewSteps } from '@/app/components/layout/footer/estimator-review';
  * about which face it landed on, about the order, and about the number.
  */
 
-/** a four-wall room, seeded, with the walls handed back */
+/**
+ * The materials these tests price against.
+ *
+ * The app ships NO catalogue — a plan starts empty and the estimator types in
+ * what it is built from. So the fixture carries its own, rather than leaning on
+ * a starter list that no longer exists: these are a test's own inputs, and a
+ * test that silently re-measures itself when a shipped default changes was
+ * never testing what it claimed to.
+ *
+ * The cost codes match `DEMO_RATES`, because several of these assert money.
+ */
+const FIXTURE_MATERIALS = [
+  { name: 'Concrete block', unit: 'm3', costCode: 'block' },
+  { name: 'Plaster', unit: 'm3', costCode: 'plaster' },
+  { name: 'Paint', unit: 'm2', costCode: 'paint' },
+  { name: 'Screed', unit: 'm3', costCode: 'screed' },
+  { name: 'Floor tile', unit: 'm2', costCode: 'floor-tile' },
+  { name: 'Wall tile', unit: 'count', costCode: 'wall-tile', coverage: 0.09 },
+] as const;
+
+function seedFixtureMaterials(session: EditorSession): void {
+  for (const one of FIXTURE_MATERIALS) {
+    session.dispatch<MaterialId>('MATERIAL.ADD', { ...one });
+  }
+}
+
+/** a four-wall room, with materials to price it by, and the walls handed back */
 function plan(): { session: EditorSession; walls: EntityId[] } {
   const session = new EditorSession();
-  seedMaterials(session);
+  seedFixtureMaterials(session);
   const corners = [point(0, 0), point(6, 0), point(6, 4), point(0, 4)];
   const walls = corners.map((a, i) =>
     session.dispatch<EntityId>('WALL.ADD', {
@@ -44,46 +70,36 @@ function plan(): { session: EditorSession; walls: EntityId[] } {
   return { session, walls };
 }
 
-/** the seeded material with this cost code */
+/** the fixture material with this cost code */
 function material(session: EditorSession, costCode: string): MaterialId {
   const found = session.doc.materials
     .list()
     .find((m) => m.costCode === costCode);
-  if (!found) throw new Error(`no seeded material for ${costCode}`);
+  if (!found) throw new Error(`no fixture material for ${costCode}`);
   return found.id;
 }
 
-describe('the starter material catalogue', () => {
-  it('gives a generated plan something to build up from', () => {
-    // a template plan starts from a bare EditorSession, whose material library
-    // is empty; without the seed the add sheet opens onto nothing at all
-    const session = new EditorSession();
-    expect(session.doc.materials.list()).toHaveLength(0);
-    seedMaterials(session);
-    expect(session.doc.materials.list()).toHaveLength(STARTER_MATERIALS.length);
-  });
-
-  it('leaves a drawing that brought its own alone', () => {
-    // a document loaded from a file carries the office's materials, with ids
-    // that finishes already reference — a second "Plaster" beside them would
-    // split one trade across two cost lines
-    const { session } = plan();
-    const before = session.doc.materials.list().length;
-    expect(seedMaterials(session)).toEqual([]);
-    expect(session.doc.materials.list()).toHaveLength(before);
-  });
-
-  it('carries a cost code for every material it seeds', () => {
-    // the cost code is the whole seam: it is what a rate table is keyed by, so
-    // a material without one is a line the bill can never price by name
-    for (const material of STARTER_MATERIALS) {
-      expect(material.costCode.trim()).toBeTruthy();
-      expect(material.name.trim()).toBeTruthy();
+describe('what a new plan is built from', () => {
+  it('starts with no materials at all', () => {
+    // the app ships no catalogue. It used to seed ten, on the reasoning that
+    // the add sheet would otherwise open onto nothing; it opens onto a New
+    // layer button instead, and a shipped list is a guess at somebody else's
+    // trades that every estimator has to scroll past.
+    for (const template of ['square', 'two-room', 'blank'] as const) {
+      const session = new EditorSession();
+      generatePlan(session, template);
+      expect(session.doc.materials.list()).toEqual([]);
     }
-    // and the one `count` material carries its tile size, or the tile count
-    // silently falls back to one unit per m²
-    const tile = STARTER_MATERIALS.find((m) => m.unit === 'count');
-    expect(tile?.coverage).toBeGreaterThan(0);
+  });
+
+  it('still draws the plan it was asked for', () => {
+    // the guard on the above: a template that silently stopped producing walls
+    // would pass an empty-catalogue check for entirely the wrong reason
+    const session = new EditorSession();
+    generatePlan(session, 'square');
+    expect(
+      session.doc.all().filter((e) => e instanceof WallEntity).length,
+    ).toBeGreaterThan(0);
   });
 });
 
@@ -703,7 +719,7 @@ describe('how far a new layer reaches', () => {
     // 12.90 m² overall and 11.10 m² clear, and the sheet must show whichever
     // one the plan is being measured by
     const session = new EditorSession();
-    seedMaterials(session);
+    seedFixtureMaterials(session);
     const lone = session.dispatch<EntityId>('WALL.ADD', {
       a: point(0, 0),
       b: point(4.3, 0),
