@@ -20,10 +20,11 @@ import type { FitBounds } from '@/editor/ui-state';
 import { estimatorSteps, type EstimatorStep } from './estimator-steps';
 import { LayerList, defaultSide, rowKey, sidesFor } from './estimator-layers';
 import {
-  clearSpan,
+  coverBounds,
   coverPatch,
   finishTargetFor,
   finishesAt,
+  spanFor,
   spotsFor,
   spotsToWrite,
   type FinishRow,
@@ -33,11 +34,12 @@ import {
 import { openingsAt, type OpeningRow } from './estimator-openings';
 import {
   AddLayersSheet,
-  LayerSheet,
+  codeOf,
   type ManualLayer,
 } from './estimator-add-layers';
 import { ReviewSheet, reviewSteps } from './estimator-review';
-import { currentRates, demoCodeFor, setManualRate } from '@/data/rates';
+import { currentRates, setManualRate } from '@/data/rates';
+import { defaultsFor, setLayerDefaults } from '@/data/layer-defaults';
 
 /**
  * The share of the plan left CLEAR by the sheet at the bottom.
@@ -177,6 +179,48 @@ function readDoc(
   return { rows, materials, openings };
 }
 
+/**
+ * The halves of a layer the DOCUMENT does not keep: what it costs, and what it
+ * starts as.
+ *
+ * Core stores a `costCode` and never a price, and it models a finish's extent
+ * on the entity rather than on the material — so neither a rate nor a default
+ * size has anywhere to go in the drawing. Both are filed under the cost code,
+ * in the app, and both are written together because they are entered together:
+ * one form, one Save, one place that knows what that Save meant.
+ *
+ * Shared by adding a layer and by correcting one, so the two cannot drift into
+ * writing different things from the same answers.
+ */
+function writeLayerSettings(layer: ManualLayer): void {
+  setManualRate(
+    layer.costCode,
+    { unit: layer.unit, unitCost: layer.unitCost },
+    window.localStorage,
+  );
+  // REPLACES, so clearing a box takes the default back off rather than leaving
+  // the old one in force under a form that no longer shows it
+  setLayerDefaults(
+    layer.costCode,
+    {
+      ...(layer.width !== undefined ? { width: layer.width } : {}),
+      ...(layer.height !== undefined ? { height: layer.height } : {}),
+      ...(layer.description !== undefined
+        ? { description: layer.description }
+        : {}),
+    },
+    window.localStorage,
+  );
+}
+
+/** a default size, held to what the host can actually carry */
+function withinHost(
+  size: number,
+  bound: { min: number; max?: number },
+): number {
+  return Math.min(Math.max(size, bound.min), bound.max ?? size);
+}
+
 /** what to call the surface being added to — "Side B", "Ceiling" */
 function sideLabel(kind: string, side: StepSide): string | null {
   return sidesFor(kind).find((one) => one.id === side)?.label ?? null;
@@ -228,15 +272,6 @@ function ShapeWizard({ close }: { close: () => void }) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   /** whether the fullscreen add sheet is up over the wizard */
   const [adding, setAdding] = useState(false);
-  /**
-   * The material being corrected, or null when nothing is.
-   *
-   * The material itself and not a row id: what the edit sheet writes is a
-   * material, and holding the row would mean re-resolving it on every render
-   * of a list that is re-read from the document on every transaction — right
-   * as the edit commits and the list changes under it.
-   */
-  const [editing, setEditing] = useState<Material | null>(null);
   /**
    * Whether the walk has run off its end into the summary.
    *
@@ -436,27 +471,6 @@ function ShapeWizard({ close }: { close: () => void }) {
               // row that no longer exists
               setOpened((rows) => without(rows, rowKey(at, finishId)));
             }}
-            /**
-             * Resolved to the MATERIAL here, out of the catalogue the view
-             * already read, rather than passed down as a material the row
-             * could hold.
-             *
-             * A row is a finish and a finish is not the thing being edited: it
-             * references a material by id, and that material is the drawing's.
-             * Resolving at the moment of the tap also means the sheet opens on
-             * the material as it stands now, not as it stood when the row was
-             * last rendered.
-             *
-             * A row whose material has gone missing opens nothing. The button
-             * is already hidden for a finish with no material at all, so this
-             * only catches the material being removed out from under a row
-             * between the render and the tap.
-             */
-            onEditMaterial={(row) =>
-              setEditing(
-                view.materials.find((one) => one.id === row.materialId) ?? null,
-              )
-            }
             /**
              * One dispatch per committed field, which is one undo entry per
              * edit — the fields commit on blur rather than per keystroke for
@@ -682,23 +696,7 @@ function ShapeWizard({ close }: { close: () => void }) {
            * says "not added" and the catalogue is left as it was.
            */
           onCreate={(layer: ManualLayer) => {
-            setManualRate(
-              layer.costCode,
-              { unit: layer.unit, unitCost: layer.unitCost },
-              window.localStorage,
-            );
-            // the strip-out as its own line at its own rate, which is what
-            // `demo-` codes are for: tearing tile off a wall costs a fraction
-            // of laying it and has nothing to do with what the tile was worth.
-            // Always m², never the layer's own unit — a surface comes off by
-            // the area, which is how `boq.ts` measures a demolished finish.
-            if (layer.demoCost !== undefined) {
-              setManualRate(
-                demoCodeFor(layer.costCode),
-                { unit: 'm2', unitCost: layer.demoCost },
-                window.localStorage,
-              );
-            }
+            writeLayerSettings(layer);
             try {
               return session.dispatch<MaterialId>('MATERIAL.ADD', {
                 name: layer.name,
@@ -710,6 +708,37 @@ function ShapeWizard({ close }: { close: () => void }) {
               });
             } catch {
               return null;
+            }
+          }}
+          /**
+           * The same two writes as adding one, against an existing id.
+           *
+           * The rate and the defaults go in under whatever code the draft
+           * ENDED on. Renaming a material moves its cost code — the code
+           * follows the name now that the box is gone — and the price has to
+           * follow it or the layer would come back unpriced under its new key,
+           * which looks exactly like somebody having deleted the rate.
+           *
+           * What is deliberately NOT done is clearing the old code's entries.
+           * They cost nothing, they are what a drawing already saved against
+           * that code still prices by, and a rename is not evidence nobody
+           * quoted the old thing.
+           */
+          onUpdate={(material, layer: ManualLayer) => {
+            writeLayerSettings(layer);
+            try {
+              session.dispatch('MATERIAL.UPDATE', {
+                id: material.id,
+                name: layer.name,
+                unit: layer.unit,
+                costCode: layer.costCode,
+                ...(layer.coverage !== undefined
+                  ? { coverage: layer.coverage }
+                  : {}),
+              });
+            } catch {
+              // the command validates its own params and throws on a name it
+              // will not take; a throw here would take the sheet with it
             }
           }}
           /**
@@ -737,17 +766,21 @@ function ShapeWizard({ close }: { close: () => void }) {
             // there is nowhere to put a layer
             if (!spot) return;
             for (const materialId of materialIds) {
+              let finishId: EntityId;
               if (spot.kind === 'wall') {
-                // face to face, not end to end. A wall's baseline runs to the
-                // junction POINT, so the default [0, 1] would cover half of
-                // every wall it meets — plaster does not, and neither does the
-                // dimension drawn over it.
+                // However the plan is being measured — the header's own
+                // setting. On `inside` that is face to face and not end to
+                // end: a wall's baseline runs to the junction POINT, so [0, 1]
+                // would cover half of every wall it meets, which plaster does
+                // not do and neither does the dimension drawn over it. On
+                // `outside` the overall extent is the answer, and the bill
+                // agrees with the dimension above it either way.
                 const wall = session.doc.get(spot.wallId);
                 const span =
                   wall instanceof WallEntity
-                    ? clearSpan(wall)
+                    ? spanFor(wall, ui.measureMode.get())
                     : { t0: 0, t1: 1 };
-                session.dispatch('FINISH.ADD', {
+                finishId = session.dispatch<EntityId>('FINISH.ADD', {
                   wallId: spot.wallId,
                   side: spot.side,
                   materialId,
@@ -755,68 +788,53 @@ function ShapeWizard({ close }: { close: () => void }) {
                   t1: span.t1,
                 });
               } else {
-                session.dispatch('FLOORFINISH.ADD', {
+                finishId = session.dispatch<EntityId>('FLOORFINISH.ADD', {
                   slabId: spot.slabId,
                   surface: spot.surface,
                   materialId,
                 });
               }
-            }
-          }}
-        />
-      )}
-      {/* Keyed by the material, so opening a second one REMOUNTS the body and
-          re-seeds its draft. Without the key the sheet would reopen still
-          holding the last material's name and prices, because the draft is
-          deliberately seeded once and never re-synced. */}
-      {editing && (
-        <LayerSheet
-          key={editing.id}
-          isOpen
-          material={editing}
-          currency={currentRates().currency}
-          onOpenChange={(open) => {
-            if (!open) setEditing(null);
-          }}
-          /**
-           * The same two writes as adding one, against an existing id.
-           *
-           * The rate goes in under whatever code the draft ENDED on. Renaming
-           * a material can move its cost code, and the price has to follow it
-           * or the layer would come back unpriced under its new key — which
-           * looks exactly like somebody having deleted the rate.
-           *
-           * What is deliberately NOT done is deleting the old code's rate. It
-           * costs nothing to leave, it is what a drawing already saved against
-           * that code still prices by, and a rename is not evidence that
-           * nobody quoted the old thing.
-           */
-          onCommit={(layer: ManualLayer) => {
-            setManualRate(
-              layer.costCode,
-              { unit: layer.unit, unitCost: layer.unitCost },
-              window.localStorage,
-            );
-            if (layer.demoCost !== undefined) {
-              setManualRate(
-                demoCodeFor(layer.costCode),
-                { unit: 'm2', unitCost: layer.demoCost },
-                window.localStorage,
+
+              /**
+               * The layer's own starting size, if this material has one.
+               *
+               * A SECOND dispatch rather than parameters on the first, and
+               * deliberately: `FLOORFINISH.ADD` takes no cover at all, and a
+               * wall's width is a `t1` that only means anything once the band
+               * knows where it starts. Going through `coverPatch` is what makes
+               * a default and a hand-typed number land on the document the same
+               * way — the alternative was a second translation from metres to
+               * `t1`, and two of those is how they start disagreeing.
+               *
+               * Clamped by the host's own bounds, because `FINISH.UPDATE`
+               * REJECTS a `t` past the end of a wall: a default of 4 m carried
+               * onto a 3 m wall would otherwise be an unhandled throw out of a
+               * tap handler rather than a layer covering the wall it is on.
+               */
+              const material = view.materials.find(
+                (one) => one.id === materialId,
               );
-            }
-            try {
-              session.dispatch('MATERIAL.UPDATE', {
-                id: editing.id,
-                name: layer.name,
-                unit: layer.unit,
-                costCode: layer.costCode,
-                ...(layer.coverage !== undefined
-                  ? { coverage: layer.coverage }
+              const defaults = material
+                ? defaultsFor(codeOf(material))
+                : { width: undefined, height: undefined };
+              if (defaults.width === undefined && defaults.height === undefined)
+                continue;
+              const made = finishesAt(session.doc, spot).find(
+                (one) => one.id === finishId,
+              );
+              if (!made?.cover) continue;
+              const bounds = coverBounds(made.cover);
+              const patch = coverPatch(made.cover, {
+                ...(defaults.width !== undefined
+                  ? { width: withinHost(defaults.width, bounds.width) }
+                  : {}),
+                ...(defaults.height !== undefined
+                  ? { height: withinHost(defaults.height, bounds.height) }
                   : {}),
               });
-            } catch {
-              // the command validates its own params and throws on a name it
-              // will not take; a throw here would take the sheet with it
+              if (Object.keys(patch).length > 0) {
+                session.dispatch('FINISH.UPDATE', { id: finishId, ...patch });
+              }
             }
           }}
         />

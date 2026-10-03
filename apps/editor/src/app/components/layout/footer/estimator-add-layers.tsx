@@ -6,13 +6,15 @@ import {
   Label,
   Modal,
   SearchField,
+  TextArea,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
 } from '@heroui/react';
-import { IconPlus } from '@tabler/icons-react';
+import { IconPencil, IconPlus } from '@tabler/icons-react';
 import type { Material, MaterialId, MaterialUnit } from '@acip/editor-core';
-import { currentRates, demoCodeFor } from '@/data/rates';
+import { currentRates } from '@/data/rates';
+import { defaultsFor, type LayerDefaults } from '@/data/layer-defaults';
 import type { RateTable } from '@acip/estimator';
 
 /**
@@ -92,13 +94,25 @@ export function toCostCode(name: string): string {
 export interface LayerDraft {
   readonly name: string;
   readonly unit: MaterialUnit;
-  /** blank means "follow the name" — see `manualLayerFrom` */
+  /**
+   * The key the rate is filed under.
+   *
+   * No longer a box on the form — it follows the name, which is what it did
+   * for everyone who never touched it. It stays on the DRAFT because editing
+   * an existing material has to carry the code it already has: a code the bill
+   * is using is a fact, and re-deriving it the moment somebody fixed a typo in
+   * the name would silently re-key a priced layer.
+   */
   readonly costCode: string;
   /** m² covered by one unit; only a `count` material uses it */
   readonly coverage: string;
   readonly unitCost: string;
-  /** what taking it back off costs, per m². Blank is an answer — see below. */
-  readonly demoCost: string;
+  /** metres across a layer of this usually runs; blank leaves it to the face */
+  readonly width: string;
+  /** metres up from the ground it usually reaches; blank leaves it to the face */
+  readonly height: string;
+  /** what this layer is, in the estimator's own words */
+  readonly description: string;
 }
 
 /**
@@ -114,7 +128,9 @@ export const EMPTY_DRAFT: LayerDraft = {
   costCode: '',
   coverage: '',
   unitCost: '',
-  demoCost: '',
+  width: '',
+  height: '',
+  description: '',
 };
 
 /** a material to add, and what it costs — the two halves this sheet writes */
@@ -125,22 +141,17 @@ export interface ManualLayer {
   readonly coverage?: number;
   readonly unitCost: number;
   /**
-   * What stripping it out costs, per m², or undefined when nobody has said.
+   * How much of a face a layer of this covers, when it is applied.
    *
-   * Always per m², whatever the layer itself is bought by. That is not a
-   * simplification, it is the convention the bill already runs on: `boq.ts`
-   * prices a demolished finish as "the SAME area, against a `demo-` code — no
-   * tile counting, coverage is irrelevant when you are tearing a surface off".
-   * A tile bought at 2.40 each comes off at so much the square metre.
-   *
-   * Optional, unlike the build price. `DEMO_RATES` ships deliberately
-   * incomplete — nothing prices `demo-block` or `demo-screed` — on the
-   * argument that a missing rate is a real answer the sheet shows as "no rate
-   * yet", and inventing one would be putting a figure in a bill nobody quoted.
-   * Forcing a strip-out price here would contradict that for every layer added
-   * as new build, which is most of them.
+   * Both optional, and undefined is not zero: it means "as much of the face as
+   * there is", which is what a finish has always defaulted to and what a coat
+   * of plaster actually does. A default is only read at the moment a layer is
+   * applied — it never reaches back into a band somebody has already measured.
    */
-  readonly demoCost?: number;
+  readonly width?: number;
+  readonly height?: number;
+  /** what this layer is; empty when nothing was written */
+  readonly description?: string;
 }
 
 /**
@@ -151,19 +162,19 @@ export interface ManualLayer {
  * would then be written half-formed.
  *
  * A blank cost code is not a missing answer, it is the DEFAULT one: the code
- * follows the name until somebody types over it, which is what the placeholder
- * under the box is showing all along.
+ * follows the name, which is all it ever did for anyone who never typed over
+ * the box it used to have.
  *
  * Coverage stays optional even for a `count` material. Core already decides
  * what a missing one means (`layerQuantity` falls back to one unit per m²),
  * and refusing the layer over it would block somebody pricing bags of
  * something by the square metre of wall — which is a real way to buy.
  *
- * The strip-out price is optional too, but not LENIENT: blank leaves it
- * unquoted, and anything else has to be a real price or the whole draft is
- * refused. Silently dropping a "-5" somebody typed would add the layer with no
- * strip-out rate while they believed they had set one — the sheet would then
- * show "no rate yet" for a figure they watched themselves enter.
+ * A default size is optional too, but not LENIENT: blank leaves the layer
+ * covering whatever face it lands on, and anything else has to be a real
+ * measurement or the whole draft is refused. Silently dropping a "-5" somebody
+ * typed would apply the layer at the face's own size while they believed they
+ * had set one — a band they watched themselves measure, quietly ignored.
  */
 export function manualLayerFrom(draft: LayerDraft): ManualLayer | null {
   const name = draft.name.trim();
@@ -176,12 +187,18 @@ export function manualLayerFrom(draft: LayerDraft): ManualLayer | null {
   if (!Number.isFinite(unitCost) || unitCost < 0) return null;
   let layer: ManualLayer = { name, unit: draft.unit, costCode, unitCost };
 
-  const typedDemo = draft.demoCost.trim();
-  if (typedDemo !== '') {
-    const demoCost = Number.parseFloat(typedDemo);
-    if (!Number.isFinite(demoCost) || demoCost < 0) return null;
-    layer = { ...layer, demoCost };
+  // a size of nothing is not a measurement, it is a band that should not have
+  // been drawn — so unlike a price, zero is refused here too
+  for (const key of ['width', 'height'] as const) {
+    const typed = draft[key].trim();
+    if (typed === '') continue;
+    const size = Number.parseFloat(typed);
+    if (!Number.isFinite(size) || size <= 0) return null;
+    layer = { ...layer, [key]: size };
   }
+
+  const description = draft.description.trim();
+  if (description) layer = { ...layer, description };
 
   if (draft.unit !== 'count') return layer;
   const coverage = Number.parseFloat(draft.coverage.trim());
@@ -209,17 +226,22 @@ export function manualLayerFrom(draft: LayerDraft): ManualLayer | null {
  * leaving it blank to be re-derived would silently re-key a layer the moment
  * somebody fixed a typo in its name.
  */
-export function draftFrom(material: Material, table: RateTable): LayerDraft {
+export function draftFrom(
+  material: Material,
+  table: RateTable,
+  defaults: LayerDefaults = {},
+): LayerDraft {
   const costCode = codeOf(material);
   const build = table.rates[costCode];
-  const demo = table.rates[demoCodeFor(costCode)];
   return {
     name: material.name,
     unit: material.unit,
     costCode,
     coverage: material.coverage === undefined ? '' : String(material.coverage),
     unitCost: build === undefined ? '' : String(build.unitCost),
-    demoCost: demo === undefined ? '' : String(demo.unitCost),
+    width: defaults.width === undefined ? '' : String(defaults.width),
+    height: defaults.height === undefined ? '' : String(defaults.height),
+    description: defaults.description ?? '',
   };
 }
 
@@ -254,6 +276,7 @@ export function LayerChoices({
   picked,
   alreadyIn,
   onPick,
+  onEdit,
 }: {
   materials: readonly Material[];
   query: string;
@@ -262,6 +285,8 @@ export function LayerChoices({
   /** material ids already on the face this sheet is adding to */
   alreadyIn: ReadonlySet<string>;
   onPick: (id: MaterialId, picked: boolean) => void;
+  /** open one row's material for correction — its name, unit, price, defaults */
+  onEdit: (material: Material) => void;
 }) {
   if (materials.length === 0) {
     // An empty library is a real state, not a bug: a drawing that arrived from
@@ -286,13 +311,13 @@ export function LayerChoices({
           // and the next begins the difference between ticking Plaster and Paint
           <li
             key={material.id}
-            className="border-b border-separator last:border-0"
+            className="flex items-start border-b border-separator last:border-0"
           >
             <Checkbox
               isSelected={already || picked.has(material.id)}
               isDisabled={already}
               onChange={(on) => onPick(material.id, on)}
-              className="w-full py-3"
+              className="min-w-0 flex-1 py-3"
             >
               {/* start, not center: the row is two lines tall and a tick beside
                   the middle of it reads as belonging to neither line */}
@@ -313,6 +338,23 @@ export function LayerChoices({
                 </span>
               </Checkbox.Content>
             </Checkbox>
+            {/* OUTSIDE the Checkbox, not inside it. A button nested in a
+                checkbox's label is part of that label's hit area, so editing
+                a material would tick it on the way — and on a row that is
+                already on this side the tick is disabled, which would have
+                made the edit unreachable exactly where it is most wanted.
+
+                Live on an `already` row for that reason: a layer on this face
+                is the one whose price somebody has just seen and wants to
+                correct. */}
+            <button
+              type="button"
+              aria-label={`Edit ${material.name}`}
+              onClick={() => onEdit(material)}
+              className="mt-1 grid size-11 shrink-0 place-items-center text-muted"
+            >
+              <IconPencil size={16} />
+            </button>
           </li>
         );
       })}
@@ -409,41 +451,48 @@ export function NewLayerFields({
         </p>
       </TextField>
 
-      {/* Straight after the build price, because the two are read together:
-          "what does this cost to put on, and what does it cost to get off".
-          Per m² and NOT per `unitSuffix` — a strip-out is priced by the area
-          coming off, never by the piece, which is the rule `boq.ts` already
-          measures demolition by. */}
-      <TextField
-        fullWidth
-        value={draft.demoCost}
-        onChange={(demoCost) => onChange({ ...draft, demoCost })}
-      >
-        <Label>Strip-out price</Label>
-        <Input inputMode="decimal" placeholder="0.00" />
-        <p className="pt-1 text-xs text-muted">
-          {currency} per m² to take it back off, billed to{' '}
-          {/* an empty code already falls through to `demo-finish` inside
-              demoCodeFor, so a blank form still names a real line */}
-          {demoCodeFor(draft.costCode.trim() || toCostCode(draft.name))}. Leave
-          it blank if nobody has quoted the strip-out.
-        </p>
-      </TextField>
+      {/* What a layer of this usually covers, which is what the row in the
+          estimator opens on. The same two words that row uses — a Width and a
+          Height from ground — because they are the same two measurements, and
+          a default called something else here would read as a third thing to
+          set rather than the starting value of those. */}
+      <div className="flex gap-3">
+        <TextField
+          fullWidth
+          value={draft.width}
+          onChange={(width) => onChange({ ...draft, width })}
+        >
+          <Label>Default width</Label>
+          <Input inputMode="decimal" placeholder="whole face" />
+        </TextField>
+        <TextField
+          fullWidth
+          value={draft.height}
+          onChange={(height) => onChange({ ...draft, height })}
+        >
+          <Label>Height from ground</Label>
+          <Input inputMode="decimal" placeholder="whole face" />
+        </TextField>
+      </div>
+      <p className="-mt-2 text-xs text-muted">
+        Metres, and what a layer of this starts at when it is applied. Leave
+        them blank to cover whatever face it lands on. Changing them never moves
+        a band already measured.
+      </p>
 
+      {/* Last, and the only box here nothing is computed from: a note is for
+          what the figures cannot say — the spec it was quoted against, the
+          room it was agreed for, why this rate and not the published one. */}
       <TextField
         fullWidth
-        value={draft.costCode}
-        onChange={(costCode) => onChange({ ...draft, costCode })}
+        value={draft.description}
+        onChange={(description) => onChange({ ...draft, description })}
       >
-        <Label>Cost code</Label>
-        {/* the derived code as the PLACEHOLDER, not as the value: shown, so
-            nobody has to guess what the bill will call this, and still
-            following the name until somebody deliberately types over it */}
-        <Input placeholder={toCostCode(draft.name) || 'gypsum-board-12mm'} />
-        <p className="pt-1 text-xs text-muted">
-          What the bill looks this price up by. Match a code your rate table
-          already uses and the two will price as one line.
-        </p>
+        <Label>Description</Label>
+        <TextArea
+          rows={3}
+          placeholder="Anything the figures do not say — spec, quote, who priced it."
+        />
       </TextField>
     </div>
   );
@@ -521,7 +570,9 @@ function LayerBody({
   // announced a change, and this sheet is opened from a list that re-reads the
   // document on every committed transaction
   const [draft, setDraft] = useState<LayerDraft>(() =>
-    material ? draftFrom(material, currentRates()) : EMPTY_DRAFT,
+    material
+      ? draftFrom(material, currentRates(), defaultsFor(codeOf(material)))
+      : EMPTY_DRAFT,
   );
   const layer = manualLayerFrom(draft);
 
@@ -593,6 +644,7 @@ export function AddLayersSheet({
   currency,
   onOpenChange,
   onCreate,
+  onUpdate,
   onSave,
 }: {
   materials: readonly Material[];
@@ -611,6 +663,8 @@ export function AddLayersSheet({
    * alone rather than ticking an id that does not exist.
    */
   onCreate: (layer: ManualLayer) => MaterialId | null;
+  /** correct an existing material and its price, in place */
+  onUpdate: (material: Material, layer: ManualLayer) => void;
   /** the chosen materials, in catalogue order, to apply to the face */
   onSave: (materialIds: readonly MaterialId[]) => void;
 }) {
@@ -625,6 +679,7 @@ export function AddLayersSheet({
             currency={currency}
             close={() => onOpenChange(false)}
             onCreate={onCreate}
+            onUpdate={onUpdate}
             onSave={onSave}
           />
         </Modal.Dialog>
@@ -648,6 +703,7 @@ function AddLayersBody({
   currency,
   close,
   onCreate,
+  onUpdate,
   onSave,
 }: {
   materials: readonly Material[];
@@ -656,12 +712,21 @@ function AddLayersBody({
   currency: string;
   close: () => void;
   onCreate: (layer: ManualLayer) => MaterialId | null;
+  onUpdate: (material: Material, layer: ManualLayer) => void;
   onSave: (materialIds: readonly MaterialId[]) => void;
 }) {
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   /** whether the new-layer form is up over the catalogue */
   const [creating, setCreating] = useState(false);
+  /**
+   * The material being corrected, or null when none is.
+   *
+   * Held HERE rather than up in the wizard, because the catalogue is where a
+   * material is now reached from. The row that opens it is the row that shows
+   * what it is measured and priced by, which is exactly what the sheet edits.
+   */
+  const [editing, setEditing] = useState<Material | null>(null);
 
   // Catalogue order, not tick order: the list this feeds is NUMBERED by the
   // order things went on, so adding four at once in the order the thumb
@@ -724,6 +789,7 @@ function AddLayersBody({
               return next;
             })
           }
+          onEdit={setEditing}
         />
       </Modal.Body>
       <Modal.Footer className="flex justify-end gap-2">
@@ -762,6 +828,22 @@ function AddLayersBody({
           setPicked((ids) => new Set(ids).add(id));
         }}
       />
+      {/* Keyed by the material, so opening a second one REMOUNTS the body and
+          re-seeds its draft. Without the key the sheet would reopen holding
+          the last material's name and prices, because the draft is seeded once
+          and deliberately never re-synced. */}
+      {editing && (
+        <LayerSheet
+          key={editing.id}
+          isOpen
+          material={editing}
+          currency={currency}
+          onOpenChange={(open) => {
+            if (!open) setEditing(null);
+          }}
+          onCommit={(layer) => onUpdate(editing, layer)}
+        />
+      )}
     </>
   );
 }

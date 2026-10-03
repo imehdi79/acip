@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { EntityId, Material, MaterialId } from '@acip/editor-core';
+import type { Material, MaterialId } from '@acip/editor-core';
 import {
   EMPTY_DRAFT,
   NewLayerFields,
@@ -9,14 +9,9 @@ import {
   manualLayerFrom,
   toCostCode,
 } from '@/app/components/layout/footer/estimator-add-layers';
-import {
-  LayerList,
-  rowKey,
-} from '@/app/components/layout/footer/estimator-layers';
-import type { FinishRow } from '@/app/components/layout/footer/estimator-finishes';
+import { LayerChoices } from '@/app/components/layout/footer/estimator-add-layers';
 import {
   DEMO_RATES,
-  demoCodeFor,
   MANUAL_RATES_KEY,
   currentRates,
   hydrateManualRates,
@@ -54,42 +49,6 @@ function fakeStorage(failing = false): Storage {
     },
   };
 }
-
-/** one plastered wall face, as the list receives it */
-const layerRow = (over: Partial<FinishRow> = {}): FinishRow => ({
-  id: 'f1' as EntityId,
-  materialId: 'm1',
-  name: 'Plaster',
-  unit: 'm2',
-  costCode: 'plaster',
-  area: 12.4,
-  length: 6,
-  quantity: 12.4,
-  phase: 'new',
-  unpriced: false,
-  thickness: 0.01,
-  deductOpenings: true,
-  priced: { rate: 12, amount: 148.8 },
-  demolition: {
-    width: 6,
-    height: 3,
-    id: null,
-    on: false,
-    costCode: 'demo-plaster',
-    quantity: 0,
-    priced: null,
-  },
-  cover: {
-    width: 6,
-    height: 3,
-    host: 'wall',
-    t0: 0,
-    sillHeight: 0,
-    hostLength: 6,
-    hostHeight: 3,
-  },
-  ...over,
-});
 
 // the rate table is a module singleton, so a test that leaves a price in it
 // prices the next test's layer
@@ -165,27 +124,39 @@ describe('the new-layer draft as something that can be saved', () => {
     expect(area?.coverage).toBeUndefined();
   });
 
-  it('leaves the strip-out unquoted when the box is blank', () => {
-    // `DEMO_RATES` ships with no `demo-block` and no `demo-screed` on purpose:
-    // a missing rate is a real answer, and a layer added as new build has no
-    // strip-out price to give
-    expect(manualLayerFrom(draft({ demoCost: '' }))?.demoCost).toBeUndefined();
+  it('leaves a blank size to the face the layer lands on', () => {
+    const layer = manualLayerFrom(draft({ width: '', height: '' }));
+    expect(layer?.width).toBeUndefined();
+    expect(layer?.height).toBeUndefined();
   });
 
-  it('carries a strip-out price when one was typed', () => {
-    expect(manualLayerFrom(draft({ demoCost: '9' }))?.demoCost).toBe(9);
+  it('carries a default size when one was typed', () => {
+    const layer = manualLayerFrom(draft({ width: '3.7', height: '1.2' }));
+    expect(layer?.width).toBe(3.7);
+    expect(layer?.height).toBe(1.2);
   });
 
-  it('takes zero as a strip-out price too', () => {
-    expect(manualLayerFrom(draft({ demoCost: '0' }))?.demoCost).toBe(0);
+  it('refuses a size of nothing, unlike a price of nothing', () => {
+    // zero money is a real answer — owner-supplied, already paid for. Zero
+    // metres is not a measurement, it is a band that should not be drawn.
+    expect(manualLayerFrom(draft({ width: '0' }))).toBeNull();
+    expect(manualLayerFrom(draft({ height: '0' }))).toBeNull();
   });
 
-  it('refuses the whole draft over a strip-out price it cannot use', () => {
-    // NOT dropped quietly: silently ignoring this would add the layer with no
-    // strip-out rate while the user watched themselves enter one, and the sheet
-    // would then say "no rate yet" for a figure that was typed
-    expect(manualLayerFrom(draft({ demoCost: '-5' }))).toBeNull();
-    expect(manualLayerFrom(draft({ demoCost: 'free' }))).toBeNull();
+  it('refuses the whole draft over a size it cannot use', () => {
+    // NOT dropped quietly: ignoring it would apply the layer at the face's own
+    // size while the user watched themselves measure one
+    expect(manualLayerFrom(draft({ width: '-5' }))).toBeNull();
+    expect(manualLayerFrom(draft({ height: 'tall' }))).toBeNull();
+  });
+
+  it('carries a description, trimmed, and nothing when it is blank', () => {
+    expect(
+      manualLayerFrom(draft({ description: '  12mm board  ' }))?.description,
+    ).toBe('12mm board');
+    expect(
+      manualLayerFrom(draft({ description: '   ' }))?.description,
+    ).toBeUndefined();
   });
 
   it('still saves a count material with no tile size', () => {
@@ -221,35 +192,28 @@ describe('the new-layer form', () => {
     expect(html({ unit: 'm3' })).not.toContain('Size of one unit');
   });
 
-  it('asks for the strip-out per m² whatever the layer is bought by', () => {
-    // a tile bought at 2.40 each comes off at so much the square metre — the
-    // rule `boq.ts` already measures a demolished finish by
-    const counted = html({ unit: 'count' });
-    expect(counted).toContain('EUR per unit');
-    expect(counted).toContain('EUR per m² to take it back off');
+  it('asks for a default size in the row’s own words', () => {
+    // the same two measurements the estimator row shows, so a default reads as
+    // the starting value of those rather than a third thing to set
+    const shown = html();
+    expect(shown).toContain('Default width');
+    expect(shown).toContain('Height from ground');
   });
 
-  it('names the demo- line the strip-out will be billed to', () => {
-    expect(html({ name: 'Gypsum board 12mm' })).toContain(
-      'demo-gypsum-board-12mm',
-    );
+  it('says a blank size means the whole face', () => {
+    expect(html()).toContain('placeholder="whole face"');
   });
 
-  it('names a real line even before anything has been typed', () => {
-    // an empty code falls through to `demo-finish` inside demoCodeFor
-    expect(html()).toContain('demo-finish');
+  it('offers somewhere to say what the figures cannot', () => {
+    expect(html()).toContain('Description');
   });
 
-  it('says a blank strip-out box is a legitimate answer', () => {
-    expect(html()).toContain('blank if nobody has quoted the strip-out');
-  });
-
-  it('shows the code the name would produce, without filling the box in', () => {
+  it('no longer asks for a cost code or a strip-out price', () => {
+    // the code follows the name, which is all it did for anyone who never
+    // typed over the box; the strip-out is not this form's question
     const shown = html({ name: 'Gypsum board 12mm' });
-    // as a placeholder: visible, so nobody has to guess what the bill will
-    // call this, and still following the name until it is typed over
-    expect(shown).toContain('placeholder="gypsum-board-12mm"');
-    expect(shown).not.toContain('value="gypsum-board-12mm"');
+    expect(shown).not.toContain('Cost code');
+    expect(shown).not.toContain('Strip-out');
   });
 });
 
@@ -262,27 +226,41 @@ describe('an existing material opened for correction', () => {
     ...over,
   });
 
-  it('opens on what the material and the table already say', () => {
+  it('opens on what the material, the table and the defaults already say', () => {
     setManualRate('plaster', { unit: 'm3', unitCost: 310 });
-    setManualRate('demo-plaster', { unit: 'm2', unitCost: 6 });
-    expect(draftFrom(material(), currentRates())).toEqual({
+    expect(
+      draftFrom(material(), currentRates(), {
+        width: 3.7,
+        height: 1.2,
+        description: '12mm board',
+      }),
+    ).toEqual({
       name: 'Plaster',
       unit: 'm3',
       costCode: 'plaster',
       coverage: '',
       unitCost: '310',
-      demoCost: '6',
+      width: '3.7',
+      height: '1.2',
+      description: '12mm board',
     });
   });
 
-  it('opens with empty price boxes when nobody has quoted the code', () => {
+  it('opens with an empty price box when nobody has quoted the code', () => {
     // the honest showing of "no rate yet", and directly typeable over
     const draft = draftFrom(material({ costCode: 'gypsum-board' }), {
       currency: 'EUR',
       rates: {},
     });
     expect(draft.unitCost).toBe('');
-    expect(draft.demoCost).toBe('');
+  });
+
+  it('opens with empty size boxes when no default was ever recorded', () => {
+    // blank is the real answer: the layer covers whatever face it lands on
+    const draft = draftFrom(material(), currentRates());
+    expect(draft.width).toBe('');
+    expect(draft.height).toBe('');
+    expect(draft.description).toBe('');
   });
 
   it('writes the cost code out rather than leaving it to follow the name', () => {
@@ -310,82 +288,68 @@ describe('an existing material opened for correction', () => {
     // `draftFrom` is the inverse of `manualLayerFrom`, and a form that changed
     // a layer just by being opened and saved would be the worst kind of edit
     setManualRate('wall-tile', { unit: 'count', unitCost: 2.4 });
-    setManualRate('demo-wall-tile', { unit: 'm2', unitCost: 9 });
     const tile = material({
       name: 'Wall tile',
       unit: 'count',
       costCode: 'wall-tile',
       coverage: 0.09,
     });
-    expect(manualLayerFrom(draftFrom(tile, currentRates()))).toEqual({
+    const defaults = { width: 3.7, height: 1.2, description: '300x300' };
+    expect(manualLayerFrom(draftFrom(tile, currentRates(), defaults))).toEqual({
       name: 'Wall tile',
       unit: 'count',
       costCode: 'wall-tile',
       coverage: 0.09,
       unitCost: 2.4,
-      demoCost: 9,
+      width: 3.7,
+      height: 1.2,
+      description: '300x300',
     });
   });
 });
 
-describe('reaching the edit sheet from a layer row', () => {
-  const html = (over: Partial<FinishRow> = {}) =>
+describe('reaching the edit sheet from the catalogue', () => {
+  const MATERIALS: readonly Material[] = [
+    {
+      id: 'm1' as MaterialId,
+      name: 'Plaster',
+      unit: 'm3',
+      costCode: 'plaster',
+    },
+    { id: 'm2' as MaterialId, name: 'Paint', unit: 'm2', costCode: 'paint' },
+  ];
+
+  const html = (alreadyIn: ReadonlySet<string> = new Set()) =>
     renderToStaticMarkup(
-      <LayerList
-        kind="wall"
-        side="a"
-        rows={{ a: [layerRow(over)] }}
-        // opened, because the button lives in the detail panel rather than as
-        // a third icon in a 44 px row
-        opened={new Set([rowKey('a', 'f1')])}
-        onSideChange={() => undefined}
-        onToggleDetail={() => undefined}
-        onRemove={() => undefined}
+      <LayerChoices
+        materials={MATERIALS}
+        query=""
+        picked={new Set()}
+        alreadyIn={alreadyIn}
+        onPick={() => undefined}
         onEdit={() => undefined}
-        onEditMaterial={() => undefined}
-        onDeduct={() => undefined}
-        openings={[]}
-        onDemolish={() => undefined}
-        onDemolishToggle={() => undefined}
-        onDemolishOpening={() => undefined}
       />,
     );
 
-  it('offers the layer and its prices for editing, by name', () => {
-    expect(html()).toContain('Edit Plaster and its prices');
+  it('offers every row for editing, by name', () => {
+    const shown = html();
+    expect(shown).toContain('Edit Plaster');
+    expect(shown).toContain('Edit Paint');
   });
 
-  it('is not on the row until the row is opened', () => {
-    const shut = renderToStaticMarkup(
-      <LayerList
-        kind="wall"
-        side="a"
-        rows={{ a: [layerRow()] }}
-        opened={new Set()}
-        onSideChange={() => undefined}
-        onToggleDetail={() => undefined}
-        onRemove={() => undefined}
-        onEdit={() => undefined}
-        onEditMaterial={() => undefined}
-        onDeduct={() => undefined}
-        openings={[]}
-        onDemolish={() => undefined}
-        onDemolishToggle={() => undefined}
-        onDemolishOpening={() => undefined}
-      />,
+  it('still offers a row that is already on this side', () => {
+    // the tick is disabled there, and a button inside the label would have gone
+    // with it — which is the row whose price somebody most wants to correct
+    expect(html(new Set(['m1']))).toContain('Edit Plaster');
+  });
+
+  it('keeps the edit control out of the tick’s own hit area', () => {
+    // nested in the checkbox label, editing a material would tick it on the way
+    const shown = html();
+    expect(shown.indexOf('Edit Plaster')).toBeGreaterThan(
+      shown.indexOf('Plaster'),
     );
-    expect(shut).not.toContain('and its prices');
-  });
-
-  it('offers nothing on a finish with no material behind it', () => {
-    // "Finish (no material)" prices as bare area against a code that is not
-    // any material's to edit
-    const bare = html({
-      materialId: null,
-      name: 'Finish (no material)',
-      unpriced: true,
-    });
-    expect(bare).not.toContain('and its prices');
+    expect(shown).toContain('aria-label="Edit Plaster"');
   });
 });
 
@@ -411,24 +375,6 @@ describe('a hand-typed rate reaching the table the sheet prices against', () => 
     // DEMO_RATES is the seed the desktop editor and the tests share; the store
     // is what moves
     expect(DEMO_RATES.rates['paint']?.unitCost).toBe(12);
-  });
-
-  it('prices the strip-out as its own line at its own rate', () => {
-    // what the `demo-` convention is for: tearing tile off a wall costs a
-    // fraction of laying it, and the two are quoted separately
-    const code = 'gypsum-board';
-    setManualRate(code, { unit: 'm2', unitCost: 18.5 });
-    setManualRate(demoCodeFor(code), { unit: 'm2', unitCost: 6 });
-    const table = currentRates();
-    expect(priceOf(table, code, 10)?.amount).toBeCloseTo(185, 6);
-    // the same 10 m² coming back off, at the strip-out rate and not the build one
-    expect(priceOf(table, demoCodeFor(code), 10)?.amount).toBeCloseTo(60, 6);
-  });
-
-  it('leaves the strip-out unquoted when only a build price was given', () => {
-    setManualRate('gypsum-board', { unit: 'm2', unitCost: 18.5 });
-    // and the sheet says "no rate yet" rather than totalling it at nothing
-    expect(priceOf(currentRates(), 'demo-gypsum-board', 10)).toBeNull();
   });
 
   it('refuses a rate it could not price with', () => {

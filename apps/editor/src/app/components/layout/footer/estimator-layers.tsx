@@ -1,5 +1,5 @@
 import { Tabs } from '@heroui/react';
-import { IconChevronDown, IconPencil, IconTrash } from '@tabler/icons-react';
+import { IconChevronDown, IconTrash } from '@tabler/icons-react';
 import { currentRates, formatMoney } from '@/data/rates';
 import type { FinishRow, StepSide } from './estimator-finishes';
 import type { OpeningRow } from './estimator-openings';
@@ -215,7 +215,6 @@ function LayerRow({
   onRemove,
   openings,
   onEdit,
-  onEditMaterial,
   onDeduct,
   onDemolish,
   onDemolishToggle,
@@ -229,8 +228,6 @@ function LayerRow({
   onRemove: () => void;
   openings: readonly OpeningRow[];
   onEdit: (patch: Record<string, number>) => void;
-  /** open the material behind this layer for correction */
-  onEditMaterial: () => void;
   onDeduct: (deductOpenings: boolean) => void;
   onDemolish: (next: { width?: number; height?: number }) => void;
   onDemolishToggle: (on: boolean) => void;
@@ -306,27 +303,6 @@ function LayerRow({
               </div>
             ))}
           </dl>
-          {/* Straight under the facts, because it changes exactly the ones
-              just read: the cost code, the rate, and what the layer comes to.
-              A row with no material behind it gets no button — there is
-              nothing to open, and "Finish (no material)" is priced as bare
-              area by a code that is not any material's to edit.
-
-              Behind the chevron rather than a third icon in the row above.
-              That row is 44 px on a phone and already carries a number, a
-              name, a two-line figure, a delete and this chevron; a labelled
-              button down here says what it does in words instead of adding
-              one more unlabelled target beside a destructive one. */}
-          {row.materialId !== null && (
-            <button
-              type="button"
-              onClick={onEditMaterial}
-              className="mt-2 flex items-center gap-1.5 py-1 text-xs text-muted underline"
-            >
-              <IconPencil size={14} />
-              Edit {row.name} and its prices
-            </button>
-          )}
           <FinishFields
             row={row}
             openings={openings}
@@ -351,7 +327,6 @@ function SideLayers({
   onRemove,
   openings,
   onEdit,
-  onEditMaterial,
   onDeduct,
   onDemolish,
   onDemolishToggle,
@@ -364,7 +339,6 @@ function SideLayers({
   onRemove: (side: StepSide, finishId: string) => void;
   openings: readonly OpeningRow[];
   onEdit: (finishId: string, patch: Record<string, number>) => void;
-  onEditMaterial: (row: FinishRow) => void;
   onDeduct: (finishId: string, deductOpenings: boolean) => void;
   onDemolish: (
     finishId: string,
@@ -400,7 +374,6 @@ function SideLayers({
             onRemove={() => onRemove(side, row.id)}
             openings={openings}
             onEdit={(patch) => onEdit(row.id, patch)}
-            onEditMaterial={() => onEditMaterial(row)}
             onDeduct={(on) => onDeduct(row.id, on)}
             onDemolish={(next) => onDemolish(row.id, next)}
             onDemolishToggle={(on) => onDemolishToggle(row.id, on)}
@@ -436,7 +409,6 @@ export function LayerList({
   onToggleDetail,
   onRemove,
   onEdit,
-  onEditMaterial,
   onDeduct,
   openings,
   onDemolish,
@@ -466,15 +438,6 @@ export function LayerList({
   onRemove: (side: StepSide, finishId: string) => void;
   /** a width or height edit, already in FINISH.UPDATE's own vocabulary */
   onEdit: (finishId: string, patch: Record<string, number>) => void;
-  /**
-   * Correct the MATERIAL a layer is built from, and what it costs.
-   *
-   * The row is how it is reached, but what it opens is not the row's: a
-   * material belongs to the drawing, and the same one under two walls is one
-   * cost line. So this hands back the row and lets the caller resolve it to
-   * the material, which is the only thing that can be edited.
-   */
-  onEditMaterial: (row: FinishRow) => void;
   /** whether the openings crossing this layer come out of its area */
   onDeduct: (finishId: string, deductOpenings: boolean) => void;
   /** the doors and windows in the shape being priced, for the strip-out boxes */
@@ -537,7 +500,6 @@ export function LayerList({
               onRemove={onRemove}
               openings={openings}
               onEdit={onEdit}
-              onEditMaterial={onEditMaterial}
               onDeduct={onDeduct}
               onDemolish={onDemolish}
               onDemolishToggle={onDemolishToggle}
