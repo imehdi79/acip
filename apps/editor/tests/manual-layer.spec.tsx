@@ -19,6 +19,8 @@ import {
   readManualRates,
   resetRates,
   setManualRate,
+  snapshotRates,
+  applyProjectRates,
   writeManualRates,
 } from '@/data/rates';
 
@@ -417,6 +419,53 @@ describe('a hand-typed rate reaching the table the sheet prices against', () => 
     expect(
       setManualRate('gypsum-board', { unit: 'm2', unitCost: 18.5 }, store),
     ).toBe(false);
+    expect(currentRates().rates['gypsum-board']?.unitCost).toBe(18.5);
+  });
+});
+
+describe('the prices one saved plan was quoted at', () => {
+  it('lifts only the codes the drawing actually uses', () => {
+    // a whole-table copy would make every saved plan a snapshot of every price
+    // this device has ever typed, and reopening one would drag codes it never
+    // referenced back over the table
+    setManualRate('plaster', { unit: 'm3', unitCost: 310 });
+    setManualRate('gypsum-board', { unit: 'm2', unitCost: 18.5 });
+    const snapshot = snapshotRates(['plaster']);
+    expect(snapshot['plaster']?.unitCost).toBe(310);
+    expect(snapshot['gypsum-board']).toBeUndefined();
+  });
+
+  it('lifts a shipped figure too, not just a hand-typed one', () => {
+    // the point of a snapshot is that the estimate reproduces; where the
+    // number came from is not something the saved plan should still depend on
+    expect(snapshotRates(['paint'])['paint']?.unitCost).toBe(12);
+  });
+
+  it('prices the plan the way it was quoted, over the device table', () => {
+    // a bill quoted in March is still a March bill in June
+    setManualRate('paint', { unit: 'm2', unitCost: 20 });
+    expect(currentRates().rates['paint']?.unitCost).toBe(20);
+    applyProjectRates({ paint: { unit: 'm2', unitCost: 12.5 } });
+    expect(currentRates().rates['paint']?.unitCost).toBe(12.5);
+  });
+
+  it('does not leave one plan’s prices behind when another opens', () => {
+    // rebuilt from the bottom rather than merged into what is showing:
+    // opening plan B must not keep plan A's rates
+    applyProjectRates({ paint: { unit: 'm2', unitCost: 99 } });
+    applyProjectRates({ plaster: { unit: 'm3', unitCost: 400 } });
+    expect(currentRates().rates['plaster']?.unitCost).toBe(400);
+    // back to the shipped figure, not plan A's 99
+    expect(currentRates().rates['paint']?.unitCost).toBe(12);
+  });
+
+  it('keeps this device’s own rates under the plan’s', () => {
+    const store = fakeStorage();
+    setManualRate('gypsum-board', { unit: 'm2', unitCost: 18.5 }, store);
+    applyProjectRates({ paint: { unit: 'm2', unitCost: 11 } }, store);
+    // the plan said what paint costs; it said nothing about gypsum board, so
+    // this device's own answer stands
+    expect(currentRates().rates['paint']?.unitCost).toBe(11);
     expect(currentRates().rates['gypsum-board']?.unitCost).toBe(18.5);
   });
 });

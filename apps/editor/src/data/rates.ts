@@ -226,3 +226,50 @@ export function hydrateManualRates(store: Storage): void {
 export function resetRates(): void {
   ratesStore.set(DEMO_RATES);
 }
+
+/**
+ * The rates a drawing needs, lifted out of the live table.
+ *
+ * Only the codes the drawing actually uses. A whole-table copy would make
+ * every saved plan a snapshot of every price this device has ever typed, and
+ * reopening one would drag codes it never referenced back over the table.
+ *
+ * Taken from the EFFECTIVE table, not from the manual one, so a plan priced
+ * against a shipped demo figure saves that figure too. The point of a snapshot
+ * is that the estimate reproduces — where the number originally came from is
+ * not something the saved plan should still depend on.
+ */
+export function snapshotRates(
+  costCodes: Iterable<string>,
+): Record<string, Rate> {
+  const table = ratesStore.get();
+  const snapshot: Record<string, Rate> = {};
+  for (const code of costCodes) {
+    const rate = table.rates[code];
+    if (rate) snapshot[code] = rate;
+  }
+  return snapshot;
+}
+
+/**
+ * Price the editor the way one saved plan was priced.
+ *
+ * Rebuilt from the bottom rather than merged into what is already showing:
+ * shipped demo figures, then what this device has typed, then the plan's own
+ * snapshot on top. Opening plan B must not leave plan A's prices behind, and
+ * merging over the live table is exactly how it would.
+ *
+ * The snapshot WINS over the device table, which is the whole point. A bill
+ * quoted in March is still a March bill in June, whatever paint has done since
+ * — and a rate typed for one job was never a correction to another.
+ */
+export function applyProjectRates(
+  snapshot: Readonly<Record<string, Rate>>,
+  store?: Storage,
+): void {
+  const manual = store ? readManualRates(store) : {};
+  ratesStore.set({
+    currency: DEMO_RATES.currency,
+    rates: { ...DEMO_RATES.rates, ...manual, ...snapshot },
+  });
+}

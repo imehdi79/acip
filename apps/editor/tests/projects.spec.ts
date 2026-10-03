@@ -32,7 +32,7 @@ const doc = (n: number) =>
 describe('saving a plan', () => {
   it('hands back a plan that was put in', () => {
     const store = memoryStore();
-    saveProject(store, 'Ground floor', doc(1), 1000);
+    saveProject(store, { name: 'Ground floor', document: doc(1) }, 1000);
     const saved = readProjects(store);
     expect(saved).toHaveLength(1);
     expect(saved[0].name).toBe('Ground floor');
@@ -41,9 +41,9 @@ describe('saving a plan', () => {
 
   it('keeps the newest first, whatever order they arrived', () => {
     const store = memoryStore();
-    saveProject(store, 'One', doc(1), 1000);
-    saveProject(store, 'Two', doc(2), 3000);
-    saveProject(store, 'Three', doc(3), 2000);
+    saveProject(store, { name: 'One', document: doc(1) }, 1000);
+    saveProject(store, { name: 'Two', document: doc(2) }, 3000);
+    saveProject(store, { name: 'Three', document: doc(3) }, 2000);
     expect(listProjects(store).map((p) => p.name)).toEqual([
       'Two',
       'Three',
@@ -55,8 +55,8 @@ describe('saving a plan', () => {
     // "Ground floor" saved twice is one drawing saved twice; a list that
     // filled with near-identical names would spend five slots in an afternoon
     const store = memoryStore();
-    saveProject(store, 'Ground floor', doc(1), 1000);
-    saveProject(store, 'ground FLOOR', doc(2), 2000);
+    saveProject(store, { name: 'Ground floor', document: doc(1) }, 1000);
+    saveProject(store, { name: 'ground FLOOR', document: doc(2) }, 2000);
     const saved = readProjects(store);
     expect(saved).toHaveLength(1);
     expect(saved[0].document).toEqual(doc(2));
@@ -67,7 +67,7 @@ describe('saving a plan', () => {
     // and it would start refusing exactly when there is most to lose
     const store = memoryStore();
     for (let i = 1; i <= MAX_PROJECTS + 2; i += 1) {
-      saveProject(store, `Plan ${i}`, doc(i), i * 1000);
+      saveProject(store, { name: `Plan ${i}`, document: doc(i) }, i * 1000);
     }
     const saved = listProjects(store);
     expect(saved).toHaveLength(MAX_PROJECTS);
@@ -77,8 +77,172 @@ describe('saving a plan', () => {
 
   it('names an unnamed plan rather than storing a blank', () => {
     const store = memoryStore();
-    saveProject(store, '   ', doc(1), 1000);
+    saveProject(store, { name: '   ', document: doc(1) }, 1000);
     expect(readProjects(store)[0].name).toBe('Untitled plan');
+  });
+});
+
+describe('the slot a save lands in', () => {
+  it('keeps its id across a save, so a plan can be followed', () => {
+    // nothing could hold a durable reference to a plan while every save minted
+    // a fresh id — which is why "the plan I have open" could not exist
+    const store = memoryStore();
+    const first = saveProject(
+      store,
+      { name: 'Ground floor', document: doc(1) },
+      1000,
+    );
+    if (!first.ok) throw new Error('first save failed');
+    const again = saveProject(
+      store,
+      { id: first.saved.id, name: 'Ground floor', document: doc(2) },
+      2000,
+    );
+    if (!again.ok) throw new Error('second save failed');
+    expect(again.saved.id).toBe(first.saved.id);
+    expect(readProjects(store)).toHaveLength(1);
+  });
+
+  it('follows the id through a rename rather than forking the plan', () => {
+    const store = memoryStore();
+    const first = saveProject(
+      store,
+      { name: 'Ground floor', document: doc(1) },
+      1000,
+    );
+    if (!first.ok) throw new Error('first save failed');
+    saveProject(
+      store,
+      { id: first.saved.id, name: 'Level 0', document: doc(2) },
+      2000,
+    );
+    const saved = readProjects(store);
+    // a rename is a rename, not a second plan
+    expect(saved).toHaveLength(1);
+    expect(saved[0].name).toBe('Level 0');
+    expect(saved[0].id).toBe(first.saved.id);
+  });
+
+  it('does NOT overwrite another plan just because the name box says so', () => {
+    // the bug: open a plan from days ago, edit it, Save — the name box
+    // prefilled from the most recently SAVED plan, so the drawing landed on
+    // top of a different one and the plan actually open stayed stale
+    const store = memoryStore();
+    const ground = saveProject(
+      store,
+      { name: 'Ground floor', document: doc(1) },
+      1000,
+    );
+    saveProject(store, { name: 'Roof', document: doc(2) }, 2000);
+    if (!ground.ok) throw new Error('setup failed');
+
+    // saving the open plan, with the id carried
+    saveProject(
+      store,
+      { id: ground.saved.id, name: 'Ground floor', document: doc(3) },
+      3000,
+    );
+    const saved = readProjects(store);
+    expect(saved).toHaveLength(2);
+    expect(saved.find((p) => p.name === 'Ground floor')?.document).toEqual(
+      doc(3),
+    );
+    // and the other plan is untouched
+    expect(saved.find((p) => p.name === 'Roof')?.document).toEqual(doc(2));
+  });
+});
+
+describe('what a save says about itself', () => {
+  it('reports a save that happened, and what it pushed out', () => {
+    const store = memoryStore();
+    for (let i = 1; i <= MAX_PROJECTS; i += 1) {
+      saveProject(store, { name: `Plan ${i}`, document: doc(i) }, i * 1000);
+    }
+    const outcome = saveProject(
+      store,
+      { name: 'One more', document: doc(9) },
+      9000,
+    );
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.projects).toHaveLength(MAX_PROJECTS);
+    // said out loud rather than discovered later by its absence
+    expect(outcome.evicted.map((p) => p.name)).toEqual(['Plan 1']);
+  });
+
+  it('reports a save that did NOT happen', () => {
+    // the one that mattered: this used to hand back a list either way, so the
+    // sheet closed on a failure looking exactly like a success
+    const store = memoryStore();
+    const readOnly = {
+      ...store,
+      setItem: () => {
+        throw new Error('QuotaExceededError');
+      },
+    } as Storage;
+    const outcome = saveProject(
+      readOnly,
+      { name: 'Plan', document: doc(1) },
+      1,
+    );
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.reason).toBeTruthy();
+  });
+
+  it('does not claim success after retrying a single slot with itself', () => {
+    // Math.max(1, length - 1) on a one-item list is the SAME list, so the
+    // retry re-sent an identical payload and failed identically — and the old
+    // code then returned a list as though it had worked
+    let calls = 0;
+    const store = memoryStore();
+    const tiny = {
+      ...store,
+      setItem: () => {
+        calls += 1;
+        throw new Error('QuotaExceededError');
+      },
+    } as Storage;
+    const outcome = saveProject(tiny, { name: 'Only', document: doc(1) }, 1);
+    expect(outcome.ok).toBe(false);
+    // tried once, did not pointlessly retry the identical payload
+    expect(calls).toBe(1);
+  });
+});
+
+describe('the prices a plan was quoted at', () => {
+  it('travels with the plan it was saved from', () => {
+    // core stores a costCode and never a figure, so a rate left only in the
+    // device table would re-value this plan the moment another job used the
+    // same code
+    const store = memoryStore();
+    const outcome = saveProject(
+      store,
+      {
+        name: 'Ground floor',
+        document: doc(1),
+        rates: { plaster: { unit: 'm3', unitCost: 310 } },
+        defaults: { plaster: { width: 3.7 } },
+      },
+      1000,
+    );
+    if (!outcome.ok) throw new Error('save failed');
+    const reopened = openProject(store, outcome.saved.id);
+    expect(reopened?.rates?.['plaster']?.unitCost).toBe(310);
+    expect(reopened?.defaults?.['plaster']?.width).toBe(3.7);
+  });
+
+  it('still opens a plan saved before prices travelled', () => {
+    // the fields are optional on purpose: an older slot prices against the
+    // device table, which is exactly what it did at the time
+    const store = memoryStore({
+      [PROJECTS_KEY]: JSON.stringify([
+        { id: 'x', name: 'Old', savedAt: 5, document: doc(1) },
+      ]),
+    });
+    const old = openProject(store, 'x');
+    expect(old?.name).toBe('Old');
+    expect(old?.rates).toBeUndefined();
   });
 });
 
@@ -116,15 +280,17 @@ describe('reading a store that has been got at', () => {
         throw new Error('QuotaExceededError');
       },
     } as Storage;
-    expect(() => saveProject(readOnly, 'Plan', doc(1), 1)).not.toThrow();
+    expect(() =>
+      saveProject(readOnly, { name: 'Plan', document: doc(1) }, 1),
+    ).not.toThrow();
   });
 });
 
 describe('forgetting a plan', () => {
   it('removes the one asked for and leaves the rest', () => {
     const store = memoryStore();
-    saveProject(store, 'Keep', doc(1), 1000);
-    saveProject(store, 'Drop', doc(2), 2000);
+    saveProject(store, { name: 'Keep', document: doc(1) }, 1000);
+    saveProject(store, { name: 'Drop', document: doc(2) }, 2000);
     const drop = readProjects(store).find((p) => p.name === 'Drop');
     const left = deleteProject(store, drop?.id ?? '');
     expect(left.map((p) => p.name)).toEqual(['Keep']);

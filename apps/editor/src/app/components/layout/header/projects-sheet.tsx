@@ -13,6 +13,13 @@ import {
   saveProject,
   type ProjectSummary,
 } from '@/data/projects';
+import { clearDraft, openProjectStore, writeDraft } from '@/data/draft';
+import { applyProjectRates, snapshotRates } from '@/data/rates';
+import {
+  applyProjectLayerDefaults,
+  snapshotLayerDefaults,
+} from '@/data/layer-defaults';
+import { codeOf } from '@/app/components/layout/footer/estimator-add-layers';
 
 /**
  * Saving and opening a plan, in one sheet with two faces.
@@ -62,20 +69,52 @@ function ProjectsBody({
   const { ui } = useRuntime();
   const [saved, setSaved] = useState<ProjectSummary[]>([]);
   const [name, setName] = useState('');
+  /** what went wrong with the last Save, or null while nothing has */
+  const [failed, setFailed] = useState<string | null>(null);
 
   useEffect(() => {
-    setSaved(listProjects(window.localStorage));
-    // a name to overwrite beats an empty box: most saves are the second save
-    // of the same drawing, and typing it again is the step nobody wants
-    setName(listProjects(window.localStorage)[0]?.name ?? 'My plan');
+    const list = listProjects(window.localStorage);
+    setSaved(list);
+    // The plan you have OPEN, not the one saved most recently. Prefilling from
+    // the top of the list is how saving a plan opened an hour ago used to
+    // overwrite a different one and leave the original stale.
+    const open = openProjectStore.get();
+    setName(list.find((p) => p.id === open)?.name ?? 'My plan');
   }, []);
 
   const doSave = () => {
+    // only the codes this drawing uses — see snapshotRates
+    const codes = session.doc.materials.list().map(codeOf);
+    const withDemo = [...codes, ...codes.map((c) => `demo-${c}`)];
+    const outcome = saveProject(window.localStorage, {
+      id: openProjectStore.get(),
+      name,
+      document: saveDocument(session.doc),
+      rates: snapshotRates(withDemo),
+      defaults: snapshotLayerDefaults(codes),
+    });
     setSaved(
-      saveProject(window.localStorage, name, saveDocument(session.doc)).map(
-        ({ id, name: n, savedAt }) => ({ id, name: n, savedAt }),
-      ),
+      outcome.projects.map(({ id, name: n, savedAt }) => ({
+        id,
+        name: n,
+        savedAt,
+      })),
     );
+    if (!outcome.ok) {
+      // The sheet STAYS OPEN. It used to close either way, so a save that
+      // could not happen looked exactly like one that did — and the drawing it
+      // failed to keep was still only in memory.
+      setFailed(outcome.reason);
+      return;
+    }
+    // this drawing now belongs to that slot, and the draft has to agree or a
+    // reload would hand it back unattached
+    openProjectStore.set(outcome.saved.id);
+    writeDraft(window.localStorage, {
+      savedAt: outcome.saved.savedAt,
+      document: outcome.saved.document,
+      projectId: outcome.saved.id,
+    });
     close();
   };
 
@@ -89,6 +128,17 @@ function ProjectsBody({
     // every subscription the viewport and footer already hold.
     session.newDocument();
     loadDocumentInto(session.doc, project.document, session.entityTypes);
+    // the prices it was quoted at, over this device's own table. A plan saved
+    // before prices travelled carries none, and gets the device table alone —
+    // which is exactly what it was priced against at the time.
+    applyProjectRates(project.rates ?? {}, window.localStorage);
+    applyProjectLayerDefaults(project.defaults ?? {}, window.localStorage);
+    openProjectStore.set(project.id);
+    writeDraft(window.localStorage, {
+      savedAt: Date.now(),
+      document: project.document,
+      projectId: project.id,
+    });
     session.selection.clear();
     ui.requestFit();
     close();
@@ -110,10 +160,24 @@ function ProjectsBody({
             <span className="text-muted">Name</span>
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                // a failure is about the save that was attempted, not about
+                // the sheet — typing a different name is a new attempt
+                setFailed(null);
+              }}
               className="w-full rounded-sm border border-separator bg-surface px-2 py-2"
             />
           </label>
+        )}
+        {/* Said where the Save button is, and the sheet stays open behind it.
+            The drawing is still only in memory at this point, so the one thing
+            that must not happen is the user walking away believing it is
+            not. */}
+        {failed !== null && (
+          <p role="alert" className="pb-2 text-sm text-danger">
+            {failed}
+          </p>
         )}
         {saved.length === 0 ? (
           <p className="text-sm text-muted">
@@ -150,7 +214,7 @@ function ProjectsBody({
                 <button
                   type="button"
                   aria-label={`Delete ${project.name}`}
-                  onClick={() =>
+                  onClick={() => {
                     setSaved(
                       deleteProject(window.localStorage, project.id).map(
                         ({ id, name: n, savedAt }) => ({
@@ -159,8 +223,15 @@ function ProjectsBody({
                           savedAt,
                         }),
                       ),
-                    )
-                  }
+                    );
+                    // the drawing stays on screen; it just has no slot any
+                    // more, so the next Save writes a new one rather than
+                    // resurrecting the row that was just deleted
+                    if (openProjectStore.get() === project.id) {
+                      openProjectStore.set(null);
+                      clearDraft(window.localStorage);
+                    }
+                  }}
                   className="grid size-11 shrink-0 place-items-center text-muted"
                 >
                   <IconTrash size={16} />

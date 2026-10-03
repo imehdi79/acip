@@ -159,3 +159,31 @@ export function hydrateLayerDefaults(store: Storage): void {
 export function resetLayerDefaults(): void {
   layerDefaultsStore.set({});
 }
+
+/** the defaults a drawing needs, lifted out of the live set — see snapshotRates */
+export function snapshotLayerDefaults(
+  costCodes: Iterable<string>,
+): Record<string, LayerDefaults> {
+  const all = layerDefaultsStore.get();
+  const snapshot: Record<string, LayerDefaults> = {};
+  for (const code of costCodes) {
+    const one = all[code];
+    if (one) snapshot[code] = one;
+  }
+  return snapshot;
+}
+
+/**
+ * Start layers the way one saved plan started them.
+ *
+ * Rebuilt from this device's own record with the plan's snapshot on top, for
+ * the reason `applyProjectRates` is: opening plan B must not leave plan A's
+ * sizes behind.
+ */
+export function applyProjectLayerDefaults(
+  snapshot: Readonly<Record<string, LayerDefaults>>,
+  store?: Storage,
+): void {
+  const mine = store ? readLayerDefaults(store) : {};
+  layerDefaultsStore.set({ ...mine, ...snapshot });
+}
