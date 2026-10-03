@@ -262,6 +262,32 @@ export function clearSpan(wall: WallEntity): { t0: number; t1: number } {
   return t1 - t0 < 1e-9 ? { t0: 0, t1: 1 } : { t0, t1 };
 }
 
+/**
+ * The stretch of a wall a new layer covers, per the measurement in force.
+ *
+ * The setting in the header is not a drawing preference — it is the firm's
+ * measurement convention, and a bill is measured the same way the dimensions
+ * over the plan are. So it decides this too:
+ *
+ * - `inside` — the CLEAR span, face to face, cut back at each junction. What a
+ *   tape held in the room reads and what a plasterer is paid for.
+ * - `outside` — the whole baseline, junction point to junction point. The
+ *   overall extent, which is what an external face actually runs to: render
+ *   and cladding do carry past the inner face of what they meet.
+ *
+ * Read at the moment a layer is APPLIED and never after. The extent then
+ * belongs to the finish, which is a real entity with a real band that the bill
+ * measures and the user can re-type — so switching the setting later does not
+ * reach back and re-measure work somebody has already checked, any more than
+ * it redraws a dimension they overrode.
+ */
+export function spanFor(
+  wall: WallEntity,
+  mode: MeasureMode,
+): { t0: number; t1: number } {
+  return mode === 'outside' ? { t0: 0, t1: 1 } : clearSpan(wall);
+}
+
 /** one finish on one face, resolved into what the sheet shows */
 export interface FinishRow {
   readonly id: EntityId;

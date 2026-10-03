@@ -182,11 +182,17 @@ export class EditorUi {
   readonly solidWalls = new ValueStore<boolean>(false);
   /**
    * Outer overall extents or inner clear widths on the plan's automatic
-   * dimensions. Outside is the default because it is what the linework already
-   * showed before there was a choice — a setting must not change the drawing
-   * the moment it exists.
+   * dimensions — and, since the estimator reads it too, how much of a wall a
+   * layer applied to it covers.
+   *
+   * INSIDE is the default. It was outside, on the argument that a setting must
+   * not change the drawing the moment it exists; that argument expired once the
+   * choice was already there and shipping, and inside is the answer the work
+   * actually needs. A clear width is what a tape held in the room reads, what a
+   * room schedule is written from, and what a plasterer is paid for — an
+   * overall extent is a dimension for the drawing, not for the bill.
    */
-  readonly measureMode = new ValueStore<MeasureMode>('outside');
+  readonly measureMode = new ValueStore<MeasureMode>('inside');
   /** starter modal (preset picker) — shown on first empty load and on New */
   readonly starterOpen = new ValueStore<boolean>(false);
   /** side panels open as a drawer on mobile (desktop always shows them) */

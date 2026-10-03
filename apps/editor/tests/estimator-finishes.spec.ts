@@ -9,6 +9,7 @@ import {
   anchorForSide,
   anchorForSurface,
   clearSpan,
+  spanFor,
   coverPatch,
   finishTargetFor,
   finishesAt,
@@ -680,6 +681,47 @@ describe('how far a new layer reaches', () => {
     // both ends meet a 0.3 m wall square on, so each is cut back by 0.15 m
     expect(span.t0 * wall.getLength()).toBeCloseTo(0.15, 6);
     expect((1 - span.t1) * wall.getLength()).toBeCloseTo(0.15, 6);
+  });
+
+  it('runs the whole baseline when the plan is measured outside', () => {
+    // the bug this fixes: the estimator measured every layer face to face
+    // whatever the header said, so a 4.30 m wall priced its plaster over the
+    // 3.70 m clear span even with "Outside (overall)" selected
+    const { session, walls } = plan();
+    const wall = session.doc.get(walls[0]);
+    if (!(wall instanceof WallEntity)) throw new Error('not a wall');
+
+    expect(spanFor(wall, 'outside')).toEqual({ t0: 0, t1: 1 });
+    // and the two modes really are different on a wall with junctions, or this
+    // would pass while measuring nothing at all
+    expect(spanFor(wall, 'inside')).toEqual(clearSpan(wall));
+    expect(spanFor(wall, 'inside').t1).toBeLessThan(1);
+  });
+
+  it('measures the layer over the whole wall in outside mode', () => {
+    // the figure from the report, end to end: a 4.30 m wall 3 m high is
+    // 12.90 m² overall and 11.10 m² clear, and the sheet must show whichever
+    // one the plan is being measured by
+    const session = new EditorSession();
+    seedMaterials(session);
+    const lone = session.dispatch<EntityId>('WALL.ADD', {
+      a: point(0, 0),
+      b: point(4.3, 0),
+      thickness: 0.3,
+      height: 3,
+    });
+    const wall = session.doc.get(lone);
+    if (!(wall instanceof WallEntity)) throw new Error('not a wall');
+    const span = spanFor(wall, 'outside');
+    session.dispatch('FINISH.ADD', {
+      wallId: lone,
+      side: 'face+',
+      materialId: material(session, 'paint'),
+      t0: span.t0,
+      t1: span.t1,
+    });
+    const row = finishesOnFace(session.doc, lone, 'face+')[0];
+    expect(row.area).toBeCloseTo(4.3 * 3, 6);
   });
 
   it('covers the whole wall when nothing crosses it', () => {

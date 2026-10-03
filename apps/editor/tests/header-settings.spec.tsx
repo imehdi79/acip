@@ -36,6 +36,23 @@ const checkedLabel = (html: string) => {
   return from.slice(from.indexOf('>') + 1, from.indexOf('</button>'));
 };
 
+describe('how a plan is measured before anybody chooses', () => {
+  it('opens on inside, the clear width', () => {
+    // a clear width is what a tape held in the room reads, what a room
+    // schedule is written from, and what a plasterer is paid for — and the
+    // estimator measures a new layer by this too, so the default is a billing
+    // decision and not only a drawing one
+    expect(new EditorUi().measureMode.get()).toBe('inside');
+  });
+
+  it('says so on the control itself', () => {
+    const ui = new EditorUi();
+    expect(checkedLabel(renderToStaticMarkup(<SettingsPanel ui={ui} />))).toBe(
+      'Inside (clear)',
+    );
+  });
+});
+
 describe('the header menu', () => {
   it('offers Settings to a viewer, who holds the permission', () => {
     // a viewer changing which faces are dimensioned changes nothing in the
