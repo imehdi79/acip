@@ -3,6 +3,9 @@
  * - /api/llm/*      LLM proxy (keys from .env, never in the browser)
  * - /api/stt        Whisper speech-to-text (any language)
  * - /api/requests   the wishlist — what users wanted that we don't have yet
+ * - /api/rates      the office price list, staged then published
+ * - /api/projects   saved plans — the editor's localStorage, server-side
+ * - /api/store/:key the editor's small stores (rates, defaults, settings)
  */
 
 import { existsSync, readFileSync } from 'fs';

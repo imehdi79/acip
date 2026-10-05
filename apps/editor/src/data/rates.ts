@@ -1,5 +1,6 @@
 import type { Rate, RateTable } from '@acip/estimator';
 import { ValueStore } from '@/editor/store';
+import { pushStore } from './sync';
 
 /**
  * What things cost, keyed by the cost code a material carries.
@@ -209,7 +210,12 @@ export function setManualRate(
     rates: { ...table.rates, [code]: rate },
   });
   if (!store) return false;
-  return writeManualRates(store, { ...readManualRates(store), [code]: rate });
+  const manual = { ...readManualRates(store), [code]: rate };
+  const kept = writeManualRates(store, manual);
+  // the office's own table, as this device has it — see sync.pushStore for why
+  // the whole blob goes rather than the one code that changed
+  pushStore(store, MANUAL_RATES_KEY, manual);
+  return kept;
 }
 
 /** merge what this device typed over the demo table, once, at start-up */

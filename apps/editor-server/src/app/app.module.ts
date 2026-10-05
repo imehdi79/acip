@@ -5,6 +5,8 @@ import { LlmController } from './llm.controller';
 import { SttController } from './stt.controller';
 import { RequestsController } from './requests.controller';
 import { RatesController } from './rates.controller';
+import { ProjectsController } from './projects.controller';
+import { StoreController } from './store.controller';
 import { PrismaService } from './prisma.service';
 
 @Module({
@@ -15,6 +17,8 @@ import { PrismaService } from './prisma.service';
     SttController,
     RequestsController,
     RatesController,
+    ProjectsController,
+    StoreController,
   ],
   providers: [AppService, PrismaService],
 })

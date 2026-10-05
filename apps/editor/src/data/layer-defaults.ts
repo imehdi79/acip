@@ -1,4 +1,5 @@
 import { ValueStore } from '@/editor/store';
+import { pushStore } from './sync';
 
 /**
  * What a layer starts as when it is applied, and what it is for.
@@ -145,7 +146,9 @@ export function setLayerDefaults(
   layerDefaultsStore.set(all);
 
   if (!store) return false;
-  return writeLayerDefaults(store, all);
+  const stored = writeLayerDefaults(store, all);
+  pushStore(store, LAYER_DEFAULTS_KEY, all);
+  return stored;
 }
 
 /** what this device recorded, back at start-up */

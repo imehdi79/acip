@@ -1,5 +1,10 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import {
+  createJSONStorage,
+  persist,
+  type StateStorage,
+} from 'zustand/middleware';
+import { pushStore } from '@/data/sync';
 import type { PlanTemplateId } from '@/editor/templates';
 
 /* -------------------------------------------------------------------------- */
@@ -127,6 +132,37 @@ type PersistedSettings = {
   chrome: Partial<Record<AppView, Partial<Chrome>>>;
 };
 
+/**
+ * `localStorage`, with the server told afterwards.
+ *
+ * Settings are the one store written by a dozen places — every signIn, every
+ * view change, every chrome patch — so there is no one call site to push from.
+ * Wrapping the storage zustand already writes through is the only place that
+ * sees all of them, and it costs nothing when there is no server: `pushStore`
+ * queues to the outbox, which is a `localStorage` write and a no-op flush.
+ *
+ * Guarded on `window` because this module is imported by components the tests
+ * render in node, where reaching for `localStorage` would throw at import time
+ * and take every one of those suites with it.
+ */
+const serverBackedStorage: StateStorage = {
+  getItem: (name) =>
+    typeof window === 'undefined' ? null : window.localStorage.getItem(name),
+  setItem: (name, value) => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(name, value);
+    try {
+      pushStore(window.localStorage, name, JSON.parse(value));
+    } catch {
+      /* a value that will not parse is one the server cannot use either */
+    }
+  },
+  removeItem: (name) => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.removeItem(name);
+  },
+};
+
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
@@ -158,6 +194,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'acip-editor-settings',
+      storage: createJSONStorage(() => serverBackedStorage),
       version: 3,
       partialize: (state): PersistedSettings => ({
         user: state.user,

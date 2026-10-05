@@ -44,3 +44,48 @@ model RateRow {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// A saved plan, as the editor's own Save writes it.
+//
+// Single tenant on purpose (user decision): one deployment is one office, and
+// everyone who opens the editor sees the same list. There is no ownerId to
+// filter by, so adding one later is a migration and a WHERE clause rather than
+// a redesign.
+//
+// The id is the CLIENT's, not a serial. A plan is named and saved in the
+// browser — offline too — and it has to keep the same identity when it reaches
+// the server, or the draft that points at it and the slot the next Save lands
+// on would both come adrift.
+model Project {
+  /// the editor's own project id (`<epoch>-<random>`)
+  id        String   @id
+  name      String
+  /// when the editor saved it, which is not when the row was written
+  savedAt   DateTime
+  /// core's DocumentData — the drawing, verbatim
+  document  Json
+  /// the rates this plan was quoted at, keyed by cost code
+  rates     Json?
+  /// what a layer of each cost code starts as
+  defaults  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([savedAt])
+}
+
+// The editor's small stores, one row each: hand-typed rates, layer defaults,
+// and the settings a device would otherwise keep to itself.
+//
+// Key-value rather than a table per store, because that is honestly what they
+// are — a blob the editor owns the shape of. Giving `manual-rates` columns
+// would put the rate table's schema in two places, and the RateRow table above
+// is deliberately NOT reused for it: that one carries an upload's provenance
+// and a staged/published review, and a price somebody typed into the add sheet
+// has neither.
+model Store {
+  /// "manual-rates" | "layer-defaults" | "editor-settings"
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

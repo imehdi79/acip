@@ -1,18 +1,23 @@
 import type { DocumentData } from '@acip/editor-core';
 import type { Rate } from '@acip/estimator';
 import type { LayerDefaults } from './layer-defaults';
+import { pushProject, pushProjectDeletion } from './sync';
 
 /**
- * Saved plans, in the browser.
+ * Saved plans — the CACHE of them, with editor-server holding the originals.
  *
- * No backend yet, and this is deliberately not pretending there is one: a plan
- * lives in `localStorage` on the one device that drew it, and nothing here
- * syncs, merges or resolves a conflict. What it buys is the thing whose
- * absence hurt most — closing the tab stopped destroying an afternoon's work.
+ * Everything here is still synchronous and still `localStorage`, deliberately:
+ * a save has to land the instant it is pressed and has to work on a train, and
+ * the list has to render without waiting on a network. What changed is that a
+ * write now also goes into the outbox, and the server has the last word at
+ * start-up — see `sync.ts` for why the flush has to happen before the pull.
+ *
+ * The local cap of five is a cache size, not a limit on how many plans exist.
+ * The server keeps everything; a plan that falls off the end of this list is
+ * forgotten here and still there, which is why eviction does not delete.
  *
  * `DocumentData` is core's own save shape (`saveDocument`), so a slot is
- * exactly what the file format would be. When a server does arrive, the thing
- * being posted is already the thing being stored.
+ * exactly what the file format is and exactly what gets posted.
  */
 export const PROJECTS_KEY = 'acip.projects.v1';
 
@@ -183,6 +188,10 @@ export function saveProject(
   const evicted = next.slice(MAX_PROJECTS);
 
   if (write(store, kept)) {
+    // the cache took it; now owe it to the server. Queued rather than awaited —
+    // a save must not wait on a network, and the outbox is what makes that
+    // safe rather than lossy.
+    pushProject(store, saved);
     return { ok: true, projects: kept, saved, evicted };
   }
 
@@ -193,6 +202,7 @@ export function saveProject(
   if (kept.length > 1) {
     const fewer = kept.slice(0, kept.length - 1);
     if (write(store, fewer)) {
+      pushProject(store, saved);
       return {
         ok: true,
         projects: fewer,
@@ -229,6 +239,10 @@ export function openProject(store: Storage, id: string): SavedProject | null {
 export function deleteProject(store: Storage, id: string): SavedProject[] {
   const next = readProjects(store).filter((p) => p.id !== id);
   write(store, next);
+  // The local cap is five; the server keeps everything. So a plan that simply
+  // fell off the end of the list must NOT be deleted server-side — only one
+  // the user actually asked to forget, which is this.
+  pushProjectDeletion(store, id);
   return next;
 }
 
