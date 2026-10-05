@@ -1,13 +1,7 @@
 import type { MaterialId } from '../common/id.js';
-import {
-  add,
-  lerp,
-  normalize,
-  perpendicular,
-  scale,
-  sub,
-} from '../geometry/primitives/point.js';
+import { add, scale } from '../geometry/primitives/point.js';
 import type { RegionShape, SegmentShape } from '../geometry/shapes.js';
+import type { Interval } from '../topology/intervals.js';
 import type { DrawingDocument } from '../document/document.js';
 import { WallEntity } from '../entities/architecture/wall-entity.js';
 
@@ -41,16 +35,28 @@ export function wallAssemblyStrips(
   const def = wall.typeRef ? doc.types.get(wall.typeRef) : undefined;
   const layers = def?.layers;
   if (!layers || layers.length === 0) return null;
-  const { a, b } = wall.getBaseline();
   const len = wall.getLength();
   if (len <= 0) return null;
   const spans = wall.getSolidSpans();
   if (spans.length === 0) return null;
 
-  const n = perpendicular(normalize(sub(b, a)));
   const total = layers.reduce((sum, layer) => sum + layer.thickness, 0);
-  const at = (s: number, offset: number) =>
-    add(lerp(a, b, s / len), scale(n, offset));
+  /*
+   * Offsets are taken from the wall's own FRAMES rather than from its chord,
+   * so the layers follow it when it bows. A straight wall hands back its two
+   * ends and the strip is the same quad it always was; a curved one hands back
+   * as many as its curvature asks for, and the strip curves with the wall
+   * instead of cutting across the inside of the bend.
+   */
+  const along = (span: Interval, offset: number) =>
+    wall
+      .getFrames(span.start, span.end)
+      .map((f) => add(f.point, scale(f.normal, offset)));
+  const band = (span: Interval, outer: number, inner: number): RegionShape => ({
+    kind: 'region',
+    boundary: [...along(span, outer), ...along(span, inner).reverse()],
+    holes: [],
+  });
 
   const strips: AssemblyStrip[] = [];
   const separators: SegmentShape[] = [];
@@ -60,24 +66,16 @@ export function wallAssemblyStrips(
     strips.push({
       materialId: layers[i].materialId,
       thickness: layers[i].thickness,
-      regions: spans.map((span) => ({
-        kind: 'region',
-        boundary: [
-          at(span.start, outer),
-          at(span.end, outer),
-          at(span.end, inner),
-          at(span.start, inner),
-        ],
-        holes: [],
-      })),
+      regions: spans.map((span) => band(span, outer, inner)),
     });
     if (i < layers.length - 1) {
       for (const span of spans) {
-        separators.push({
-          kind: 'segment',
-          a: at(span.start, inner),
-          b: at(span.end, inner),
-        });
+        // the separator is the layer boundary itself: a line on a straight
+        // wall, the same run of points on a curved one
+        const line = along(span, inner);
+        for (let k = 1; k < line.length; k++) {
+          separators.push({ kind: 'segment', a: line[k - 1], b: line[k] });
+        }
       }
     }
     outer = inner;

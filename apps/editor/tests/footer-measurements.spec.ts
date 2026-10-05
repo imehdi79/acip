@@ -46,6 +46,21 @@ beforeEach(() => {
 });
 
 describe('applyMeasurements', () => {
+  it('sets a CURVED wall to the length the plan printed for it', () => {
+    // the label prints the arc and the command takes the chord: typing back
+    // the number on the drawing has to leave the wall that long, not longer
+    const id = addWall(0, 0, 4, 0);
+    session.dispatch('WALL.SETARC', { ids: [id], sweep: Math.PI / 2 });
+    const wall = wallOf(id);
+
+    expect(
+      applyMeasurements(session, [wall], edits({ length: '6' }), OUTSIDE),
+    ).toEqual([]);
+
+    expect(lengthOf(wall)).toBeCloseTo(6, 6);
+    expect(wall.isCurved()).toBe(true);
+  });
+
   // centred, not anchored at 'a': a wall in a room has to grow without
   // dragging the whole room sideways — see footer-wall-sync.spec.ts
   it('stretches a single wall about its midpoint', () => {

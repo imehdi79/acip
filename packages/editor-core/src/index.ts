@@ -56,6 +56,7 @@ export type {
   MeshDetail,
   WallSegment,
   RecognizeWallsOptions,
+  Arc,
 } from './geometry/index.js';
 export { transformGeometry } from './geometry/shapes.js';
 export {
@@ -97,6 +98,10 @@ export {
   distanceToArc,
   isAngleInArc,
   distanceToPolyline,
+  arcFromChord,
+  arcPointAt,
+  arcSagitta,
+  tessellateArc,
   simplifyStroke,
   recognizeWalls,
   EMPTY_MESH,
@@ -155,6 +160,7 @@ export type {
   DimPointsDef,
   DimWallsDef,
   DimWallSide,
+  WallBendPlan,
   WallEndSide,
   WallJoin,
 } from './entities/index.js';
@@ -299,6 +305,7 @@ export {
   AddDoorCommand,
   SetWallPropsCommand,
   SetWallJogCommand,
+  SetWallArcCommand,
   registerArchitectureCommands,
   AddLevelCommand,
   UpdateLevelCommand,

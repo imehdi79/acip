@@ -22,7 +22,9 @@ import type { MeasureMode, OverlayState, UnderlayState } from '../ui-state';
 import { formatLength } from '../units';
 import { visibleSpaceName } from '../spaces';
 import { planDimensions } from './wall-dimensions';
+import type { PlanDimension } from './wall-dimensions';
 import { shapeColor, shapeFill } from '../shape-colors';
+import { BEND_STANDOFF_PX, bendHandles } from '../curve';
 
 const COLORS = {
   background: '#ffffff',
@@ -35,6 +37,8 @@ const COLORS = {
   regionFillSelected: 'rgba(31, 122, 224, 0.20)',
   grip: '#1f7ae0',
   gripBorder: '#ffffff',
+  bend: '#1f7ae0',
+  bendGlyph: '#ffffff',
   spaceFill: 'rgba(60, 150, 130, 0.08)',
   spaceLabel: '#3c7a68',
   measure: '#a67c00',
@@ -74,6 +78,14 @@ const MARK_PREFIX: Record<string, string> = {
 };
 
 export const GRIP_PIXELS = 4;
+
+/**
+ * The bend button's radius. Round rather than square, because it is not a
+ * grip: the grips move the wall's two ends, this one changes its shape.
+ * Bigger than a grip so it is a thumb target on a phone, and it carries the
+ * bow it makes, so it reads as a curve before it is dragged rather than after.
+ */
+export const BEND_PIXELS = 8;
 
 /** provisional-wall band: fixed screen width, pulsed between these alphas */
 const PENDING_WIDTH_PX = 10;
@@ -522,6 +534,44 @@ export function drawScene(
     }
   }
 
+  // the bend button for each selected wall — standing off the wall's middle,
+  // drawn after the grips so the two never fight over the same pixels
+  for (const handle of bendHandles(
+    doc,
+    [...selection] as EntityId[],
+    BEND_STANDOFF_PX / viewport.scale,
+  )) {
+    const s = viewport.toScreen(handle.point);
+    // a leader back to the point on the wall it bends, so the button is
+    // obviously that wall's and not a stray dot on the plan
+    const on = viewport.toScreen(handle.anchor);
+    ctx.beginPath();
+    ctx.moveTo(on.x, on.y);
+    ctx.lineTo(s.x, s.y);
+    ctx.strokeStyle = COLORS.bend;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, BEND_PIXELS, 0, Math.PI * 2);
+    ctx.fillStyle = COLORS.bend;
+    ctx.fill();
+    ctx.strokeStyle = COLORS.gripBorder;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // the glyph: a bow drawn across the button, which is what dragging it does
+    ctx.beginPath();
+    ctx.arc(
+      s.x,
+      s.y + BEND_PIXELS * 0.7,
+      BEND_PIXELS * 0.95,
+      Math.PI * 1.25,
+      Math.PI * 1.75,
+    );
+    ctx.strokeStyle = COLORS.bendGlyph;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
   // room labels — name over area, fixed screen size, hidden once a room
   // shrinks below roughly a label's worth of pixels
   if (spaces.length > 0) {
@@ -549,6 +599,194 @@ const DIM_OFFSET_PX = 18;
 const DIM_MIN_PX = 44;
 /** gap between lanes — a line plus its label has to fit in here */
 const DIM_LANE_PX = 22;
+
+/** how finely a dimension arc is walked: at most this much turn per piece */
+const DIM_ARC_STEP = Math.PI / 48;
+/** a rise shorter than this on screen is not worth an arrow and a number */
+const DIM_DEPTH_MIN_PX = 14;
+
+/**
+ * A dimension that FOLLOWS the wall it measures, for a wall that bows.
+ *
+ * Drawn as the boundary itself, stood off radially — the same stand-off the
+ * straight case applies perpendicular to its line, so a curved dimension sits
+ * in its lane beside its wall exactly as a straight one does. It has to be the
+ * arc and not the chord: a straight line labelled with an arc length is a
+ * drawing that disagrees with its own number, and the chord is 40 cm shorter
+ * than the wall on the bow in the screenshots.
+ *
+ * The second dimension is the DEPTH: the rise from the chord between the two
+ * anchors to the apex of that same boundary, which is the number that says how
+ * far the wall bulges and the one nobody can take off a length. It is drawn
+ * inside the bow, where it is measured, with its label pushed along the chord
+ * so it does not land on the arrow, the arc, or the bend handle above it.
+ *
+ * Both are read off `dim.curve`, which IS the boundary the layout chose for the
+ * current mode — inner for inside, outer for outside — so the line drawn and
+ * the number printed can only ever be the same boundary.
+ */
+function drawCurvedDimension(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport2D,
+  dim: PlanDimension,
+  colour: string,
+  standOff: number,
+): void {
+  const curve = dim.curve;
+  if (!curve) return;
+  const centre = viewport.toScreen(curve.centre);
+
+  // which way "out" is for this dimension: the lane stands off along the same
+  // side the straight case uses, turned into a radial direction here
+  const radial = {
+    x: curve.apex.x - curve.centre.x,
+    y: curve.apex.y - curve.centre.y,
+  };
+  const outward = dim.side.x * radial.x + dim.side.y * radial.y >= 0 ? 1 : -1;
+
+  /** the boundary, walked in screen space and pushed out into its lane */
+  const steps = Math.max(2, Math.ceil(Math.abs(curve.sweep) / DIM_ARC_STEP));
+  const line: { x: number; y: number }[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const phi = curve.startAngle - curve.sweep * (i / steps);
+    const p = viewport.toScreen({
+      x: curve.centre.x + curve.radius * Math.cos(phi),
+      y: curve.centre.y + curve.radius * Math.sin(phi),
+    });
+    const dx = p.x - centre.x;
+    const dy = p.y - centre.y;
+    const len = Math.hypot(dx, dy) || 1;
+    line.push({
+      x: p.x + (dx / len) * standOff * outward,
+      y: p.y + (dy / len) * standOff * outward,
+    });
+  }
+
+  const sa = viewport.toScreen(dim.a);
+  const sb = viewport.toScreen(dim.b);
+  ctx.strokeStyle = colour;
+  ctx.fillStyle = colour;
+  ctx.lineWidth = dim.selected ? 1.5 : 1;
+  ctx.beginPath();
+  ctx.moveTo(line[0].x, line[0].y);
+  for (const p of line.slice(1)) ctx.lineTo(p.x, p.y);
+  // witness lines, from just off the measured ends out to the dimension arc —
+  // the same bracket the straight dimension closes
+  const witness = (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+  ) => {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const len = Math.hypot(dx, dy) || 1;
+    ctx.moveTo(from.x + (dx / len) * 4, from.y + (dy / len) * 4);
+    ctx.lineTo(to.x, to.y);
+  };
+  witness(sa, line[0]);
+  witness(sb, line[line.length - 1]);
+  ctx.stroke();
+
+  // the label rides the apex of the arc, turned along it and kept upright
+  const mid = line[Math.floor(line.length / 2)];
+  const before = line[Math.max(0, Math.floor(line.length / 2) - 1)];
+  const after =
+    line[Math.min(line.length - 1, Math.floor(line.length / 2) + 1)];
+  let angle = Math.atan2(after.y - before.y, after.x - before.x);
+  if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
+  const apex = viewport.toScreen(curve.apex);
+  const lift = {
+    x: (mid.x - apex.x) / (Math.hypot(mid.x - apex.x, mid.y - apex.y) || 1),
+    y: (mid.y - apex.y) / (Math.hypot(mid.x - apex.x, mid.y - apex.y) || 1),
+  };
+  ctx.save();
+  ctx.translate(mid.x + lift.x * 9, mid.y + lift.y * 9);
+  ctx.rotate(angle);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = COLORS.background;
+  ctx.strokeText(formatLength(dim.length), 0, 0);
+  ctx.fillText(formatLength(dim.length), 0, 0);
+  ctx.restore();
+
+  drawArcDepth(ctx, sa, sb, apex, curve.depth, colour, dim.selected);
+}
+
+/**
+ * The rise of the bow: chord, arrow, number.
+ *
+ * Measured and drawn between the same two anchors the arc dimension spans, so
+ * the pair reads as one statement about one boundary — the chord it stands on
+ * is the chord of THAT arc, not of the wall's baseline.
+ *
+ * Skipped when the rise is a few pixels: a tick and a number on a wall that
+ * looks straight at this zoom is clutter claiming to be information.
+ */
+function drawArcDepth(
+  ctx: CanvasRenderingContext2D,
+  sa: { x: number; y: number },
+  sb: { x: number; y: number },
+  apex: { x: number; y: number },
+  depth: number,
+  colour: string,
+  selected: boolean,
+): void {
+  const foot = { x: (sa.x + sb.x) / 2, y: (sa.y + sb.y) / 2 };
+  const rise = Math.hypot(apex.x - foot.x, apex.y - foot.y);
+  if (rise < DIM_DEPTH_MIN_PX) return;
+
+  const up = { x: (apex.x - foot.x) / rise, y: (apex.y - foot.y) / rise };
+  // along the chord, for pushing the label off the arrow it labels
+  const along = { x: -up.y, y: up.x };
+
+  ctx.strokeStyle = colour;
+  ctx.fillStyle = colour;
+  ctx.lineWidth = selected ? 1.5 : 1;
+  ctx.beginPath();
+  // the chord the rise is measured from, dashed so it is plainly a reference
+  // line and not another piece of wall
+  ctx.setLineDash([4, 3]);
+  ctx.moveTo(sa.x, sa.y);
+  ctx.lineTo(sb.x, sb.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.beginPath();
+  ctx.moveTo(foot.x, foot.y);
+  ctx.lineTo(apex.x, apex.y);
+  // arrowheads at both ends, pointing the way the measurement runs
+  for (const [tip, dir] of [
+    [foot, up],
+    [apex, { x: -up.x, y: -up.y }],
+  ] as const) {
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(
+      tip.x + dir.x * 6 + along.x * 3,
+      tip.y + dir.y * 6 + along.y * 3,
+    );
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(
+      tip.x + dir.x * 6 - along.x * 3,
+      tip.y + dir.y * 6 - along.y * 3,
+    );
+  }
+  ctx.stroke();
+
+  const label = formatLength(depth);
+  let angle = Math.atan2(apex.y - foot.y, apex.x - foot.x);
+  if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
+  ctx.save();
+  // beside the arrow rather than on it, and beside the bend handle rather than
+  // under it: the handle stands off the apex along this same line
+  ctx.translate(
+    (foot.x + apex.x) / 2 + along.x * 11,
+    (foot.y + apex.y) / 2 + along.y * 11,
+  );
+  ctx.rotate(angle);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = COLORS.background;
+  ctx.strokeText(label, 0, 0);
+  ctx.fillText(label, 0, 0);
+  ctx.restore();
+}
 
 /**
  * Automatic length labels on every wall, and width labels on the openings cut
@@ -585,6 +823,23 @@ export function drawPlanDimensions(
   ctx.textBaseline = 'middle';
 
   for (const dim of dims) {
+    // a bowed wall is measured round its own boundary, so it is drawn round it
+    // too — the straight path below has an axis to stand off from and a curve
+    // has none
+    if (dim.curve) {
+      const arcPx =
+        dim.curve.radius * Math.abs(dim.curve.sweep) * viewport.scale;
+      if (arcPx < DIM_MIN_PX) continue;
+      drawCurvedDimension(
+        ctx,
+        viewport,
+        dim,
+        dim.selected ? COLORS.selected : COLORS.measure,
+        DIM_OFFSET_PX + dim.lane * DIM_LANE_PX,
+      );
+      continue;
+    }
+
     // the anchors ARE the measured points: the only thing applied below is a
     // perpendicular stand-off, so the line can never span a different length
     // than the label states

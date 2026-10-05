@@ -1,4 +1,5 @@
 import type {
+  Arc,
   DrawingDocument,
   EntityId,
   Point,
@@ -7,6 +8,8 @@ import type {
 import {
   HostedOpeningEntity,
   WallEntity,
+  arcSagitta,
+  distance,
   isEntityVisible,
 } from '@acip/editor-core';
 import type { MeasureMode } from '../ui-state';
@@ -37,8 +40,37 @@ export interface FaceExtent {
   readonly normal: Point;
   readonly a: Point;
   readonly b: Point;
-  /** distance(a, b), the same promise every length here makes */
+  /** distance(a, b) on a straight wall; the arc length of `curve` when it bows */
   readonly length: number;
+  /** the bowed boundary this face runs along; absent on a straight wall */
+  readonly curve?: ArcExtent;
+}
+
+/**
+ * The curved boundary a dimension follows, when what is being measured bows.
+ *
+ * Concentric with the wall's own centreline arc — same centre, same angular
+ * extent, one radius further out or in — so it is the wall's geometry read at
+ * an offset rather than a second account of where the wall is. That is the
+ * whole point: a chord is not a wall, and the number beside a bowed wall has
+ * to be the length of the boundary a tape would actually run along.
+ */
+export interface ArcExtent {
+  readonly centre: Point;
+  /** of THIS boundary: the centreline radius, plus or minus half a thickness */
+  readonly radius: number;
+  /** angle of `a` about the centre */
+  readonly startAngle: number;
+  /**
+   * Signed angular extent, in core's convention: the boundary runs a → b as
+   * the angle turns from `startAngle` by MINUS this. Its sign says which way
+   * the wall bows, so nothing downstream has to guess an orientation.
+   */
+  readonly sweep: number;
+  /** the point halfway along — where the label sits and the depth arrow lands */
+  readonly apex: Point;
+  /** rise from the chord between the two anchors to the apex; never negative */
+  readonly depth: number;
 }
 
 /** parallel within this many radians counts as "runs straight through" (~0.6°) */
@@ -149,6 +181,12 @@ export interface PlanExtent {
    */
   readonly faces?: readonly FaceExtent[];
   /**
+   * The bowed boundary this dimension measures, when it bows. A straight wall
+   * carries none, and every reader treats its absence as "this is a straight
+   * dimension" — which is what keeps the straight case exactly as it was.
+   */
+  readonly curve?: ArcExtent;
+  /**
    * How far short of each end of `base` a CLEAR width must stop, because
    * something crosses the wall there. See `setbackAt`.
    *
@@ -176,6 +214,171 @@ export interface PlanDimension extends PlanExtent {
 }
 
 /**
+ * How far along the wall a point sits, as a fraction of the whole sweep: 0 at
+ * the start of the baseline, 1 at its end.
+ *
+ * This is the bowed wall's answer to "project the corner onto the axis", which
+ * is what the straight path does with every outline corner. An angle about the
+ * centre IS the arc's own parameter, so a mitered cap reaching past the end of
+ * the wall, or a tee stopping short of it, lands outside or inside [0, 1]
+ * exactly as its projection would on a straight wall.
+ *
+ * Folded onto the branch around the middle of the wall rather than taken raw,
+ * because an angle is only known modulo a turn and a cap can sit either side of
+ * either end. A sweep is clamped short of a full turn, so that branch always
+ * has room for the whole wall.
+ */
+function arcProgress(arc: Arc, p: Point): number {
+  const raw =
+    (arc.startAngle - Math.atan2(p.y - arc.center.y, p.x - arc.center.x)) /
+    arc.sweep;
+  const period = (Math.PI * 2) / Math.abs(arc.sweep);
+  return raw - period * Math.round((raw - 0.5) / period);
+}
+
+/**
+ * One boundary of a bowed wall: the stretch of it between `from` and `to`,
+ * both in the 0..1 of `arcProgress`.
+ *
+ * `offset` is how far the boundary lies off the centreline along the wall's own
+ * `face+` normal — half a thickness one way for one face, the other way for the
+ * other. Which of the two is "inside" is not decided here: that is the plan's
+ * business, and the layout pass already knows it.
+ *
+ * ARC LENGTH, never the chord: radius times the angle turned, on the radius of
+ * THIS boundary. The depth is the sagitta of the same stretch, taken from the
+ * geometry package's own arcSagitta rather than worked out again here.
+ *
+ * Null when the boundary has collapsed — a bend tight enough that the inner
+ * face has no radius left to run along. The caller then has no curve to offer
+ * and the face is dropped, exactly as a collapsed straight face is.
+ */
+function boundaryExtent(
+  arc: Arc,
+  offset: number,
+  from: number,
+  to: number,
+): ArcExtent | null {
+  // the centre sits away from the bulge, so the face a wall bows TOWARD is the
+  // one further from it: that is what the sweep's sign is saying here
+  const radius = arc.radius + Math.sign(arc.sweep) * offset;
+  const sweep = arc.sweep * (to - from);
+  if (radius <= 1e-9 || Math.abs(sweep) < 1e-9) return null;
+
+  const at = (u: number): Point => {
+    const phi = arc.startAngle - arc.sweep * u;
+    return {
+      x: arc.center.x + radius * Math.cos(phi),
+      y: arc.center.y + radius * Math.sin(phi),
+    };
+  };
+  const a = at(from);
+  const b = at(to);
+  return {
+    centre: arc.center,
+    radius,
+    startAngle: arc.startAngle - arc.sweep * from,
+    sweep,
+    apex: at((from + to) / 2),
+    depth: Math.abs(arcSagitta(distance(a, b), sweep)),
+  };
+}
+
+/** a boundary turned into the anchors and length a dimension is made of */
+function arcAnchors(curve: ArcExtent): {
+  a: Point;
+  b: Point;
+  length: number;
+  curve: ArcExtent;
+} {
+  const end = curve.startAngle - curve.sweep;
+  return {
+    a: {
+      x: curve.centre.x + curve.radius * Math.cos(curve.startAngle),
+      y: curve.centre.y + curve.radius * Math.sin(curve.startAngle),
+    },
+    b: {
+      x: curve.centre.x + curve.radius * Math.cos(end),
+      y: curve.centre.y + curve.radius * Math.sin(end),
+    },
+    length: curve.radius * Math.abs(curve.sweep),
+    curve,
+  };
+}
+
+/**
+ * Overall extent of a BOWED wall, measured round the wall rather than across
+ * the chord it leaves behind.
+ *
+ * The same shape of answer the straight path gives, arrived at the same way:
+ * the wall's own drawn outline is walked, every corner is placed along the wall
+ * and sorted onto the face it belongs to, and each face is then measured end to
+ * end. Only the two words change — "along the wall" is an angle about the arc's
+ * centre instead of a distance along the axis, and "which face" is which side of
+ * the centreline RADIUS a corner falls on instead of which side of the baseline.
+ *
+ * Both have to change, and both for the same reason: a bow puts its inner face
+ * on the far side of its own chord, so which side of that chord a corner sits
+ * on says nothing about which face it came from, and how far along the chord it
+ * projects says nothing about how much wall is behind it.
+ *
+ * Caps therefore still count for exactly what they counted for before. A wall
+ * mitered into a corner has its faces cut where core drew them, so an inner arc
+ * that stops short of the baseline endpoint measures short — which is what a
+ * clear width IS.
+ *
+ * The top-level length stays the CENTRELINE arc: how much wall there is, the
+ * answer for a caller that has not chosen a side. Both modes pick a face over
+ * it, the same way both modes already pick one on a straight wall.
+ */
+function curvedWallExtent(wall: WallEntity, arc: Arc): PlanExtent | null {
+  const { a, b } = wall.getBaseline();
+  const chord = distance(a, b);
+  if (chord < 1e-9) return null;
+  const spine = boundaryExtent(arc, 0, 0, 1);
+  if (!spine) return null;
+
+  const half = wall.getThickness() / 2;
+  const plus: number[] = [];
+  const minus: number[] = [];
+  for (const corner of wall.getOutline()) {
+    // + is the face the wall bows toward when it bows to face+, which is the
+    // side further from the centre; the sweep's sign carries the rest
+    const radial =
+      (distance(corner, arc.center) - arc.radius) * Math.sign(arc.sweep);
+    (radial >= 0 ? plus : minus).push(arcProgress(arc, corner));
+  }
+
+  // the chord's normal, which is the side a face is ON as far as the rest of
+  // the model is concerned — the same convention rooms assign faces by
+  const nx = -(b.y - a.y) / chord;
+  const ny = (b.x - a.x) / chord;
+
+  const face = (us: number[], sign: 1 | -1): FaceExtent | null => {
+    if (us.length < 2) return null;
+    const curve = boundaryExtent(
+      arc,
+      sign * half,
+      Math.min(...us),
+      Math.max(...us),
+    );
+    if (!curve) return null;
+    return { normal: { x: nx * sign, y: ny * sign }, ...arcAnchors(curve) };
+  };
+
+  return {
+    entityId: wall.id,
+    kind: 'wall',
+    ...arcAnchors(spine),
+    base: { a, b },
+    faces: [face(plus, 1), face(minus, -1)].filter(
+      (item): item is FaceExtent => item !== null,
+    ),
+    setback: { start: setbackAt(wall, 'start'), end: setbackAt(wall, 'end') },
+  };
+}
+
+/**
  * Overall extent of a wall measured along its own axis: the wall as drawn,
  * from outer corner to outer corner.
  *
@@ -200,6 +403,11 @@ export interface PlanDimension extends PlanExtent {
  * Returns null for a degenerate wall, which has no direction to measure along.
  */
 export function wallExtent(wall: WallEntity): PlanExtent | null {
+  // A bowed wall has no axis to project onto, and everything below projects
+  // onto one. It is measured round its own arc instead, by the same rules.
+  const arc = wall.getArc();
+  if (arc) return curvedWallExtent(wall, arc);
+
   const { a, b } = wall.getBaseline();
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -361,7 +569,35 @@ function innerFace(dim: PlanExtent, outward: Point): FaceExtent | null {
       best = face;
     }
   }
-  return best && dotp(best.normal, outward) < 0 ? clear(dim, best) : null;
+  if (!best || dotp(best.normal, outward) >= 0) return null;
+  // A bowed face is already cut where core drew its caps, and `clear` is
+  // straight-line arithmetic along the baseline: applied to an arc it would
+  // throw the measured boundary back onto the chord it is there to avoid.
+  return best.curve ? best : clear(dim, best);
+}
+
+/**
+ * The face a tape held OUTSIDE the plan would run along: the mirror of
+ * `innerFace`, the one facing away from the plan's middle.
+ *
+ * Only a BOWED wall asks for it. A straight wall's outside dimension is its
+ * overall drawn extent and stays exactly that — outer corner to outer corner,
+ * caps and all — because on a straight wall the outer face and that extent are
+ * the same stretch of the same line. On a bow they are not even the same
+ * LENGTH: the outer boundary is a longer arc than the centreline, and the
+ * drawn extent is the projection onto a chord that is shorter than either.
+ *
+ * Null when the wall offers no such face, which sends the caller back to the
+ * extent — the same fallback inside mode has always had.
+ */
+function outerFace(dim: PlanExtent, outward: Point): FaceExtent | null {
+  let best: FaceExtent | null = null;
+  for (const face of dim.faces ?? []) {
+    if (!best || dotp(face.normal, outward) > dotp(best.normal, outward)) {
+      best = face;
+    }
+  }
+  return best && dotp(best.normal, outward) > 0 ? best : null;
 }
 
 /**
@@ -467,6 +703,16 @@ export function layOutDimensions(
     // and the printed number are one thing: a face's span with the extent's
     // number against it would be a dimension lying about what it spans.
     const inner = mode === 'inside' ? innerFace(dim, outward) : null;
+    /*
+     * Outside mode on a BOWED wall measures its outer boundary, for the same
+     * reason inside mode measures the inner one: the two are different arcs of
+     * different lengths, and the drawn extent — a projection onto the chord —
+     * is neither of them. Straight walls never reach this line and keep the
+     * overall extent they have always been given.
+     */
+    const outer =
+      mode === 'outside' && dim.curve ? outerFace(dim, outward) : null;
+    const chosen = inner ?? outer;
     // and it is drawn on that same side. Outside rings the drawing so the
     // dimensions do not fall across the rooms; inside deliberately does fall
     // across them, because that is where the width being quoted is.
@@ -474,8 +720,16 @@ export function layOutDimensions(
       mode === 'inside'
         ? { x: -outward.x, y: -outward.y }
         : { x: outward.x, y: outward.y };
-    const measured: PlanExtent = inner
-      ? { ...dim, a: inner.a, b: inner.b, length: inner.length }
+    const measured: PlanExtent = chosen
+      ? {
+          ...dim,
+          a: chosen.a,
+          b: chosen.b,
+          length: chosen.length,
+          // the boundary that was measured is the boundary that gets drawn,
+          // so the line and the number stay one answer
+          curve: chosen.curve,
+        }
       : dim;
 
     placed.push({

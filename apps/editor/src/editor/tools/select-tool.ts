@@ -15,6 +15,12 @@ import {
 } from '../rooms';
 import type { RectRoom } from '../rooms';
 import {
+  BEND_STANDOFF_PX,
+  applyBend,
+  bendHandleAt,
+  previewBend,
+} from '../curve';
+import {
   alignGuides,
   constrainAngle,
   cornerAngles,
@@ -24,6 +30,7 @@ import type { AlignGuide } from './drafting';
 import {
   HostedOpeningEntity,
   JOIN_TOLERANCE,
+  add,
   bboxExpand,
   bboxFromPoints,
   detectSpaces,
@@ -63,6 +70,16 @@ type Mode =
       index: number;
     }
   | { kind: 'room-resize'; room: RectRoom; fixed: Point }
+  | {
+      kind: 'wall-bend';
+      wallId: EntityId;
+      /** where the finger went down, so the wall follows what it MOVED */
+      grab: Point;
+      /** the point on the wall under the button when it was grabbed */
+      apex: Point;
+      /** the sweep the last preview asked for — what pointer-up commits */
+      sweep: number;
+    }
   | { kind: 'box'; start: Point; additive: boolean };
 
 /** smallest room a drag can shrink to (meters) */
@@ -165,7 +182,39 @@ export class SelectTool implements Tool {
       }
     }
 
-    // 1) grips of selected entities take priority
+    /*
+     * 1) the bend button standing off the middle of a selected wall.
+     *
+     * It is the only thing at that spot — the button floats clear of the wall
+     * precisely so that dragging the wall itself, middle included, still moves
+     * it — so this is a small target answered before the general ones rather
+     * than a claim staked over them. After the room corners, which sit on the
+     * ENDS: on a room small enough for the two to come within a finger of each
+     * other, the corner is the safer guess.
+     */
+    const bend = gathering
+      ? null
+      : bendHandleAt(
+          ctx.doc,
+          ctx.selection.list(),
+          e.point,
+          this.bendStandoff(),
+          tolerance * 1.5,
+        );
+    if (bend) {
+      const wall = ctx.doc.get(bend.wallId);
+      this.mode = {
+        kind: 'wall-bend',
+        wallId: bend.wallId,
+        grab: e.point,
+        apex: bend.anchor,
+        sweep: wall instanceof WallEntity ? wall.getSweep() : 0,
+      };
+      this.ui.prompt.set('Drag to curve the wall (back flat to straighten it)');
+      return;
+    }
+
+    // 2) grips of selected entities take priority
     const grip = gathering ? null : this.gripAt(e.point, tolerance * 1.5);
     if (grip) {
       // anchor at the grip's real position so coincident corners are found
@@ -202,7 +251,7 @@ export class SelectTool implements Tool {
       return;
     }
 
-    // 2) entity under cursor → select + arm drag
+    // 3) entity under cursor → select + arm drag
     const hit = this.topHit(e.point, tolerance);
     if (hit) {
       if (this.additive(e)) {
@@ -223,7 +272,7 @@ export class SelectTool implements Tool {
       return;
     }
 
-    // 3) empty space → box selection
+    // 4) empty space → box selection
     this.mode = { kind: 'box', start: e.point, additive: this.additive(e) };
   }
 
@@ -280,6 +329,26 @@ export class SelectTool implements Tool {
       case 'opening-resize':
         this.previewOpening(e.point);
         break;
+      case 'wall-bend': {
+        /*
+         * The wall bows by what the finger MOVED, not by where it landed: the
+         * button floats off the wall, so reading the cursor as the new apex
+         * would snap the wall out to meet it the moment the drag began.
+         *
+         * The preview is the wall itself — the centreline it would run along,
+         * read from the wall rather than redrawn here — so what is on screen
+         * is exactly what pointer-up commits.
+         */
+        const plan = previewBend(
+          ctx.doc,
+          this.mode.wallId,
+          add(this.mode.apex, sub(e.point, this.mode.grab)),
+        );
+        if (!plan) break;
+        this.mode = { ...this.mode, sweep: plan.sweep };
+        this.ui.setGhost([plan.ghost]);
+        break;
+      }
       case 'room-resize': {
         const r = rectFrom(this.mode.fixed, e.point);
         const outline: Geometry = {
@@ -378,6 +447,15 @@ export class SelectTool implements Tool {
         this.ui.prompt.set(this.restingPrompt());
         break;
       }
+      case 'wall-bend':
+        applyBend(
+          (name, params) => ctx.dispatch(name, params),
+          ctx.doc,
+          mode.wallId,
+          mode.sweep,
+        );
+        this.ui.prompt.set(this.restingPrompt());
+        break;
       case 'room-resize':
         resizeRectRoomTo(
           (name, params) => ctx.dispatch(name, params),
@@ -404,6 +482,14 @@ export class SelectTool implements Tool {
     this.ui.setGuides(null);
     this.ui.setPending(null);
     this.ctx?.selection.clear();
+  }
+
+  /**
+   * The bend button's stand-off in meters — a fixed screen gap converted at
+   * the live zoom, so the tool aims at the same place the renderer drew it.
+   */
+  private bendStandoff(): number {
+    return BEND_STANDOFF_PX / this.ui.camera.get().scale;
   }
 
   /** blinking band showing the opening the end grip would leave behind */
@@ -470,6 +556,17 @@ export class SelectTool implements Tool {
       for (const c of rectRoomCorners(room)) {
         if (distance(c, point) <= tolerance * 1.5) return true;
       }
+    }
+    if (
+      bendHandleAt(
+        ctx.doc,
+        ctx.selection.list(),
+        point,
+        this.bendStandoff(),
+        tolerance * 1.5,
+      )
+    ) {
+      return true;
     }
     if (this.gripAt(point, tolerance * 1.5)) return true;
     const hit = this.topHit(point, tolerance);

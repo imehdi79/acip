@@ -163,8 +163,18 @@ function targetBaseline(
   view: MeasureView,
   wantedExtent: number,
 ): number | null {
+  const chord = baselineLength(wall);
+  /*
+   * On a CURVED wall the label prints the ARC and the commands take the chord,
+   * so growing the arc by a metre takes less than a metre of chord. The ratio
+   * between the two is fixed by the sweep, and the resize holds the sweep, so
+   * the delta is carried across scaled by it and the wall comes out the length
+   * that was typed. A straight wall has a ratio of 1 and takes exactly the
+   * arithmetic it always did.
+   */
+  const perChord = wall.isCurved() ? chord / wall.getLength() : 1;
   const target =
-    baselineLength(wall) + (wantedExtent - wallLength(doc, wall, view));
+    chord + (wantedExtent - wallLength(doc, wall, view)) * perChord;
   return target > 1e-3 ? target : null;
 }
 

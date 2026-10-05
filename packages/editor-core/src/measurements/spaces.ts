@@ -177,14 +177,28 @@ function collectWallSegments(
       entity.baseLevelId !== levelId
     )
       continue;
-    const { a, b } = entity.getBaseline();
     walls.set(entity.id as string, entity);
-    segments.push({
-      id: entity.id as string,
-      a,
-      b,
-      halfWidth: entity.getThickness() / 2,
-    });
+    /*
+     * A CURVED wall enters the arrangement as several straight segments under
+     * its own id, rather than as its chord.
+     *
+     * This is what keeps curved rooms honest without the curve-curve splitting
+     * this document used to say they would need: the arrangement stays
+     * entirely segment-based and never learns what an arc is, while the room
+     * it bounds gets the area the curve really encloses instead of the area
+     * the chord would cut off. Sharing one id is deliberate — faces dedupe by
+     * it, so the room still reports ONE bounding wall, and `halfWidthOf` still
+     * finds its thickness.
+     */
+    const centreline = entity.getCentreline();
+    for (let i = 0; i + 1 < centreline.length; i++) {
+      segments.push({
+        id: entity.id as string,
+        a: centreline[i],
+        b: centreline[i + 1],
+        halfWidth: entity.getThickness() / 2,
+      });
+    }
   }
   return { walls, segments };
 }

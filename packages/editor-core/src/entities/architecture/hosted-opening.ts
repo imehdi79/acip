@@ -5,15 +5,18 @@ import {
   add,
   angleOf,
   dot,
-  lerp,
-  normalize,
   perpendicular,
+  point,
   scale,
   sub,
 } from '../../geometry/primitives/point.js';
 import type { Matrix3 } from '../../geometry/primitives/matrix3.js';
 import { applyToPoint } from '../../geometry/primitives/matrix3.js';
-import type { SegmentShape } from '../../geometry/shapes.js';
+import {
+  closestParamOnPolyline,
+  polylineFrameAt,
+  polylineLength,
+} from '../../geometry/curves/polyline.js';
 import type {
   Anchor,
   GripPoint,
@@ -116,23 +119,44 @@ export abstract class HostedOpeningEntity
     const anchors = host.getAnchors();
     const anchor =
       anchors[relation.anchorIndex] ?? anchors.find((a) => a.kind === 'curve');
-    return anchor && anchor.geometry.kind === 'segment' ? anchor : null;
+    if (!anchor) return null;
+    const kind = anchor.geometry.kind;
+    return kind === 'segment' || kind === 'polyline' ? anchor : null;
+  }
+
+  /**
+   * The host axis as a run of points: two for a straight host, more for one
+   * that curves.
+   *
+   * Everything below is written against this rather than against a segment,
+   * because `t` was never a position along a straight line — it is a fraction
+   * of the DISTANCE along the host, and that reading is what carries an
+   * opening around a wall that bows without the opening being told. A host
+   * that hands back a two-point axis gets exactly the segment arithmetic it
+   * always got.
+   */
+  protected axisPoints(): Point[] | null {
+    const anchor = this.axisAnchor();
+    if (!anchor) return null;
+    const g = anchor.geometry;
+    if (g.kind === 'segment') return [g.a, g.b];
+    return g.kind === 'polyline' && g.points.length >= 2 ? [...g.points] : null;
   }
 
   protected frame(): OpeningFrame | null {
-    const anchor = this.axisAnchor();
+    const axis = this.axisPoints();
     const host = this.host();
-    if (!anchor || !host) return null;
-    const seg = anchor.geometry as SegmentShape;
-    const u = normalize(sub(seg.b, seg.a));
+    if (!axis || !host) return null;
+    const at = polylineFrameAt(axis, this.t);
+    if (!at) return null;
     const thickness =
       typeof (host as Partial<HasThickness>).getThickness === 'function'
         ? (host as unknown as HasThickness).getThickness()
         : 0.2;
     return {
-      center: lerp(seg.a, seg.b, this.t),
-      u,
-      n: perpendicular(u),
+      center: at.point,
+      u: at.tangent,
+      n: perpendicular(at.tangent),
       halfWidth: this.width / 2,
       halfThickness: thickness / 2,
     };
@@ -148,11 +172,18 @@ export abstract class HostedOpeningEntity
   }
 
   evalPlacement(anchor: Anchor, _params: PlacementParams): Placement {
-    const seg = anchor.geometry as SegmentShape;
-    return {
-      position: lerp(seg.a, seg.b, this.t),
-      rotation: angleOf(sub(seg.b, seg.a)),
-    };
+    const g = anchor.geometry;
+    const axis =
+      g.kind === 'segment'
+        ? [g.a, g.b]
+        : g.kind === 'polyline'
+          ? g.points
+          : null;
+    const at = axis ? polylineFrameAt(axis, this.t) : null;
+    // an axis with nothing to walk along places nothing; the caller reads a
+    // placement, so answer with one rather than throwing at draw time
+    if (!at) return { position: point(0, 0), rotation: 0 };
+    return { position: at.point, rotation: angleOf(at.tangent) };
   }
 
   getOpeningSpec(): OpeningSpec {
@@ -201,13 +232,9 @@ export abstract class HostedOpeningEntity
 
   /** project a target point back onto the host axis and update t */
   protected setPositionFromPoint(target: Point, tx: Transaction): void {
-    const anchor = this.axisAnchor();
-    if (!anchor) return;
-    const seg = anchor.geometry as SegmentShape;
-    const ab = sub(seg.b, seg.a);
-    const lenSq = dot(ab, ab);
-    const nextT =
-      lenSq === 0 ? this.t : clamp01(dot(sub(target, seg.a), ab) / lenSq);
+    const axis = this.axisPoints();
+    if (!axis) return;
+    const nextT = clamp01(closestParamOnPolyline(target, axis));
     tx.update(this, (entity) => {
       (entity as HostedOpeningEntity).t = nextT;
     });
@@ -226,19 +253,18 @@ export abstract class HostedOpeningEntity
    * fits inside the host. Pure, so a tool previews exactly what will commit.
    */
   planEndDrag(index: number, to: Point): OpeningSpan | null {
-    const anchor = this.axisAnchor();
-    if (!anchor) return null;
-    const seg = anchor.geometry as SegmentShape;
-    const ab = sub(seg.b, seg.a);
-    const len = Math.hypot(ab.x, ab.y);
+    const axis = this.axisPoints();
+    if (!axis) return null;
+    const len = polylineLength(axis);
     if (len === 0) return null;
-    const u = scale(ab, 1 / len);
+    const on = (along: number): Point =>
+      polylineFrameAt(axis, along / len)?.point ?? axis[0];
     // meters along the axis: grip 1 is the low end, so grip 2's is the one to
     // leave alone, and the other way round
     const center = this.t * len;
     const fixed =
       index === 1 ? center + this.width / 2 : center - this.width / 2;
-    const dragged = clamp(dot(sub(to, seg.a), u), 0, len);
+    const dragged = clamp(closestParamOnPolyline(to, axis) * len, 0, len);
     const width = clamp(
       Math.abs(dragged - fixed),
       Math.min(HostedOpeningEntity.MIN_WIDTH, len),
@@ -254,8 +280,8 @@ export abstract class HostedOpeningEntity
     return {
       t: at / len,
       width,
-      a: add(seg.a, scale(u, at - half)),
-      b: add(seg.a, scale(u, at + half)),
+      a: on(at - half),
+      b: on(at + half),
     };
   }
 

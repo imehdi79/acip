@@ -107,6 +107,16 @@ export const ResolveWallsCommand: Command<
       // drawing, locked ones are not yours to rewrite, and neither has any
       // business reshaping a wall that is
       if (!isEntityInteractive(ctx.doc, entity)) continue;
+      /*
+       * A CURVED wall takes no part in this, in either direction.
+       *
+       * Overlap is decided on the baseline, and a bowed wall's baseline is a
+       * chord it does not run along: splitting it there would cut it at a
+       * point it never passes through and leave both pieces turning the whole
+       * sweep, and letting it cut OTHERS would erase a straight wall to make
+       * room for a wall that is somewhere else.
+       */
+      if (entity.isCurved()) continue;
       if (
         levelId !== null &&
         entity.baseLevelId !== null &&
