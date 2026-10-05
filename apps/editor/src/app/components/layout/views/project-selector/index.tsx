@@ -1,7 +1,17 @@
-import { ReactNode, useId } from 'react';
+import { ReactNode, useEffect, useId, useState } from 'react';
 import { Card, cn, ListBox, ScrollShadow } from '@heroui/react';
 import { IconChevronRight } from '@tabler/icons-react';
 import { useSettingsStore } from '@/app/stores/global/settings.store';
+import { useSession } from '@/editor/session-context';
+import { useRuntime } from '@/editor/runtime';
+import { openSavedPlan } from '@/editor/open-plan';
+import { openProjectStore } from '@/data/draft';
+import {
+  listProjects,
+  openProject,
+  savedAgo,
+  type ProjectSummary,
+} from '@/data/projects';
 import type { PlanTemplateId } from '@/editor/templates';
 
 type Project = {
@@ -133,11 +143,6 @@ const projects: Project[] = [
   },
 ];
 
-const recentProjects = Array.from({ length: 0 }, (_, index) => ({
-  id: `project-${index + 1}`,
-  title: `Project ${index + 1}`,
-}));
-
 type TemplateCardProps = {
   project: Project;
   onSelect: (id: PlanTemplateId) => void;
@@ -184,9 +189,51 @@ const TemplateCard = ({ project, onSelect, compact }: TemplateCardProps) => (
 
 const ProjectSelector = () => {
   const openTemplate = useSettingsStore((state) => state.openTemplate);
+  const setView = useSettingsStore((state) => state.setView);
+  const session = useSession();
+  const { ui } = useRuntime();
+  const [recentProjects, setRecentProjects] = useState<ProjectSummary[]>([]);
+
+  // Read on mount rather than watched: `localStorage` announces nothing when
+  // it changes, and this screen is reached by navigating to it — so arriving
+  // IS the moment the list is current. The same reasoning the projects sheet
+  // gives for reading its own list on opening.
+  useEffect(() => {
+    setRecentProjects(listProjects(window.localStorage));
+  }, []);
 
   const handleSelect = (id: PlanTemplateId) => {
+    // A starter plan is not the plan you had open, and saying so BEFORE
+    // navigating is what lets the provider tell this route from the Recent
+    // one — it skips generating over a document that is already a plan.
+    openProjectStore.set(null);
     openTemplate(id);
+  };
+
+  /**
+   * Reopen a plan from the Recent list.
+   *
+   * The document is loaded BEFORE the view changes, so the editor mounts onto
+   * the plan rather than onto whatever was there a moment ago. `openSavedPlan`
+   * also writes the draft, which is what makes this safe against the
+   * provider's own restore: if that runs on the view change it finds this very
+   * plan and reloads it, which is the same answer.
+   *
+   * `openTemplate` is deliberately NOT used — it would set a starter template
+   * alongside the view, and the next thing the provider does with a template
+   * it has not generated yet is generate it, over this.
+   */
+  const handleOpenRecent = (id: string) => {
+    const project = openProject(window.localStorage, id);
+    if (!project) {
+      // deleted in another tab between the read and the tap: show what is
+      // actually there rather than opening nothing and looking broken
+      setRecentProjects(listProjects(window.localStorage));
+      return;
+    }
+    openSavedPlan(session, project, window.localStorage);
+    setView('editor');
+    ui.requestFit();
   };
 
   const hasRecentProjects = recentProjects.length > 0;
@@ -257,7 +304,7 @@ const ProjectSelector = () => {
               const [first] = [...keys];
 
               if (first != null) {
-                console.log(String(first));
+                handleOpenRecent(String(first));
               }
             }}
             className="gap-1 p-2"
@@ -266,13 +313,20 @@ const ProjectSelector = () => {
               <ListBox.Item
                 key={project.id}
                 id={project.id}
-                textValue={project.title}
+                textValue={project.name}
                 className="rounded-xl px-2 py-2"
               >
                 <div className="flex w-full min-w-0 items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">
-                      {project.title}
+                      {project.name}
+                    </p>
+                    {/* when, in words. The list is ordered newest first, so
+                        this is what separates "the one I was on" from the four
+                        behind it — a row of names alone says nothing about
+                        which is which. */}
+                    <p className="truncate text-xs text-muted">
+                      {savedAgo(project.savedAt)}
                     </p>
                   </div>
 

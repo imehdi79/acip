@@ -48,6 +48,17 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     if (generatedFor.current === template) return;
     generatedFor.current = template;
 
+    // A plan opened from the selector's Recent list is ALREADY the document,
+    // loaded deliberately a moment before the view changed. Neither branch
+    // below should run over it: not the draft (a write that failed its quota
+    // would restore a stale one), and not the template.
+    //
+    // This state cannot be reached any other way. A reload starts with a fresh
+    // session — empty document, and `openProjectStore` back to null — and
+    // picking a starter plan clears the store before it navigates, which is
+    // what keeps the selector's two routes out of each other's way.
+    if (openProjectStore.get() !== null && session.doc.all().length > 0) return;
+
     // A reload used to land here and regenerate the template over whatever was
     // on screen — the settings store remembers the pick, the fresh session
     // remembers nothing, and an afternoon's work went to an empty room. The
@@ -57,6 +68,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       const draft = readDraft(window.localStorage);
       if (draft) {
         try {
+          // `newDocument` FIRST, for the reason the projects sheet gives:
+          // loadDocumentInto ADDS, and `levels.add` throws on an id it has
+          // already seen. The document is usually empty here — but not when a
+          // plan was opened from the selector a moment ago, and restoring the
+          // draft on top of it would throw into the catch below and generate
+          // the template over the plan the user just picked.
+          session.newDocument();
           loadDocumentInto(session.doc, draft.document, session.entityTypes);
           openProjectStore.set(draft.projectId);
           runtime.tools.useById('select');

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Modal } from '@heroui/react';
 import { IconTrash } from '@tabler/icons-react';
-import { loadDocumentInto, saveDocument } from '@acip/editor-core';
+import { saveDocument } from '@acip/editor-core';
 import { useSession } from '@/editor/session-context';
 import { useRuntime } from '@/editor/runtime';
 import {
@@ -14,11 +14,9 @@ import {
   type ProjectSummary,
 } from '@/data/projects';
 import { clearDraft, openProjectStore, writeDraft } from '@/data/draft';
-import { applyProjectRates, snapshotRates } from '@/data/rates';
-import {
-  applyProjectLayerDefaults,
-  snapshotLayerDefaults,
-} from '@/data/layer-defaults';
+import { snapshotRates } from '@/data/rates';
+import { snapshotLayerDefaults } from '@/data/layer-defaults';
+import { openSavedPlan } from '@/editor/open-plan';
 import { codeOf } from '@/app/components/layout/footer/estimator-add-layers';
 
 /**
@@ -121,25 +119,9 @@ function ProjectsBody({
   const doOpen = (id: string) => {
     const project = openProject(window.localStorage, id);
     if (!project) return;
-    // `newDocument` FIRST: loadDocumentInto ADDS to whatever is already there,
-    // so loading over a live plan would merge the two — and `levels.add`
-    // throws on an id it has already seen, which is a save that opens once and
-    // then refuses. Same session throughout, because a new one would orphan
-    // every subscription the viewport and footer already hold.
-    session.newDocument();
-    loadDocumentInto(session.doc, project.document, session.entityTypes);
-    // the prices it was quoted at, over this device's own table. A plan saved
-    // before prices travelled carries none, and gets the device table alone —
-    // which is exactly what it was priced against at the time.
-    applyProjectRates(project.rates ?? {}, window.localStorage);
-    applyProjectLayerDefaults(project.defaults ?? {}, window.localStorage);
-    openProjectStore.set(project.id);
-    writeDraft(window.localStorage, {
-      savedAt: Date.now(),
-      document: project.document,
-      projectId: project.id,
-    });
-    session.selection.clear();
+    // the drawing, its prices and its slot — shared with the selector's Recent
+    // list, so the two cannot drift about what opening a plan means
+    openSavedPlan(session, project, window.localStorage);
     ui.requestFit();
     close();
   };
